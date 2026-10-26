@@ -66,12 +66,26 @@ function drawPixelPart(
     : source ? (c.bit ?? 0) : result.gateValues[c.id];
   const tint = signalColor(logical ?? 'Z');
   ctx.save(); ctx.translate(c.x, c.y);
+  ctx.rotate(c.rotation * Math.PI / 180);
   ctx.font = 'bold 11px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   if (selected) {
     ctx.strokeStyle = '#ffb0ef'; ctx.shadowColor = ink.pink; ctx.shadowBlur = 14;
     ctx.lineWidth = 2; ctx.setLineDash([5, 4]); ctx.strokeRect(-38, -34, 76, 68);
     ctx.setLineDash([]); ctx.shadowBlur = 0;
   }
+  // Pixel-straight pin leads rotate with the sprite, matching actual pin geometry.
+  ctx.save();
+  ctx.lineWidth = 3; ctx.lineCap = 'square'; ctx.strokeStyle = '#a6e3f5';
+  for (const pin of pinsOf(c)) {
+    const local = pin === 'out' ? {x:48,y:0}
+      : pin === 'in' ? {x:-48,y:0}
+        : pin === 'a' ? {x:-48,y:pinsOf(c).includes('b')?-12:0}
+          : {x:-48,y:12};
+    ctx.beginPath();
+    ctx.moveTo(local.x < 0 ? -30 : 30, local.y);
+    ctx.lineTo(local.x, local.y); ctx.stroke();
+  }
+  ctx.restore();
   // The square-stepped enclosure is a small sprite made of crisp pixel blocks.
   ctx.shadowColor = source ? '#62d7ff' : led ? tint : '#a774f5';
   ctx.shadowBlur = led && logical === 1 ? 25 : 11;
@@ -214,7 +228,7 @@ function drawSignalCanvas(
       ctx.fillRect(point.x-5, point.y-5, 10, 10);
       ctx.shadowBlur = 0; ctx.font = 'bold 9px monospace'; ctx.textAlign = 'center';
       ctx.fillStyle = '#e8defb';
-      ctx.fillText(pin.toUpperCase(), point.x, point.y+pinAt(c,pin).y-c.y<0 ? point.y-12 : point.y+20);
+      ctx.fillText(pin.toUpperCase(), point.x, point.y < c.y ? point.y-13 : point.y+20);
       ctx.restore();
     }
   }
