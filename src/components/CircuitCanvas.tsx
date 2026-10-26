@@ -542,7 +542,7 @@ export function CircuitCanvas() {
       {menu && <>
         <div className="context-backdrop" onPointerDown={() => setMenu(null)} />
         <div className="arcade-context" role="menu" aria-label="Circuit context menu"
-          style={{ left: menu.x, top: menu.y }}>
+          style={{ left: menu.x, top: menu.y, maxHeight: Math.max(150, size.height - menu.y - 10) }}>
           <div className="context-title">
             <span>✦ QUICK ACTIONS</span>
             <button aria-label="Close context menu" onClick={() => setMenu(null)}>×</button>

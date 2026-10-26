@@ -47,7 +47,8 @@ export interface TransientResult {
 }
 
 export const GRID = 24;
-export const snap = (n: number) => Math.round(n / GRID) * GRID;
+// Components snap to half-cells, so a pin can always meet a free trace end.
+export const snap = (n: number) => Math.round(n / (GRID / 2)) * (GRID / 2);
 export const id = () => Math.random().toString(36).slice(2, 11);
 export const terminalKey = (t: Terminal) => t.componentId + ':' + t.pin;
 export const isTerminal = (e: WireEndpoint): e is Terminal => 'componentId' in e;

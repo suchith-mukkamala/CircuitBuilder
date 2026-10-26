@@ -1,11 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { starterCircuit } from './sample';
-import { isCircuitDocument, pinPosition } from './types';
+import { isCircuitDocument, pinPosition, snap } from './types';
 import { onWire, wirePath } from './geometry';
 import { circuitNodes } from './connectivity';
 import { solveDC } from '../simulation/dc';
 
 describe('free-ended traces and junction topology', () => {
+  it('uses half-grid snapping so resistor and ground pins can meet free tips', () => {
+    expect(snap(12)).toBe(12);
+    expect(pinPosition({ id: 'r', kind: 'resistor', x: snap(12 + 48), y: snap(12),
+      rotation: 0, value: 1000 }, 'a')).toEqual({ x: 12, y: 12 });
+    expect(pinPosition({ id: 'g', kind: 'ground', x: snap(12), y: snap(12 + 36),
+      rotation: 0, value: 0 }, 'g')).toEqual({ x: 12, y: 12 });
+  });
   it('accepts a dangling wire tip and joins a component moved onto it', () => {
     const doc = starterCircuit();
     const r2 = doc.components.find(c => c.id === 'r2')!;
