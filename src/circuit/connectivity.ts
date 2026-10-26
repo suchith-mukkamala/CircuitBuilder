@@ -38,7 +38,9 @@ export function circuitNodes(doc: CircuitDocument): { terminalNodes: Record<stri
     const ca = componentMap.get(wire.from.componentId);
     const cb = componentMap.get(wire.to.componentId);
     const correctPin = (kind: string | undefined, pin: PinName) =>
-      kind === 'ground' ? pin === 'g' : (pin === 'a' || pin === 'b');
+      kind === 'ground' ? pin === 'g'
+        : kind === 'potentiometer' ? (pin === 'a' || pin === 'b' || pin === 'w')
+        : kind !== undefined && (pin === 'a' || pin === 'b');
     if (!terminals.has(a) || !terminals.has(b) ||
       !correctPin(ca?.kind, wire.from.pin) || !correctPin(cb?.kind, wire.to.pin)) {
       throw new Error('A wire references a missing component or terminal.');

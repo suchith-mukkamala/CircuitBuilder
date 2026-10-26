@@ -1,7 +1,7 @@
-export type ComponentKind = 'resistor' | 'voltage_source' | 'ground';
+export type ComponentKind = 'resistor' | 'voltage_source' | 'ground' | 'switch' | 'current_source' | 'potentiometer';
 export type Rotation = 0 | 90 | 180 | 270;
 export type Point = { x: number; y: number };
-export type PinName = 'a' | 'b' | 'g';
+export type PinName = 'a' | 'b' | 'g' | 'w';
 export type Terminal = { componentId: string; pin: PinName };
 
 export interface CircuitComponent {
@@ -11,6 +11,10 @@ export interface CircuitComponent {
   y: number;
   rotation: Rotation;
   value: number;
+  /** SPST mechanical state (true = ideal closed contact). */
+  closed?: boolean;
+  /** Potentiometer wiper fraction along resistance a->b, clamped to [0.001, 0.999]. */
+  wiper?: number;
 }
 
 export interface Wire {
@@ -41,14 +45,17 @@ export const GRID = 24;
 export const snap = (n: number) => Math.round(n / GRID) * GRID;
 export const id = () => Math.random().toString(36).slice(2, 11);
 export const terminalKey = (t: Terminal) => t.componentId + ':' + t.pin;
-export const pinsFor = (c: CircuitComponent): PinName[] => c.kind === 'ground' ? ['g'] : ['a', 'b'];
+export const pinsFor = (c: CircuitComponent): PinName[] =>
+  c.kind === 'ground' ? ['g'] : c.kind === 'potentiometer' ? ['a', 'b', 'w'] : ['a', 'b'];
 
 export function pinPosition(c: CircuitComponent, pin: PinName): Point {
   const base = c.kind === 'ground'
     ? { x: 0, y: -36 }
-    : c.kind === 'voltage_source'
+    : c.kind === 'voltage_source' || c.kind === 'current_source'
       ? { x: 0, y: pin === 'a' ? -48 : 48 }
-      : { x: pin === 'a' ? -48 : 48, y: 0 };
+      : c.kind === 'potentiometer' && pin === 'w'
+        ? { x: 0, y: 48 }
+        : { x: pin === 'a' ? -48 : 48, y: 0 };
   const angle = (c.rotation * Math.PI) / 180;
   return {
     x: c.x + Math.round(base.x * Math.cos(angle) - base.y * Math.sin(angle)),
@@ -57,7 +64,8 @@ export function pinPosition(c: CircuitComponent, pin: PinName): Point {
 }
 
 export function labelFor(c: CircuitComponent, components: CircuitComponent[]): string {
-  const prefix = c.kind === 'resistor' ? 'R' : c.kind === 'voltage_source' ? 'V' : 'GND';
+  const prefix = ({ resistor: 'R', voltage_source: 'V', current_source: 'I',
+    ground: 'GND', switch: 'S', potentiometer: 'P' } as const)[c.kind];
   if (c.kind === 'ground') return 'GND';
   const sameKind = components.filter(other => other.kind === c.kind);
   return prefix + (sameKind.findIndex(other => other.id === c.id) + 1);
@@ -89,19 +97,24 @@ export function isCircuitDocument(input: unknown): input is CircuitDocument {
   for (const raw of d.components) {
     if (!raw || typeof raw !== 'object') return false;
     const c = raw as Record<string, unknown>;
-    if (typeof c.id !== 'string' || !['resistor', 'voltage_source', 'ground'].includes(String(c.kind)) ||
+    if (typeof c.id !== 'string' || !['resistor', 'voltage_source', 'ground', 'switch', 'current_source', 'potentiometer'].includes(String(c.kind)) ||
       ![0, 90, 180, 270].includes(Number(c.rotation)) ||
       !['x', 'y', 'value'].every(k => typeof c[k] === 'number' && Number.isFinite(c[k]))) return false;
+    if (c.closed !== undefined && typeof c.closed !== 'boolean') return false;
+    if (c.wiper !== undefined && (typeof c.wiper !== 'number' || !Number.isFinite(c.wiper) || c.wiper < 0.001 || c.wiper > 0.999)) return false;
     if (ids.has(c.id)) return false;
     ids.add(c.id);
   }
+  const componentMap = new Map((d.components as CircuitComponent[]).map(c => [c.id, c]));
+  const wireIds = new Set<string>();
   return d.wires.every(raw => {
     if (!raw || typeof raw !== 'object') return false;
     const w = raw as Record<string, unknown>;
-    if (typeof w.id !== 'string') return false;
+    if (typeof w.id !== 'string' || wireIds.has(w.id)) return false;
+    wireIds.add(w.id);
     const valid = (t: unknown) => !!t && typeof t === 'object' &&
       ids.has(String((t as Terminal).componentId)) &&
-      ['a', 'b', 'g'].includes(String((t as Terminal).pin));
+      pinsFor(componentMap.get(String((t as Terminal).componentId))!).includes((t as Terminal).pin);
     if (!valid(w.from) || !valid(w.to)) return false;
     if (w.waypoints !== undefined && (!Array.isArray(w.waypoints) ||
       !w.waypoints.every(p => p && typeof p.x === 'number' && Number.isFinite(p.x) &&

@@ -28,6 +28,7 @@ export function App() {
   const remove = useCircuitStore(s => s.removeSelection);
   const cancel = useCircuitStore(s => s.cancelWire);
   const rotate = useCircuitStore(s => s.rotateComponent);
+  const toggleSwitch = useCircuitStore(s => s.toggleSwitch);
   const selection = useCircuitStore(s => s.selection);
   const pendingPin = useCircuitStore(s => s.pendingPin);
   const message = useCircuitStore(s => s.message);
@@ -45,10 +46,14 @@ export function App() {
       if (e.key === 'Escape') cancel();
       if (e.key === 'Delete' || e.key === 'Backspace') remove();
       if (e.key.toLowerCase() === 'r' && selection?.type === 'component') rotate(selection.id);
+      if (e.code === 'Space' && selection?.type === 'component') {
+        const part = useCircuitStore.getState().document.components.find(c => c.id === selection.id);
+        if (part?.kind === 'switch') { e.preventDefault(); toggleSwitch(part.id); }
+      }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [selection, remove, rotate, cancel, save]);
+  }, [selection, remove, rotate, toggleSwitch, cancel, save]);
 
   const onImport = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -65,7 +70,7 @@ export function App() {
       <header className="topbar">
         <div className="brand">
           <span className="brand-chip"><span className="chip-center">▣</span></span>
-          <div className="brand-name">CIRCUIT<span>BUILDER</span><small>V0.1</small></div>
+          <div className="brand-name">CIRCUIT<span>BUILDER</span><small>V0.2</small></div>
         </div>
         <div className="topbar-separator" />
         <div className="file-name"><span className="folder-icon">▰</span>
@@ -89,7 +94,7 @@ export function App() {
         <main className="editor-region">
           <div className="editor-titlebar">
             <div><span className="titlebar-indicator" /> SCHEMATIC EDITOR <small>/ {circuit.name.toUpperCase()}</small></div>
-            <div className="editor-tags"><span>GRID: 24 PX</span><span>ANALOG / DC</span></div>
+            <div className="editor-tags"><span>GRID: 24 PX</span><span>NEON / DC</span></div>
           </div>
           <CircuitCanvas />
           <div className="editor-foot">
@@ -106,6 +111,7 @@ export function App() {
             <div><kbd>R</kbd><span>Rotate selected component</span></div>
             <div><kbd>DEL</kbd><span>Delete component / wire</span></div>
             <div><kbd>ESC</kbd><span>Cancel wire</span></div>
+            <div><kbd>SPACE</kbd><span>Flip selected switch</span></div>
             <div><kbd>⌘ / CTRL + S</kbd><span>Save in browser</span></div>
             <button className="help-sim-link" onClick={run}>▶ RE-RUN ANALYSIS</button>
           </div>
@@ -113,7 +119,7 @@ export function App() {
       </div>
       <footer className="global-footer">
         <span>✦ BUILT FOR CURIOUS MINDS</span>
-        <span>REAL ELECTRICAL MATH. PIXEL-INSPIRED INTERFACE.</span>
+        <span>NEON PIXELS. REAL ELECTRICAL MATH.</span>
         <span>© CIRCUITBUILDER · 2026</span>
       </footer>
     </div>

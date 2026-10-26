@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { starterCircuit } from '../circuit/sample';
-import { CircuitDocument, CircuitComponent, ComponentKind, Selection, Rotation, Point, Terminal, DCResult, id, snap, terminalKey, isCircuitDocument } from '../circuit/types';
+import { CircuitDocument, CircuitComponent, ComponentKind, Selection, Rotation, Point, Terminal, DCResult, id, snap, terminalKey, pinsFor, isCircuitDocument } from '../circuit/types';
 import { solveDC } from '../simulation/dc';
 
 type CircuitStore = {
@@ -14,6 +14,8 @@ type CircuitStore = {
   moveComponent: (id: string, at: Point) => void;
   rotateComponent: (id: string) => void;
   setComponentValue: (id: string, value: number) => void;
+  toggleSwitch: (id: string) => void;
+  setPotWiper: (id: string, value: number) => void;
   rename: (name: string) => void;
   select: (selection: Selection) => void;
   startOrFinishWire: (pin: Terminal) => void;
@@ -26,7 +28,8 @@ type CircuitStore = {
 };
 
 const freshValue: Record<ComponentKind, number> = {
-  resistor: 1000, voltage_source: 5, ground: 0,
+  resistor: 1000, voltage_source: 5, current_source: 0.005,
+  ground: 0, switch: 0, potentiometer: 1000,
 };
 const invalidated = { simulation: null, message: 'Circuit updated. Run simulation for new results.' };
 const emptyDocument = (): CircuitDocument => ({
@@ -42,6 +45,8 @@ export const useCircuitStore = create<CircuitStore>()(persist((set, get) => ({
   addComponent: (kind, at) => {
     const component: CircuitComponent = {
       id: id(), kind, x: snap(at.x), y: snap(at.y), rotation: 0, value: freshValue[kind],
+      ...(kind === 'switch' ? { closed: false } : {}),
+      ...(kind === 'potentiometer' ? { wiper: 0.5 } : {}),
     };
     set(state => ({
       document: { ...state.document, components: [...state.document.components, component] },
@@ -68,6 +73,17 @@ export const useCircuitStore = create<CircuitStore>()(persist((set, get) => ({
         ? { ...c, value } : c) }, ...invalidated,
     }));
   },
+  toggleSwitch: idToToggle => set(state => ({
+    document: { ...state.document, components: state.document.components.map(c =>
+      c.id === idToToggle && c.kind === 'switch' ? { ...c, closed: !c.closed } : c) },
+    ...invalidated,
+  })),
+  setPotWiper: (idToEdit, value) => set(state => ({
+    document: { ...state.document, components: state.document.components.map(c =>
+      c.id === idToEdit && c.kind === 'potentiometer'
+        ? { ...c, wiper: Math.max(0.001, Math.min(0.999, value)) } : c) },
+    ...invalidated,
+  })),
   rename: name => set(state => ({ document: { ...state.document, name: name.slice(0, 90) } })),
   select: selection => set({ selection }),
   startOrFinishWire: pin => {
@@ -76,7 +92,7 @@ export const useCircuitStore = create<CircuitStore>()(persist((set, get) => ({
     if (terminalKey(previous) === terminalKey(pin)) { set({ pendingPin: null, message: 'Wire cancelled.' }); return; }
     const doc = get().document;
     const a = doc.components.find(c => c.id === pin.componentId);
-    if (!a || !(a.kind === 'ground' ? pin.pin === 'g' : ['a', 'b'].includes(pin.pin))) {
+    if (!a || !pinsFor(a).includes(pin.pin)) {
       set({ pendingPin: null }); return;
     }
     const exists = doc.wires.some(w =>
