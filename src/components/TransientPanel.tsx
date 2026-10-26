@@ -137,7 +137,7 @@ export function TransientPanel() {
               </>}
             </svg>
             <div className="scope-reading">
-              <span>AT {displayTime(frame.time)}</span>
+              <span>AT {displayTime(frame?.time ?? 0)}</span>
               <strong>{formatElectrical(reading[traceKind], traceKind === 'voltage' ? 'V' : 'A')}</strong>
             </div>
             <p>Select another part to graph its voltage or current.</p>
