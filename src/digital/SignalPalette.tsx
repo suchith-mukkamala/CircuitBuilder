@@ -17,6 +17,7 @@ export function SignalPalette(){
   const searchRef=useRef<HTMLInputElement>(null);
   const [query,setQuery]=useState('');
   const [category,setCategory]=useState<CategoryFilter>('all');
+  const [expanded,setExpanded]=useState<Record<string,boolean>>({});
   const [blockName,setBlockName]=useState('MY LOGIC BLOCK');
   const [blockError,setBlockError]=useState('');
   const add=useDigitalStore(s=>s.add);
@@ -129,8 +130,14 @@ export function SignalPalette(){
       const parts=group.parts.filter(part=>shown.has(part.kind));
       if(!parts.length)return null;
       return <details key={group.id+'-'+(query?'search':category)}
-        className="signal-catalog-category" open={query?true:undefined}
-        defaultOpen={!query&&(index<2)}>
+        className="signal-catalog-category"
+        open={!!query || (expanded[group.id] ?? index<2)}
+        onToggle={event=>{
+          if(query)return;
+          const nextOpen=event.currentTarget.open;
+          setExpanded(previous=>previous[group.id]===nextOpen?previous:
+            {...previous,[group.id]:nextOpen});
+        }}>
         <summary>
           <span className="signal-catalog-icon">{group.icon}</span>
           <span className="signal-catalog-category-title">{group.name}
