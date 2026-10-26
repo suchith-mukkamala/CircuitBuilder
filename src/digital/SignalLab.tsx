@@ -142,6 +142,7 @@ function SignalInspector({ result }: { result: ReturnType<typeof simulateLogic> 
   const remove = useDigitalStore(s=>s.remove);
   const copy = useDigitalStore(s=>s.copy);
   const duplicate = useDigitalStore(s=>s.duplicate);
+  const openBlock = useDigitalStore(s=>s.openBlock);
   const part = selected?.type==='component' ? doc.components.find(c=>c.id===selected.id) : null;
   const wire = selected?.type==='wire' ? doc.wires.find(w=>w.id===selected.id) : null;
   const [draft,setDraft] = useState('');
@@ -176,6 +177,11 @@ function SignalInspector({ result }: { result: ReturnType<typeof simulateLogic> 
           <strong>▣ REUSABLE MODULE</strong>
           <p>Logic inside this block is simulated independently in each instance.</p>
           <small>{doc.blocks?.find(def=>def.id===part.blockId)?.circuit.components.length??0} internal components</small>
+          <button className="signal-open-block" onClick={()=>{
+            try { openBlock(part.id); }
+            catch(error){window.alert(error instanceof Error?error.message:'Unable to open block.');}
+          }}>▣ OPEN & EDIT BLOCK</button>
+          <small>Or double-click this block on the canvas.</small>
         </div>}
         <div className="signal-pin-list">
           <div className="signal-section-label">LIVE TERMINALS</div>
@@ -281,6 +287,15 @@ export function SignalLab() {
   const fileMenu = useRef<HTMLDetailsElement>(null);
   const doc = useDigitalStore(s=>s.document);
   const message = useDigitalStore(s=>s.message);
+  const editStack = useDigitalStore(s=>s.editStack);
+  const saveBlockEdit = useDigitalStore(s=>s.saveBlockEdit);
+  const cancelBlockEdit = useDigitalStore(s=>s.cancelBlockEdit);
+  const [blockSaveError,setBlockSaveError]=useState('');
+  const inBlock = editStack.length>0;
+  const saveInternal = () => {
+    try {saveBlockEdit();setBlockSaveError('');}
+    catch(error){setBlockSaveError(error instanceof Error?error.message:'Could not save this block.');}
+  };
   const selectedIds = useDigitalStore(s=>s.selectedIds);
   const past = useDigitalStore(s=>s.past.length);
   const future = useDigitalStore(s=>s.future.length);
@@ -334,7 +349,7 @@ export function SignalLab() {
   return <div className="signal-lab-shell">
     <header className="signal-workbench-header">
       <div className="signal-lab-brand"><span className="signal-lab-glyph">▧</span>
-        <div><strong>SIGNAL LAB</strong><small>LAB 02 / DIGITAL LOGIC v0.2</small></div></div>
+        <div><strong>SIGNAL LAB</strong><small>LAB 02 / DIGITAL LOGIC v0.3</small></div></div>
       <input aria-label="Signal circuit name" className="signal-circuit-title"
         title="Rename circuit" value={doc.name} onChange={e=>rename(e.target.value)}/>
       <nav className="signal-toolbar" aria-label="Signal Lab actions">
@@ -358,24 +373,45 @@ export function SignalLab() {
       <details className="signal-file-menu" ref={fileMenu}>
         <summary title="Signal file actions">⋮</summary>
         <div>
-          <button onClick={()=>{if(window.confirm('Create an empty Signal Lab circuit? You can undo.'))newCircuit();close();}}>+ NEW SIGNAL CIRCUIT</button>
-          <button onClick={()=>{load(initialDigitalCircuit());close();}}>◇ LOAD DEMO</button>
+          <button disabled={inBlock} title={inBlock?'Save or cancel block editing first':'New circuit'}
+            onClick={()=>{if(window.confirm('Create an empty Signal Lab circuit? You can undo.'))newCircuit();close();}}>+ NEW SIGNAL CIRCUIT</button>
+          <button disabled={inBlock} onClick={()=>{load(initialDigitalCircuit());close();}}>◇ LOAD DEMO</button>
           <button onClick={()=>{downloadSignal(doc);close();}}>⇩ EXPORT .SIGNAL.JSON</button>
-          <button onClick={()=>{fileRef.current?.click();close();}}>⇧ IMPORT SIGNAL JSON</button>
+          <button disabled={inBlock} onClick={()=>{fileRef.current?.click();close();}}>⇧ IMPORT SIGNAL JSON</button>
         </div>
       </details>
       <input ref={fileRef} type="file" accept=".json,.signal.json,application/json"
         hidden onChange={importFile}/>
     </header>
+    {inBlock && <div className="signal-block-navigation" role="navigation"
+      aria-label="Internal module editing">
+      <div className="signal-edit-crumbs">
+        <span className="signal-edit-tag">▣ EDITING MODULE</span>
+        <span>ROOT CIRCUIT</span>
+        {editStack.map((frame,i)=><span className="signal-edit-crumb" key={i}>
+          <span aria-hidden="true">›</span> {frame.name}
+        </span>)}
+        <small>Edits are drafts until saved.</small>
+      </div>
+      <div className="signal-edit-actions">
+        <button className="signal-edit-cancel" onClick={()=>{
+          cancelBlockEdit();setBlockSaveError('');
+        }}>← CANCEL / BACK</button>
+        <button className="signal-edit-save" onClick={saveInternal}>✓ SAVE BLOCK</button>
+      </div>
+      {!!blockSaveError&&<div className="signal-edit-error" role="alert">{blockSaveError}</div>}
+    </div>}
     <div className={'signal-workspace'+(!paletteOpen?' signal-no-palette':'')+
       (!panelOpen?' signal-no-panel':'')}>
       {paletteOpen && <SignalPalette/>}
       <main className="signal-editor">
         <div className="signal-editor-heading">
-          <span><i/> DIGITAL SCHEMATIC <small>/ {doc.name.toUpperCase()}</small></span>
+          <span><i/> {inBlock ? 'MODULE INTERNALS' : 'DIGITAL SCHEMATIC'}
+            <small>/ {doc.name.toUpperCase()}</small></span>
           <span className="signal-editor-tags"><b>{gates.length} GATES</b><b>{doc.wires.length} NETS</b></span>
         </div>
-        <SignalCanvas result={result} onProbe={()=>{setPanelOpen(true);setTab('scope');}}/>
+        <SignalCanvas key={editStack.map(e=>e.blockId).join('/') || 'root'}
+          result={result} onProbe={()=>{setPanelOpen(true);setTab('scope');}}/>
         <div className="signal-status">
           <span><i/> LIVE LOGIC</span><span className="signal-status-message">{message}</span>
           <span>{result.warnings.length?'⚠ '+result.warnings.length+' ISSUES':'✓ NO SIGNAL WARNINGS'}</span>
@@ -403,6 +439,7 @@ export function SignalLab() {
           <p>Shift-click to multi-select; Ctrl/Cmd+Z undo, C copy, V paste, D duplicate, A select all.</p>
           <p>Signal colors: green = HIGH (1), blue = LOW (0), pink = undefined (X), gray = undriven (Z).</p>
           <p>Save a complete circuit as a block from the Parts Library. Probe any wire or pin with right-click; use INPUT TEST for binary vectors and SCOPE to inspect event history.</p>
+          <p>Double-click a reusable block to edit its internals. SAVE BLOCK updates all instances. CANCEL/BACK discards internal changes. Keep original INPUT and LED boundary components to preserve connected ports.</p>
         </details>
       </aside>}
     </div>
