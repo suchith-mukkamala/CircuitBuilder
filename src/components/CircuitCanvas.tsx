@@ -148,7 +148,7 @@ function drawComponent(ctx: CanvasRenderingContext2D, c: CircuitComponent, selec
 function drawCanvas(
   canvas: HTMLCanvasElement, doc: CircuitDocument, view: View,
   selection: { type: 'component' | 'wire'; id: string } | null,
-  pending: { componentId: string; pin: 'a' | 'b' | 'g' } | null,
+  pending: { componentId: string; pin: 'a' | 'b' | 'g' | 'w' } | null,
   hover: Point | null, simulation: ReturnType<typeof useCircuitStore.getState>['simulation'],
 ): void {
   const ctx = canvas.getContext('2d');
