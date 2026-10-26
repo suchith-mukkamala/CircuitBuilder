@@ -66,9 +66,9 @@ describe('v0.2 source and control components', () => {
     expect(isCircuitDocument(doc)).toBe(false);
   });
 
-  it('rejects a floating disconnected current source', () => {
+  it('identifies the isolated current-source branch as a floating DC node', () => {
     const doc = currentSourceCircuit();
     doc.wires.pop();
-    expect(() => solveDC(doc)).toThrow(/Connect both terminals/);
+    expect(() => solveDC(doc)).toThrow(/Floating DC node near I1\.B/);
   });
 });

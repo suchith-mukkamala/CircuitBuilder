@@ -72,7 +72,7 @@ export function explainFloatingNodes(
   const openSwitch = doc.components.some(c => c.kind === 'switch' && !c.closed);
   const hint = capacitor ? ' Capacitors are open circuits in steady-state DC; try RUN TRANSIENT for charging.'
     : openSwitch ? ' An open switch may leave a part of the circuit floating.'
-      : ' Verify that the highlighted wire ends and component terminals really connect to ground through a DC path.';
+      : ' Verify that the listed component terminals connect to GND through a DC-conductive path.';
   return 'Floating DC node near ' + preview + remainder + '.' + hint;
 }
 
