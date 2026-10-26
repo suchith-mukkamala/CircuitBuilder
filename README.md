@@ -1,3 +1,40 @@
+# CircuitBuilder v0.6.1 — Block Wiring & Circuit Drilldown
+
+This release fixes Signal Lab's reusable-block pin connections and adds a direct way to edit the original circuit inside any saved module.
+
+## Connect a reusable block
+
+- **Block input pins** are named \`in0\`, \`in1\`, etc.; outputs are \`out0\`, \`out1\`, etc. The editor now uses the component's actual declared pins during wiring, so these are accepted just like AND/OR/XOR gate pins.
+- Click an INPUT or gate output pin, then a block input, to wire a block. Click a block output and another gate or LED input to connect its result.
+- Free-ended wires and intentional junctions remain supported. A component input placed directly onto a drawn trace is still recognized as connected.
+- Named pin labels (for example \`A\`, \`B\`, \`SUM\`, \`CARRY\`) remain visible on the block body.
+
+## Open and edit a block
+
+1. **Double-click** any placed block on the Signal Lab canvas. Or select it and choose **OPEN & EDIT BLOCK** in the inspector, or right-click the block and choose **OPEN & EDIT INTERNAL CIRCUIT**.
+2. The canvas switches to the block's *original, expanded* schematic. A breadcrumb bar shows **ROOT CIRCUIT › BLOCK NAME**, including nested levels.
+3. Change internal gates, move parts, reroute traces, or rename interface INPUT switches and LED outputs. Undo/redo remains available inside the draft.
+4. Choose **SAVE BLOCK** to validate and publish the edited schematic. Every instance referencing that same saved block now uses the new logic. The parent schematic returns automatically.
+5. Choose **CANCEL / BACK** to discard the current level's uncommitted edits and return to the parent without altering it.
+
+Saving edits to a nested module updates the shared definition of that nested module. External pin identities remain stable, so an edit cannot silently disconnect pre-existing wires. For this first editor, keep the original boundary INPUT and LED components; add or remove internal gates freely. If you need a different number of boundary pins, capture a new block with the desired interface.
+
+While editing internals, the app persists the last committed parent schematic, **not the temporary draft**. Save the block before refreshing. Existing v1 Signal Lab and Analog Lab documents remain compatible.
+
+## Verify locally
+
+\`\`\`bash
+git pull origin main
+npm install
+npm run dev
+npm test
+npm run build
+\`\`\`
+
+---
+
+## Previous release notes
+
 # CircuitBuilder v0.6 — Signal Lab Modules + Waveform Tools
 
 CircuitBuilder has two separate neon pixel-art workbenches: Analog Lab and Signal Lab. This release expands **Signal Lab** with *reusable circuit blocks*, a four-channel logic-event waveform graph, and a typed input-vector tester.

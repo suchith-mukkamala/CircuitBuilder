@@ -309,6 +309,7 @@ export function SignalCanvas({ result, onProbe }: { result: LogicResult; onProbe
   const duplicate = useDigitalStore(s => s.duplicate);
   const addProbe = useDigitalStore(s => s.addProbe);
   const addSavedBlock = useDigitalStore(s => s.addSavedBlock);
+  const openBlock = useDigitalStore(s => s.openBlock);
   const dragStart = useDigitalStore(s => s.dragStart);
   const dragEnd = useDigitalStore(s => s.dragEnd);
 
@@ -481,6 +482,16 @@ export function SignalCanvas({ result, onProbe }: { result: LogicResult; onProbe
         x:digitalSnap(p.x),y:digitalSnap(p.y) },
       selection:choice,wirePoint:trace?.point??null });
   };
+  const doubleClick = (e: MouseEvent<HTMLCanvasElement>) => {
+    if (pending) return;
+    const p = world(e);
+    const instance = [...doc.components].reverse().find(c =>
+      c.kind === 'block' && hitPart(c, p));
+    if (!instance) return;
+    e.preventDefault();
+    try { openBlock(instance.id); }
+    catch (err) { window.alert(err instanceof Error ? err.message : 'Cannot open block.'); }
+  };
   const onDrop = (e: DragEvent<HTMLCanvasElement>) => {
     e.preventDefault();
     const blockId = e.dataTransfer.getData('application/x-signal-block');
@@ -501,12 +512,13 @@ export function SignalCanvas({ result, onProbe }: { result: LogicResult; onProbe
     <div className="signal-canvas-wrapper" ref={wrapper}>
       <canvas ref={canvas} className="signal-canvas" aria-label="Digital logic schematic editor"
         onPointerDown={down} onPointerMove={movePointer} onPointerUp={up}
+        onDoubleClick={doubleClick}
         onPointerCancel={up} onWheel={wheel} onContextMenu={context}
         onPointerLeave={() => setHover(null)}
         onDragOver={e=>e.preventDefault()} onDrop={onDrop} />
       <div className="signal-canvas-hint">
-        <span className="spark">✦</span> CLICK INPUTS TO TOGGLE <span>·</span> CLICK PINS TO WIRE
-        <span>·</span> RIGHT-CLICK TO EDIT
+        <span className="spark">✦</span> CLICK PINS TO WIRE <span>·</span> DOUBLE-CLICK BLOCK TO EDIT
+        <span>·</span> RIGHT-CLICK FOR TOOLS
       </div>
       <div className="signal-canvas-controls">
         <button className={animate && !reducedMotion ? 'is-active' : ''}
@@ -532,6 +544,8 @@ export function SignalCanvas({ result, onProbe }: { result: LogicResult; onProbe
             <div className="signal-menu-subtitle">{digitalLabel(menuPart,doc.components)} · {menuPart.kind.toUpperCase()}</div>
             {menuPart.kind==='input' && <button className="signal-menu-accent"
               onClick={action(()=>toggleInput(menuPart.id))}>↯ TOGGLE TO {menuPart.bit===1?'LOW':'HIGH'}</button>}
+            {menuPart.kind==='block' && <button className="signal-menu-accent"
+              onClick={action(()=>openBlock(menuPart.id))}>▣ OPEN & EDIT INTERNAL CIRCUIT</button>}
             {pinsOf(menuPart).map(pin=><div className="signal-port-actions" key={pin}>
               <button onClick={action(()=>startWire({componentId:menuPart.id,pin}))}>
                 ⌁ {menuPart.kind==='block'

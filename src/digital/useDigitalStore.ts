@@ -3,13 +3,30 @@ import { persist } from 'zustand/middleware';
 import {
   DigitalComponent, DigitalDocument, DigitalEndpoint, DigitalKind, DigitalPoint,
   DigitalSelection, DigitalWire, DigitalBlock, LogicValue, digitalId, digitalSnap,
-  initialDigitalCircuit, isDigitalDocument, isDigitalTerminal,
+  initialDigitalCircuit, isDigitalDocument, isDigitalTerminal, pinsOf,
 } from './types';
 import { simulateLogic } from './engine';
-import { applyInputVector, captureBlock, placeBlock } from './blocks';
+import { applyInputVector, captureBlock, placeBlock, reviseBlockDefinition, updatedBlockCatalog } from './blocks';
 
 type Clip = { components: DigitalComponent[]; wires: DigitalWire[] };
 type Side = 'from' | 'to';
+/** Navigation frame for a block editor. The original parent is not mutated
+ * until SAVE BLOCK, so CANCEL can leave the circuit untouched. */
+export type BlockEditFrame = {
+  blockId: string;
+  instanceId: string;
+  name: string;
+  document: DigitalDocument;
+  past: DigitalDocument[];
+  future: DigitalDocument[];
+  selection: DigitalSelection;
+  selectedIds: string[];
+  probes: SignalProbe[];
+  trace: SignalSample[];
+  clipboard: Clip | null;
+  pasteCount: number;
+};
+
 export type SignalProbe = { id: string; kind: 'terminal' | 'wire'; key: string; label: string };
 export type SignalSample = {
   step: number;
@@ -38,6 +55,10 @@ export type DigitalStore = {
   pasteCount: number;
   message: string;
   blockLibrary: DigitalBlock[];
+  editStack: BlockEditFrame[];
+  openBlock: (instanceId: string) => void;
+  saveBlockEdit: () => void;
+  cancelBlockEdit: () => void;
   probes: SignalProbe[];
   trace: SignalSample[];
   captureAsBlock: (name: string) => void;
@@ -90,15 +111,113 @@ const ownWire = (w: DigitalWire, ids: Set<string>) =>
   ((isDigitalTerminal(w.from) && ids.has(w.from.componentId)) ||
    (isDigitalTerminal(w.to) && ids.has(w.to.componentId)));
 
+/** Exported separately so draft/committed persistence can be regression-tested
+ * even when Node test runners do not provide localStorage. */
+export function persistedDigitalState(state: DigitalStore) {
+  return {
+    document: state.editStack[0]?.document ?? state.document,
+    blockLibrary: state.blockLibrary,
+  };
+}
+
 export const useDigitalStore = create<DigitalStore>()(persist((set, get) => ({
   document: initialDigitalCircuit(),
   selection: null, selectedIds: [], pending: null,
   past: [], future: [], dragOrigin: null,
   clipboard: null, pasteCount: 0,
-  blockLibrary: [], probes: [], trace: [sample(initialDigitalCircuit(), 0)],
+  blockLibrary: [], editStack: [], probes: [], trace: [sample(initialDigitalCircuit(), 0)],
   message: 'Signal Lab ready · flip input switches to update the outputs.',
+  openBlock: instanceId => {
+    const state = get();
+    const instance = state.document.components.find(c => c.id === instanceId);
+    if (!instance || instance.kind !== 'block' || !instance.blockId) {
+      throw new Error('Select a saved circuit block to open its internal schematic.');
+    }
+    const catalog = new Map(state.blockLibrary.map(def => [def.id, def]));
+    for (const def of state.document.blocks ?? []) catalog.set(def.id, def);
+    const definition = catalog.get(instance.blockId);
+    if (!definition) throw new Error('The internal schematic for this block is missing.');
+    if (state.editStack.some(f => f.blockId === definition.id)) {
+      throw new Error('Recursive block editing is not supported.');
+    }
+    const working: DigitalDocument = {
+      ...definition.circuit,
+      blocks: [...catalog.values()],
+    };
+    if (!isDigitalDocument(working)) {
+      throw new Error('The saved block definition is invalid. Its internal circuit cannot be opened.');
+    }
+    simulateLogic(working);
+    const frame: BlockEditFrame = {
+      blockId: definition.id, instanceId, name: definition.name,
+      document: state.document, past: state.past, future: state.future,
+      selection: state.selection, selectedIds: state.selectedIds,
+      probes: state.probes, trace: state.trace,
+      clipboard: state.clipboard, pasteCount: state.pasteCount,
+    };
+    set({
+      document: working,
+      editStack: [...state.editStack, frame],
+      past: [], future: [], selection: null, selectedIds: [],
+      pending: null, dragOrigin: null, clipboard: null, pasteCount: 0,
+      probes: [], trace: [sample(working, 0)],
+      message: 'Editing ' + definition.name + '. Save Block updates all instances; Cancel discards edits.',
+    });
+  },
+  saveBlockEdit: () => {
+    const state = get();
+    const frame = state.editStack.at(-1);
+    if (!frame) throw new Error('No open block to save.');
+    const existing = (state.document.blocks ?? state.blockLibrary)
+      .find(def => def.id === frame.blockId);
+    if (!existing) throw new Error('The current block definition is missing.');
+    const revised = reviseBlockDefinition(existing, state.document);
+    const libraryById = new Map(state.blockLibrary.map(def => [def.id, def]));
+    libraryById.set(revised.id, revised);
+    const defs = [...libraryById.values()];
+    const sync = (doc: DigitalDocument) => updatedBlockCatalog(doc, defs);
+    const parent = sync(frame.document);
+    // All placed instances keep the same external pin names; only the
+    // internal gate logic and optional display labels change.
+    simulateLogic(parent); // validation before touching persistent state
+    const stack = state.editStack.slice(0, -1).map(f => ({
+      ...f, document: sync(f.document),
+      past: f.past.map(sync), future: f.future.map(sync),
+    }));
+    set({
+      document: parent,
+      blockLibrary: defs, editStack: stack,
+      past: limit([...frame.past, frame.document]),
+      future: [], selection: parent.components.some(c => c.id === frame.instanceId)
+        ? { type: 'component', id: frame.instanceId } : frame.selection,
+      selectedIds: parent.components.some(c => c.id === frame.instanceId)
+        ? [frame.instanceId] : frame.selectedIds,
+      pending: null, dragOrigin: null,
+      probes: frame.probes, trace: [sample(parent, 0)],
+      clipboard: frame.clipboard, pasteCount: frame.pasteCount,
+      message: 'Saved ' + revised.name + '. All instances now use the updated internal circuit.',
+    });
+  },
+  cancelBlockEdit: () => {
+    const state = get();
+    const frame = state.editStack.at(-1);
+    if (!frame) return;
+    set({
+      document: frame.document,
+      editStack: state.editStack.slice(0, -1),
+      past: frame.past, future: frame.future,
+      selection: frame.selection, selectedIds: frame.selectedIds,
+      pending: null, dragOrigin: null, probes: frame.probes,
+      trace: frame.trace, clipboard: frame.clipboard,
+      pasteCount: frame.pasteCount,
+      message: 'Closed ' + frame.name + ' without saving internal edits.',
+    });
+  },
   captureAsBlock: name => {
     const state = get();
+    if (state.editStack.length) throw new Error(
+      'Save or cancel the open block before capturing a new module.',
+    );
     const { definition, condensed } = captureBlock(state.document, name);
     const known = new Map(state.blockLibrary.map(d => [d.id, d]));
     known.set(definition.id, definition);
@@ -136,6 +255,7 @@ export const useDigitalStore = create<DigitalStore>()(persist((set, get) => ({
   removeProbe: id => set(state => ({probes:state.probes.filter(p=>p.id!==id)})),
   clearTrace: () => set(state => ({trace:[sample(state.document,0)],message:'Signal history reset.'})),
   add: (kind, at) => set(state => {
+    if (kind === 'block') return { message: 'Insert a block from the saved block library.' };
     const c: DigitalComponent = {
       id: digitalId(), kind, x: digitalSnap(at.x), y: digitalSnap(at.y), rotation: 0,
       ...(kind === 'input' ? { bit: 0 as const } : {}),
@@ -235,12 +355,12 @@ export const useDigitalStore = create<DigitalStore>()(persist((set, get) => ({
       set({ pending: null, message: 'Wire drawing stopped.' }); return;
     }
     const doc = get().document;
+    // Use each component's *declared* pins, including custom module ports
+    // (in0, in1, out0...). The old hard-coded gate pin set silently
+    // rejected valid block connections during interactive wiring.
     const valid = (e: DigitalEndpoint) =>
       !isDigitalTerminal(e) || doc.components.some(c =>
-        c.id === e.componentId && (c.kind === 'input' ? e.pin === 'out'
-          : c.kind === 'led' ? e.pin === 'in'
-            : c.kind === 'not' || c.kind === 'buffer' ? ['a', 'out'].includes(e.pin)
-              : ['a', 'b', 'out'].includes(e.pin)));
+        c.id === e.componentId && pinsOf(c).includes(e.pin));
     if (!valid(previous) || !valid(endpoint)) {
       set({ pending: null, message: 'Cannot connect to a missing pin.' }); return;
     }
@@ -330,10 +450,19 @@ export const useDigitalStore = create<DigitalStore>()(persist((set, get) => ({
     });
   }),
   duplicate: () => { get().copy(); get().paste(); },
-  newCircuit: () => set(state => patch(state, {
-    version: 1, lab: 'signal', name: 'Untitled signal circuit', components: [], wires: [],
-  }, { selection: null, selectedIds: [], pending: null, message: 'Empty Signal Lab schematic created.' })),
+  newCircuit: () => set(state => {
+    if (state.editStack.length) return {
+      message: 'Save or cancel the open block before creating a new schematic.',
+    };
+    return patch(state, {
+      version: 1, lab: 'signal', name: 'Untitled signal circuit', components: [], wires: [],
+    }, { selection: null, selectedIds: [], pending: null,
+      message: 'Empty Signal Lab schematic created.' });
+  }),
   load: input => {
+    if (get().editStack.length) {
+      throw new Error('Save or cancel the open block before loading another circuit.');
+    }
     if (!isDigitalDocument(input)) {
       throw new Error('Not a Signal Lab JSON schematic (expected lab:"signal", version:1).');
     }
@@ -349,5 +478,7 @@ export const useDigitalStore = create<DigitalStore>()(persist((set, get) => ({
   },
 }), {
   name: 'circuitbuilder-signal-v01',
-  partialize: state => ({ document: state.document, blockLibrary: state.blockLibrary }),
+  // An in-progress internal edit is a draft: reload restores the last
+  // committed parent, never an orphaned copy of the module's internals.
+  partialize: persistedDigitalState,
 }));

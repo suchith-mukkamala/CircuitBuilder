@@ -140,3 +140,48 @@ export function applyInputVector(doc: DigitalDocument, raw: string): DigitalDocu
   return { ...doc, components: doc.components.map(c => c.kind === 'input'
     ? { ...c, bit: Number(bits[index.get(c.id)!]) as 0 | 1 } : c) };
 }
+
+
+/**
+ * Edit a saved module while retaining its stable external pin identifiers.
+ * This allows full rewiring and gate replacement without corrupting
+ * connections on already-placed instances in larger schematics.
+ *
+ * Ports are ordered by the original capture; the same boundary switch / LED
+ * component IDs must remain. Renaming those components updates port labels.
+ */
+export function reviseBlockDefinition(
+  existing: DigitalBlock, edited: DigitalDocument,
+): DigitalBlock {
+  if (!isDigitalDocument(edited)) {
+    throw new Error('This block has invalid or missing wires, ports, or component definitions.');
+  }
+  const inputs = edited.components.filter(c => c.kind === 'input');
+  const outputs = edited.components.filter(c => c.kind === 'led');
+  if (inputs.map(c => c.id).join('|') !== existing.inputs.map(p => p.componentId).join('|') ||
+      outputs.map(c => c.id).join('|') !== existing.outputs.map(p => p.componentId).join('|')) {
+    throw new Error(
+      'Keep the original INPUT switches and LED output components when editing a block. ' +
+      'Their pins are used by existing circuits. Internal gates and wires can be freely edited.',
+    );
+  }
+  const nameOf = (c: DigitalComponent, fallback: string) =>
+    (c.name?.trim() || fallback).slice(0, 28);
+  const { blocks: _catalog, ...circuit } = edited;
+  return {
+    ...existing,
+    inputs: existing.inputs.map((p, i) => ({ ...p, label: nameOf(inputs[i], p.label) })),
+    outputs: existing.outputs.map((p, i) => ({ ...p, label: nameOf(outputs[i], p.label) })),
+    circuit,
+  };
+}
+
+/** Replace definitions in a schematic, preserving all other library entries. */
+export function updatedBlockCatalog(
+  document: DigitalDocument,
+  definitions: DigitalBlock[],
+): DigitalDocument {
+  if (!document.blocks?.length) return document;
+  const updated = new Map(definitions.map(def => [def.id, def]));
+  return { ...document, blocks: document.blocks.map(def => updated.get(def.id) ?? def) };
+}

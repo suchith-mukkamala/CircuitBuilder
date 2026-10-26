@@ -1,0 +1,43 @@
+/* v0.6.1 — reusable module drilldown, save/cancel controls and pin affordances */
+.signal-block-navigation{
+  display:flex;align-items:center;gap:12px;flex-wrap:wrap;min-height:62px;
+  padding:9px 15px;position:relative;z-index:5;
+  background:linear-gradient(90deg,#251846,#17193f);
+  border-bottom:2px solid #996ed1;box-shadow:0 3px 15px #b772e844
+}
+.signal-edit-crumbs{display:flex;align-items:center;flex:1;min-width:0;flex-wrap:wrap;gap:8px;
+  color:#b9c5ed;font:10px/1.8 'Space Mono',monospace}
+.signal-edit-crumbs .signal-edit-tag{
+  color:#f9d6ff;border:1px solid #a475d7;background:#382355;
+  box-shadow:0 0 11px #d784ed55;font:7px/1.7 var(--pixel);padding:8px
+}
+.signal-edit-crumbs>small{color:#bda6e0;font:9px 'Space Mono',monospace}
+.signal-edit-crumb{color:#b2ffe6;text-shadow:0 0 9px #82ffe77e}
+.signal-edit-crumb span{color:#b58cdb;padding-right:6px;font:bold 17px monospace}
+.signal-edit-actions{display:flex;gap:7px;align-items:center;margin-left:auto}
+.signal-edit-actions button{white-space:nowrap;padding:12px 9px;
+  font:8px/1.8 var(--pixel);border:2px solid #8a70b6;cursor:pointer}
+.signal-edit-cancel{color:#f2c1eb;background:#302243}
+.signal-edit-cancel:hover{background:#462c57;box-shadow:0 0 13px #d183d655}
+.signal-edit-actions .signal-edit-save{color:#092b2c;background:#a0ffe1;border-color:#d2fff4;
+  box-shadow:0 0 18px #6effd768}
+.signal-edit-save:hover{background:#c9ffed;box-shadow:0 0 20px #72ffe1a8}
+.signal-edit-error{width:100%;color:#ffd0e6;font:10px/1.6 'Space Mono',monospace;
+  background:#421d3d;border:1px solid #f19bbd;padding:8px}
+.signal-block-inspect{display:flex;flex-direction:column;gap:8px;
+  border:1px solid #8064b3;background:#261a44;padding:11px}
+.signal-block-inspect strong{color:#f5d5ff;font:8px/1.8 var(--pixel)}
+.signal-block-inspect p{margin:0;color:#b8b3df;font:10px/1.7 'Space Mono',monospace}
+.signal-block-inspect small{color:#abbfe9;font:9px 'Space Mono',monospace}
+.signal-block-inspect .signal-open-block{padding:12px 8px;border:2px solid #9cffe3;
+  background:#19484e;color:#c4fff1;font:8px/1.7 var(--pixel);
+  box-shadow:0 0 13px #78ffe45c;cursor:pointer}
+.signal-block-inspect .signal-open-block:hover{background:#276268;box-shadow:0 0 20px #91ffe7b3}
+.signal-context-menu .signal-menu-accent{border-color:#80e9d2}
+.signal-file-menu button:disabled{opacity:.35;cursor:not-allowed}
+@media(max-width:840px){
+  .signal-block-navigation{align-items:flex-start;gap:8px}
+  .signal-edit-crumbs{flex-basis:100%}
+  .signal-edit-actions{width:100%;margin-left:0}
+  .signal-edit-actions button{flex:1}
+}
