@@ -45,10 +45,11 @@ export function unbranchedWireCurrents(
   for (const w of doc.wires) {
     const root = wireNodes[w.id];
     if (root === undefined || count.get(root) !== 2 || countWires.get(root) !== 1) continue;
-    if (!isTerminal(w.from) || !isTerminal(w.to)) continue;
+    const fromEnd = w.from, toEnd = w.to;
+    if (!isTerminal(fromEnd) || !isTerminal(toEnd)) continue;
     const a = validPins.get(root) ?? [];
-    const from = a.find(p => p.c.id === w.from.componentId && p.pin === w.from.pin);
-    const to = a.find(p => p.c.id === w.to.componentId && p.pin === w.to.pin);
+    const from = a.find(p => p.c.id === fromEnd.componentId && p.pin === fromEnd.pin);
+    const to = a.find(p => p.c.id === toEnd.componentId && p.pin === toEnd.pin);
     if (!from || !to) continue;
     const outgoing = currentInjection(from.c, from.pin);
     const incoming = currentInjection(to.c, to.pin);
