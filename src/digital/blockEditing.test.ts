@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { captureBlock, reviseBlockDefinition } from './blocks';
 import { simulateLogic } from './engine';
 import { initialDigitalCircuit, pinsOf, DigitalDocument } from './types';
-import { useDigitalStore } from './useDigitalStore';
+import { useDigitalStore, persistedDigitalState } from './useDigitalStore';
 
 const reset = () => useDigitalStore.setState({
   document: initialDigitalCircuit(), past: [], future: [],
@@ -160,10 +160,7 @@ describe('block drilldown editing and parent restoration',()=>{
     const {block,doc}=initializeBlock();
     useDigitalStore.getState().openBlock(block.id);
     replaceInnerXorWithAnd();
-    const options=useDigitalStore.persist.getOptions();
-    const persisted=options.partialize?.(useDigitalStore.getState()) as {
-      document:DigitalDocument;
-    };
+    const persisted=persistedDigitalState(useDigitalStore.getState());
     expect(persisted.document).toBe(doc);
     expect(persisted.document.components.some(c=>c.kind==='xor')).toBe(false);
     expect(persisted.document.components.some(c=>c.kind==='block')).toBe(true);

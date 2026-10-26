@@ -111,6 +111,15 @@ const ownWire = (w: DigitalWire, ids: Set<string>) =>
   ((isDigitalTerminal(w.from) && ids.has(w.from.componentId)) ||
    (isDigitalTerminal(w.to) && ids.has(w.to.componentId)));
 
+/** Exported separately so draft/committed persistence can be regression-tested
+ * even when Node test runners do not provide localStorage. */
+export function persistedDigitalState(state: Pick<DigitalStore, 'document' | 'editStack' | 'blockLibrary'>) {
+  return {
+    document: state.editStack[0]?.document ?? state.document,
+    blockLibrary: state.blockLibrary,
+  };
+}
+
 export const useDigitalStore = create<DigitalStore>()(persist((set, get) => ({
   document: initialDigitalCircuit(),
   selection: null, selectedIds: [], pending: null,
@@ -471,8 +480,5 @@ export const useDigitalStore = create<DigitalStore>()(persist((set, get) => ({
   name: 'circuitbuilder-signal-v01',
   // An in-progress internal edit is a draft: reload restores the last
   // committed parent, never an orphaned copy of the module's internals.
-  partialize: state => ({
-    document: state.editStack[0]?.document ?? state.document,
-    blockLibrary: state.blockLibrary,
-  }),
+  partialize: persistedDigitalState,
 }));
