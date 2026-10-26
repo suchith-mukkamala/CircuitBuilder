@@ -1,6 +1,6 @@
 import {
-  DigitalBlock, DigitalComponent, DigitalDocument, GateKind, LogicValue,
-  isDigitalDocument, pinsOf,
+  DigitalBlock, DigitalComponent, DigitalDocument,
+  isDigitalDocument, inputsOf, outputsOf,
 } from './types';
 import { buildSignalNetwork } from './network';
 
@@ -33,10 +33,8 @@ class UnionFind {
 export interface Primitive {
   id: string;
   component: DigitalComponent;
-  a?: string;
-  b?: string;
-  input?: string;
-  output?: string;
+  inputs: Record<string, string>;
+  outputs: Record<string, string>;
   label: string;
 }
 export interface CompiledSignals {
@@ -99,10 +97,8 @@ export function compileSignals(doc: DigitalDocument): CompiledSignals {
       primitives.push({
         id: namespace + '/' + c.id,
         component: c,
-        a: pinsOf(c).includes('a') ? at(c, 'a') : undefined,
-        b: pinsOf(c).includes('b') ? at(c, 'b') : undefined,
-        input: c.kind === 'led' ? at(c, 'in') : undefined,
-        output: c.kind !== 'led' ? at(c, 'out') : undefined,
+        inputs: Object.fromEntries(inputsOf(c).map(pin => [pin,at(c,pin)])),
+        outputs: Object.fromEntries(outputsOf(c).map(pin => [pin,at(c,pin)])),
         label: namespace === 'top' ? c.name ?? c.kind.toUpperCase() : namespace + '/' + (c.name ?? c.kind),
       });
     }
@@ -117,8 +113,9 @@ export function compileSignals(doc: DigitalDocument): CompiledSignals {
     terminals: Object.fromEntries(Object.entries(topTerms).map(([pin, root]) => [pin, uf.find(root)])),
     wires: Object.fromEntries(Object.entries(topWires).map(([id, root]) => [id, uf.find(root)])),
     primitives: primitives.map(c => ({
-      ...c, a: canonical(c.a), b: canonical(c.b),
-      input: canonical(c.input), output: canonical(c.output),
+      ...c,
+      inputs:Object.fromEntries(Object.entries(c.inputs).map(([pin,net])=>[pin,canonical(net)!])),
+      outputs:Object.fromEntries(Object.entries(c.outputs).map(([pin,net])=>[pin,canonical(net)!])),
     })),
   };
 }

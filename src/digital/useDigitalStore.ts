@@ -3,7 +3,7 @@ import { persist } from 'zustand/middleware';
 import {
   DigitalComponent, DigitalDocument, DigitalEndpoint, DigitalKind, DigitalPoint,
   DigitalSelection, DigitalWire, DigitalBlock, LogicValue, digitalId, digitalSnap,
-  initialDigitalCircuit, isDigitalDocument, isDigitalTerminal, pinsOf,
+  initialDigitalCircuit, isDigitalDocument, isDigitalTerminal, pinsOf, digitalKinds,
 } from './types';
 import { simulateLogic } from './engine';
 import { applyInputVector, captureBlock, placeBlock, reviseBlockDefinition, updatedBlockCatalog } from './blocks';
@@ -55,6 +55,9 @@ export type DigitalStore = {
   pasteCount: number;
   message: string;
   blockLibrary: DigitalBlock[];
+  favoriteKinds: DigitalKind[];
+  recentKinds: DigitalKind[];
+  toggleFavorite: (kind:DigitalKind) => void;
   editStack: BlockEditFrame[];
   openBlock: (instanceId: string) => void;
   saveBlockEdit: () => void;
@@ -117,6 +120,8 @@ export function persistedDigitalState(state: DigitalStore) {
   return {
     document: state.editStack[0]?.document ?? state.document,
     blockLibrary: state.blockLibrary,
+    favoriteKinds: state.favoriteKinds,
+    recentKinds: state.recentKinds,
   };
 }
 
@@ -125,7 +130,11 @@ export const useDigitalStore = create<DigitalStore>()(persist((set, get) => ({
   selection: null, selectedIds: [], pending: null,
   past: [], future: [], dragOrigin: null,
   clipboard: null, pasteCount: 0,
-  blockLibrary: [], editStack: [], probes: [], trace: [sample(initialDigitalCircuit(), 0)],
+  blockLibrary: [], favoriteKinds:[], recentKinds:[], editStack: [],
+  probes: [], trace: [sample(initialDigitalCircuit(), 0)],
+  toggleFavorite: kind => set(state => ({ favoriteKinds:
+    state.favoriteKinds.includes(kind) ? state.favoriteKinds.filter(k => k!==kind) : [...state.favoriteKinds,kind],
+  })),
   message: 'Signal Lab ready · flip input switches to update the outputs.',
   openBlock: instanceId => {
     const state = get();
@@ -256,6 +265,7 @@ export const useDigitalStore = create<DigitalStore>()(persist((set, get) => ({
   clearTrace: () => set(state => ({trace:[sample(state.document,0)],message:'Signal history reset.'})),
   add: (kind, at) => set(state => {
     if (kind === 'block') return { message: 'Insert a block from the saved block library.' };
+    if (!digitalKinds.includes(kind)) return {message:'Unknown Signal Lab part.'};
     const c: DigitalComponent = {
       id: digitalId(), kind, x: digitalSnap(at.x), y: digitalSnap(at.y), rotation: 0,
       ...(kind === 'input' ? { bit: 0 as const } : {}),
@@ -264,6 +274,7 @@ export const useDigitalStore = create<DigitalStore>()(persist((set, get) => ({
       ...state.document, components: [...state.document.components, c],
     }, {
       selection: { type: 'component', id: c.id }, selectedIds: [c.id], pending: null,
+      recentKinds: [kind,...state.recentKinds.filter(k=>k!==kind)].slice(0,6),
       message: kind.toUpperCase() + ' placed. Click a pin to wire it.',
     });
   }),

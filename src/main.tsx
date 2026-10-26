@@ -8,6 +8,7 @@ import './v04.css';
 import './signal.css';
 import './signal-v06.css';
 import './signal-v061.css';
+import './signal-v07.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode><LabHub /></React.StrictMode>,
