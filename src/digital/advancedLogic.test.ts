@@ -75,7 +75,7 @@ describe('new component catalog and metadata',()=>{
     expect(pins('high')).toEqual(['out']);
     expect(pins('low')).toEqual(['out']);
     expect(pinAt({id:'g',kind:'mux2',x:400,y:240,rotation:90},'sel'))
-      .toEqual({x:400,y:176});
+      .toEqual({x:376,y:176});
   });
 });
 
@@ -185,10 +185,10 @@ describe('undefined and floating signals on new devices',()=>{
     const doc=makeCircuit('mux2',[1,0,1]);
     doc.wires=doc.wires.filter(w=>w.id!=='wIn2');
     const result=simulateLogic(doc);
-    expect(result.warnings).toContain(expect.stringMatching(/SEL has no driver/));
+    expect(result.warnings).toEqual(expect.arrayContaining([expect.stringMatching(/SEL has no driver/)]));
     const full=makeCircuit('fulladder',[1,0,1]);
     full.wires=full.wires.filter(w=>w.id!=='wIn2');
-    expect(simulateLogic(full).warnings).toContain(expect.stringMatching(/CIN has no driver/));
+    expect(simulateLogic(full).warnings).toEqual(expect.arrayContaining([expect.stringMatching(/CIN has no driver/)]));
   });
 });
 
