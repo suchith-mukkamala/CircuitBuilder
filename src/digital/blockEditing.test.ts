@@ -134,7 +134,7 @@ describe('block drilldown editing and parent restoration',()=>{
     state.undo();
     expect(simulateLogic(useDigitalStore.getState().document).ledValues[led.id]).toBe(1);
   });
-  it('lets a gate's visible interface labels update without changing external pin IDs',()=>{
+  it('updates block interface labels without changing external pin IDs',()=>{
     const {block}=initializeBlock();
     useDigitalStore.getState().openBlock(block.id);
     useDigitalStore.getState().setName('a','DATA');
