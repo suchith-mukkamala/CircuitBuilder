@@ -1,3 +1,12 @@
+## Troubleshooting electrical connections (v0.3 repair)
+
+Component terminals placed directly on a drawn wire now electrically connect to the trace. Previously, the graph could show an attached pin but omit it from the solver, leading to a misleading singular-matrix error. Pure wire crossings without endpoints still do not join.
+
+If DC analysis reports a floating node, its message names affected component pins (for example R2.A). Check those contacts. Capacitors and open switches do not conduct in steady-state DC even when correctly wired; use transient analysis for charging behavior.
+
+If an ideal voltage source is shorted by a wire, you receive a direct short diagnosis. Parallel ideal sources and loops of ideal shorts can also make the equations singular.
+
+---
 # CircuitBuilder v0.3 — Neon Time Lab
 
 **New in v0.3:** Free-ended traces, right-click menus, real capacitors and inductors, and a time-position scrubber over an RLC transient simulation.

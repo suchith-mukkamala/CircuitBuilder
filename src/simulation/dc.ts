@@ -1,5 +1,6 @@
 import { CircuitDocument, DCResult, CircuitComponent, terminalKey } from '../circuit/types';
 import { circuitNodes } from '../circuit/connectivity';
+import { explainFloatingNodes, explainIdealConstraintShort } from './diagnostics';
 
 /**
  * Modified Nodal Analysis for linear DC circuits.
@@ -43,6 +44,13 @@ export function solveDC(doc: CircuitDocument): DCResult {
       throw new Error('Potentiometer wiper must be between 0.1% and 99.9%.');
     }
   }
+
+  // Diagnose disconnected DC islands and ideal shorts BEFORE matrix solving.
+  // Otherwise both look like an opaque singular-matrix error to the user.
+  const short = explainIdealConstraintShort(doc, terminalNodes);
+  if (short) throw new Error(short);
+  const floating = explainFloatingNodes(doc, terminalNodes, ground);
+  if (floating) throw new Error(floating);
 
   const roots = [...new Set(Object.values(terminalNodes))].filter(root => root !== ground).sort();
   const indexes = new Map(roots.map((root, i) => [root, i]));
@@ -94,7 +102,15 @@ export function solveDC(doc: CircuitDocument): DCResult {
     rhs[row] = c.kind === 'voltage_source' ? c.value : 0;
   });
 
-  const solution = solveLinear(a, rhs);
+  let solution: number[];
+  try {
+    solution = solveLinear(a, rhs);
+  } catch (error) {
+    if (!(error instanceof Error) || !/cannot be solved/i.test(error.message)) throw error;
+    throw new Error('Circuit cannot be solved: the network has dependent or conflicting ideal constraints. Check for ' +
+      'parallel ideal voltage sources, closed-switch bypasses, or loops containing only ideal ' +
+      'sources and inductors. Try adding a physical resistor in series with the ideal loop.');
+  }
   const nodeVoltages: Record<string, number> = { [ground]: 0 };
   roots.forEach((root, i) => { nodeVoltages[root] = solution[i]; });
   const at = (c: CircuitComponent, pin: 'a' | 'b' | 'w') =>
