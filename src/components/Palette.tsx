@@ -60,21 +60,16 @@ export function Palette() {
       <div className="palette-list">{controls.map(renderEntry)}</div>
       <div className="sidebar-section-label sidebar-second">03 / ENERGY STORAGE <span className="new-marker">NEW!</span></div>
       <div className="palette-list">{reactive.map(renderEntry)}</div>
-      <div className="lab-presets">
-        <div className="sidebar-section-label">04 / INSTANT LABS</div>
+      <details className="lab-presets lab-presets-collapsible">
+        <summary className="sidebar-section-label">04 / INSTANT LABS <span>▸</span></summary>
         <button onClick={() => selectLab(starterCircuit())}><span>◇</span> VOLTAGE DIVIDER</button>
         <button onClick={() => selectLab(switchCircuit())}><span>↯</span> SWITCH CONTROL</button>
         <button onClick={() => selectLab(currentSourceCircuit())}><span>⇣</span> CURRENT SOURCE</button>
         <button onClick={() => selectLab(potentiometerCircuit())}><span>◈</span> POTENTIOMETER</button>
         <button onClick={() => selectLab(rcCircuit(), .5)}><span>▥</span> RC CHARGING (0.5 s)</button>
         <button onClick={() => selectLab(rlCircuit(), .012)}><span>∿</span> RL RESPONSE (12 ms)</button>
-      </div>
-      <div className="sidebar-bottom">
-        <div className="tip-heading">✦ LAB NOTES</div>
-        <p>Click a pin then empty space to leave a free wire end.
-          Later, drag any matching terminal onto it.</p>
-        <p>Right-click anything for quick controls. Open an RC or RL lab to scrub through time.</p>
-      </div>
+      </details>
+      <div className="palette-mini-tip">✦ RIGHT-CLICK CANVAS FOR QUICK ACTIONS</div>
     </aside>
   );
 }

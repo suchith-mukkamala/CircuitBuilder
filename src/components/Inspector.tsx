@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useCircuitStore } from '../state/useCircuitStore';
 import { formatElectrical, labelFor, isTerminal, WireEndpoint } from '../circuit/types';
+import { parseEngineering } from '../editor/units';
 
 const endpointLabel = (e: WireEndpoint) => isTerminal(e)
   ? e.componentId + ' : ' + e.pin : '(' + e.x + ', ' + e.y + ')';
@@ -14,6 +15,12 @@ const symbols = {
 export function Inspector() {
   const doc = useCircuitStore(s => s.document);
   const selected = useCircuitStore(s => s.selection);
+  const selectedIds = useCircuitStore(s => s.selectedIds);
+  const copy = useCircuitStore(s => s.copySelection);
+  const duplicate = useCircuitStore(s => s.duplicateSelection);
+  const straightenWire = useCircuitStore(s => s.straightenWire);
+  const beginDrag = useCircuitStore(s => s.beginDrag);
+  const endDrag = useCircuitStore(s => s.endDrag);
   const simulation = useCircuitStore(s => s.simulation);
   const rotate = useCircuitStore(s => s.rotateComponent);
   const setValue = useCircuitStore(s => s.setComponentValue);
@@ -24,7 +31,16 @@ export function Inspector() {
   const wire = selected?.type === 'wire' ? doc.wires.find(item => item.id === selected.id) : undefined;
   const reading = c ? simulation?.readings[c.id] : undefined;
   const [draft, setDraft] = useState('');
-  useEffect(() => { setDraft(c ? String(c.value) : ''); }, [c?.id, c?.value]);
+  const [invalid, setInvalid] = useState(false);
+  useEffect(() => { setDraft(c ? String(c.value) : ''); setInvalid(false); }, [c?.id, c?.value]);
+  const commit = () => {
+    if (!c) return;
+    const parsed = parseEngineering(draft, c.kind);
+    if (parsed === null) { setInvalid(true); return; }
+    setInvalid(false);
+    setValue(c.id, parsed);
+    setDraft(String(parsed));
+  };
   const isSource = c?.kind === 'voltage_source' || c?.kind === 'current_source';
   const isResistive = c?.kind === 'resistor' || c?.kind === 'potentiometer';
   const isReactive = c?.kind === 'capacitor' || c?.kind === 'inductor';
@@ -35,6 +51,12 @@ export function Inspector() {
       <div className="panel-heading">◈ COMPONENT LAB <span className="tiny-muted">/ INSPECT</span></div>
       {c ? (
         <div className="panel-content inspector-content">
+          {selectedIds.length > 1 && <div className="multi-selection-banner">
+            <strong>▣ {selectedIds.length} PARTS SELECTED</strong>
+            <span>Drag any selected part to move the group.</span>
+            <div><button onClick={copy}>COPY</button><button onClick={duplicate}>DUPLICATE</button>
+              <button onClick={remove}>DELETE ALL</button></div>
+          </div>}
           <div className="selected-heading">
             <span className={'selected-symbol accent-' + c.kind}>{symbols[c.kind]}</span>
             <div><strong>{labelFor(c, doc.components)}</strong><small>{c.kind.replace('_', ' ').toUpperCase()}</small></div>
@@ -46,14 +68,16 @@ export function Inspector() {
                 : c.kind === 'inductor' ? 'INDUCTANCE (HENRYS)' : 'VOLTAGE (VOLTS)'}
             </label>
             <input
-              id="component-value" className="input" type="number" step="any"
-              value={draft} onChange={e => {
-                setDraft(e.target.value);
-                const num = Number(e.target.value);
-                if (e.target.value.trim() && Number.isFinite(num)) setValue(c.id, num);
+              id="component-value" className="input" type="text" inputMode="decimal"
+              aria-invalid={invalid} placeholder="4.7k, 100uF, 10mH"
+              value={draft} onChange={e => { setDraft(e.target.value); setInvalid(false); }}
+              onBlur={commit} onKeyDown={e => {
+                if (e.key === 'Enter') { e.currentTarget.blur(); }
+                if (e.key === 'Escape') { setDraft(String(c.value)); setInvalid(false); }
               }}
             />
-            <div className="field-note">{isResistive ? 'Enter ohms (1000 = 1 kΩ)'
+            {invalid && <div className="value-error">Enter a valid number or SI unit (e.g. 4.7kΩ).</div>}
+            <div className="field-note">{isResistive ? 'Try 1kΩ, 4.7k, 2M or 220'
               : c.kind === 'capacitor' ? 'Farads · 0.0001 = 100 µF. Starts uncharged at t = 0.'
               : c.kind === 'inductor' ? 'Henrys · 0.1 = 100 mH. Starts with 0 A at t = 0.'
               : c.kind === 'current_source' ? 'Positive current flows from A to B (0.005 = 5 mA)'
@@ -82,6 +106,7 @@ export function Inspector() {
                 id="pot-wiper" aria-label="Potentiometer wiper position"
                 type="range" min="1" max="99" step="1"
                 value={Math.round((c.wiper ?? 0.5) * 100)}
+                onPointerDown={beginDrag} onPointerUp={endDrag} onPointerCancel={endDrag}
                 onChange={e => setPotWiper(c.id, Number(e.target.value) / 100)}
               />
               <div className="wiper-labels"><span>A</span><span>WIPER</span><span>B</span></div>
@@ -109,6 +134,7 @@ export function Inspector() {
           <div className="selected-heading"><span className="selected-symbol">⌁</span><div><strong>WIRE</strong><small>CONNECTION</small></div></div>
           <div className="info-pair"><span>FROM</span><b>{endpointLabel(wire.from)}</b></div>
           <div className="info-pair"><span>TO</span><b>{endpointLabel(wire.to)}</b></div>
+          <button className="small-action" onClick={() => straightenWire(wire.id)}>⌁ STRAIGHTEN ROUTE</button>
           <button className="small-action danger-action" onClick={remove}>✕ DELETE WIRE</button>
         </div>
       ) : (
@@ -127,12 +153,13 @@ export function SimulationPanel() {
   const result = useCircuitStore(s => s.simulation);
   const document = useCircuitStore(s => s.document);
   const message = useCircuitStore(s => s.message);
+  const analysisMode = useCircuitStore(s => s.analysisMode);
   return (
     <div className={'panel simulation-panel neon-panel ' + (result ? 'simulation-live' : '')}>
       <div className="panel-heading">◉ VOLTAGE ARCADE <span className="tiny-muted">/ DC</span></div>
       <div className="panel-content">
         <div className="status-line"><span className={'status-dot ' + (result ? 'success' : '')}></span>
-          {result ? '● CIRCUIT ANALYZED' : '○ READY TO COMPUTE'}</div>
+          {result ? (analysisMode === 'dc' ? '● DC ANALYZED' : '● TRANSIENT ANALYZED') : '○ READY TO COMPUTE'}</div>
         <button className="run-button" onClick={simulate}><span>▶</span> RUN DC ANALYSIS</button>
         <div className={'simulation-message ' + (result ? 'message-success' : '')} role="status">{message}</div>
         <div className="stats-row">

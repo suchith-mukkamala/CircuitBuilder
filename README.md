@@ -1,3 +1,42 @@
+# CircuitBuilder v0.4 — Arcade Editor Polish
+
+**Latest:** animated conventional-current particles on electrically unbranched wires, voltage-based neon coloring, deliberately marked junctions, undo/redo, group editing, quick SI-unit input, and hideable panels. The physics is still computed by the existing DC / transient MNA solvers.
+
+## A calmer workbench
+
+- Top toolbar consolidates **Undo**, **Redo**, **Copy**, **Paste**, **DC**, **RLC**, and toggles for the **Parts** and **Panel** sidebars.
+- The right sidebar now has **INSPECT / SIMULATE** tabs; shortcuts are tucked under an expandable reference.
+- Circuit presets remain in **Parts Library → Instant Labs** (collapsed by default).
+- The schematic hides voltage text on unrelated components until selected, while highlighting the selected component's A-terminal net or the selected wire's entire electrical net.
+- `◉ FLOW` on the lower right of the canvas toggles the animation. The preference persists, and operating systems requesting reduced motion disable the effect.
+
+## Editing shortcuts
+
+| Action | Shortcut or gesture |
+| --- | --- |
+| Undo / redo | Ctrl/Cmd+Z / Ctrl/Cmd+Shift+Z (Ctrl+Y also redoes) |
+| Multi-select | Shift-click several components |
+| Move selection | Drag any selected component to move them together |
+| Select all | Ctrl/Cmd+A |
+| Copy / paste | Ctrl/Cmd+C / Ctrl/Cmd+V |
+| Duplicate | Ctrl/Cmd+D |
+| Rotate | R |
+| Delete selected parts / wire | Delete / Backspace |
+| Move a free wire end | Shift-drag its glowing endpoint |
+| Straighten a wire | Right-click wire → STRAIGHTEN ROUTE |
+| Edit values | Type `4.7k`, `100uF`, `10mH`, `5mA`, etc., then Enter or leave the field |
+
+Copy/paste recreates internal wires for selected components using new component and wire IDs. A drag creates one undo-history entry instead of hundreds of entries for each mouse movement. History is limited to the last 80 editing actions; it is not persisted between browser reloads. Existing circuit JSON files remain schema version 1.
+
+## Electrical honesty of the animation
+
+Animated dots represent **conventional current** (positive charge-flow direction), derived from signed simulated branch currents. They are intentionally shown only when a wire belongs to an electrically unbranched net with two terminals and a single wire. On branching and ideal-wire networks, segment current distribution may not be uniquely determined by the ideal circuit model, so those traces remain illuminated according to their **simulated node voltage** without misleading directional particles. Particle speed is illustrative, not a physical drift velocity or calibrated current meter. Use the inspector and time panel for quantitative readings.
+
+## Transient resolution
+
+The Time Machine exposes **60, 120, 240, and 500 sample steps** across the chosen time window. Higher steps improve time resolution at increased computational cost. The solver still assumes constant DC excitation from t=0 with initially uncharged capacitors and zero inductor currents (Backward Euler, fixed-step).
+
+---
 ## Troubleshooting electrical connections (v0.3 repair)
 
 Component terminals placed directly on a drawn wire now electrically connect to the trace. Previously, the graph could show an attached pin but omit it from the solver, leading to a misleading singular-matrix error. Pure wire crossings without endpoints still do not join.
