@@ -30,6 +30,16 @@ Signal Lab's neon pixel-art parts library now contains **20 built-in components*
 
 The Boolean engine retains four-state semantics: HIGH (1), LOW (0), unknown/conflict (X), undriven (Z). Known controlling values produce deterministic results, even alongside unknowns where mathematically justified (for example \`AND3(0,X,Z)=0\` and \`MAJORITY(1,1,Z)=1\`). These are combinational components, not clocked or propagation-delay models.
 
+
+
+### Analog Lab search and organization
+
+Analog Lab now shares the neon search-and-category experience. Its existing eight
+simulated parts are grouped under **Passives & Reference**, **Sources & Controls**,
+and **Energy Storage**, with collapsible categories, quick category filters,
+and keyword searching (for example \`coil\`, \`current\`, or \`variable resistor\`).
+No analog component model or solver behavior has been changed.
+
 ## Improvements under the hood
 
 - A single part-definition catalog drives search, category navigation, and right-click placement.

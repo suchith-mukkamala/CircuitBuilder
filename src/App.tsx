@@ -109,7 +109,7 @@ export function App() {
       <header className="topbar polished-topbar">
         <div className="brand">
           <span className="brand-chip"><span className="chip-center">▣</span></span>
-          <div className="brand-name">CIRCUIT<span>BUILDER</span><small>V0.4</small></div>
+          <div className="brand-name">CIRCUIT<span>BUILDER</span><small>LAB 01</small></div>
         </div>
         <div className="file-name polished-filename">
           <span className="folder-icon">▰</span>

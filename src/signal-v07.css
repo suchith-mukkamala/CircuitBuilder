@@ -96,3 +96,26 @@
   .signal-catalog-entry .signal-palette-words small{font-size:8px}
 }
 @media(prefers-reduced-motion:reduce){.signal-catalog-chevron{transition:none}}
+
+/* Analog Lab uses the same arcade search/category affordances. */
+.analog-catalog{min-height:0;overflow-y:auto;background:#11112f}
+.analog-catalog .signal-catalog-search{padding:5px 8px 10px}
+.analog-catalog .signal-catalog-search .sidebar-section-label{display:block;padding:8px 0;color:#b7ffe7;font:7px/1.6 var(--pixel)}
+.analog-catalog .signal-catalog-filters{padding:8px 7px;gap:4px}
+.analog-catalog .signal-filter-chip{font-size:8px;padding:6px}
+.analog-catalog .signal-catalog-category{margin:6px 7px}
+.analog-catalog .signal-catalog-category summary{padding:9px 6px}
+.analog-catalog .signal-catalog-category-title{font-size:6px}
+.analog-catalog .signal-catalog-category-title small{font-size:8px}
+.analog-catalog .signal-catalog-category .palette-list{display:flex;flex-direction:column;gap:6px;padding:9px 6px}
+.analog-catalog .signal-catalog-category .palette-item{min-height:47px;padding:6px;gap:6px;width:100%}
+.analog-catalog .signal-catalog-category .palette-icon{width:33px;flex:0 0 33px;height:33px;font-size:21px}
+.analog-catalog .signal-catalog-category .palette-text strong{font-size:6.5px}
+.analog-catalog .signal-catalog-category .palette-text small{font-size:9px}
+.analog-catalog .signal-catalog-category .palette-plus{font-size:14px}
+.analog-catalog-groups{min-width:0}
+.analog-catalog .palette-mini-tip{position:sticky;bottom:0;background:#0e1c37ee;z-index:3}
+@media(max-width:650px){
+  .analog-catalog .signal-catalog-category .palette-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+  .analog-catalog .signal-catalog-category .palette-item{min-height:58px}
+}
