@@ -113,7 +113,7 @@ const ownWire = (w: DigitalWire, ids: Set<string>) =>
 
 /** Exported separately so draft/committed persistence can be regression-tested
  * even when Node test runners do not provide localStorage. */
-export function persistedDigitalState(state: Pick<DigitalStore, 'document' | 'editStack' | 'blockLibrary'>) {
+export function persistedDigitalState(state: DigitalStore) {
   return {
     document: state.editStack[0]?.document ?? state.document,
     blockLibrary: state.blockLibrary,
