@@ -1,0 +1,113 @@
+/* CIRCUITBUILDER v0.6 — modules, signal scope and vector tester */
+.signal-block-library{margin-top:11px;border-top:1px solid #4d397c;padding:2px 8px 9px}
+.signal-block-library .signal-section-label{padding-left:2px}
+.signal-block-creator{border:1px solid #7057a2;background:#191737;padding:10px;margin-bottom:11px}
+.signal-block-creator summary{font:7px/1.8 var(--pixel);color:#ffc7fa;list-style:none;cursor:pointer;display:flex;justify-content:space-between}
+.signal-block-creator summary::-webkit-details-marker{display:none}
+.signal-block-creator p{color:#b3add8;font:10px/1.75 'Space Mono',monospace}
+.signal-block-creator label,.scope-probe-add label,.scope-position label,.vector-label{display:block;font:8px/1.8 var(--pixel);color:#a5fff0;padding:7px 0}
+.signal-block-creator input{width:100%;border:1px solid #8768b4;background:#0c1331;color:#ffeafa;padding:9px;font:10px 'Space Mono',monospace}
+.signal-block-creator button{
+  margin-top:9px;width:100%;padding:11px 6px;border:2px solid #85f8d8;
+  background:#224e53;color:#c1fff1;font:8px var(--pixel);
+  box-shadow:0 0 13px #69ffcd50;cursor:pointer
+}
+.signal-block-error{color:#ffaccc!important;background:#391937;padding:8px;border:1px solid #cd6e9b}
+.signal-block-empty{color:#828eaf;font:9px/1.7 'Space Mono',monospace}
+.signal-saved-block-list{display:flex;flex-direction:column;gap:6px}
+.signal-saved-block-list>button{
+  display:flex;align-items:center;width:100%;gap:7px;text-align:left;
+  background:#1a1639;border:1px solid #7655a4;padding:8px 6px;cursor:grab
+}
+.signal-saved-block-list>button:hover{background:#302252;border-color:#ffc5fa;box-shadow:0 0 12px #a872d863}
+.saved-block-glyph{
+  flex:0 0 31px;display:flex;align-items:center;justify-content:center;
+  width:31px;height:31px;border:2px solid #bc91e9;background:#251b4d;
+  color:#f3bbfd;font:24px monospace;box-shadow:0 0 10px #be74ff55
+}
+.signal-saved-block-list>button>span:nth-child(2){display:flex;flex:1;flex-direction:column;gap:4px;min-width:0}
+.signal-saved-block-list strong{color:#fad6ff;word-break:break-word;font:9px/1.5 'Space Mono',monospace}
+.signal-saved-block-list small{color:#93dccc;font:9px 'Space Mono',monospace}
+.saved-block-plus{font:20px monospace;color:#7cffdb}
+.signal-toolbar button.signal-instrument-button{
+  background:#23234c;border-color:#7b6ab8;color:#e1c7ff;
+}
+.signal-toolbar button.signal-instrument-button:hover{border-color:#9ffff0;background:#294455}
+.signal-tabs{grid-template-columns:repeat(4,minmax(0,1fr))}
+.signal-tabs button{font-size:7px;line-height:1.5;padding:11px 2px}
+.signal-scope-panel,.signal-vector-panel{min-width:0;background:#111433;border:2px solid #564483}
+.signal-scope-intro{font:10px/1.85 'Space Mono',monospace;color:#a4b9d5;margin:0;padding:14px}
+.scope-probe-add{padding:0 12px 10px}
+.scope-probe-add>div{display:flex;gap:5px}
+.scope-probe-add select{
+  flex:1;min-width:0;padding:8px 5px;border:1px solid #5e69aa;background:#0b1939;
+  color:#e8ddff;font:10px 'Space Mono',monospace
+}
+.scope-probe-add button{border:1px solid #6ef4d5;background:#1a4b4c;color:#b9ffe8;
+  padding:8px;font:8px 'Space Mono',monospace}
+.scope-probe-add button:disabled{opacity:.35;cursor:not-allowed}
+.scope-probe-list{padding:0 12px 7px}
+.scope-probe-line{display:flex;align-items:center;gap:7px;padding:7px 4px;border-bottom:1px solid #3f3c68}
+.scope-probe-line strong{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  color:#dbdcf4;font:10px 'Space Mono',monospace}
+.scope-probe-line>span:nth-last-child(2){font:bold 13px monospace}
+.scope-probe-line button{border:1px solid #78487b;background:#302044;color:#ffc8eb;font:13px monospace}
+.probe-pip{flex:0 0 9px;width:9px;height:9px;box-shadow:0 0 9px currentColor}
+.scope-position{display:flex;align-items:end;gap:6px;justify-content:space-between;padding:8px 12px 11px}
+.scope-position input{width:92px;max-width:100%;padding:8px;background:#0c1938;
+  color:#ffe4b3;border:1px solid #8465b8;font:11px monospace}
+.scope-advance{display:flex;gap:3px;align-items:center}
+.scope-advance button{padding:8px 6px;border:1px solid #5d6091;color:#d6e7fd;
+  background:#20284b;font:10px monospace}
+.scope-advance button:hover{background:#30486a}
+.scope-chart{margin:0 12px;background:#061327;border:2px solid #3e6e94;
+  box-shadow:inset 0 0 19px #1b748c35;overflow:hidden}
+.scope-chart svg{display:block;cursor:crosshair;max-width:100%}
+.scope-chart svg path{filter:drop-shadow(0 0 3px currentColor)}
+.scope-sample-info{
+  padding:10px 12px;color:#b7cee3;display:flex;gap:8px;justify-content:space-between;
+  font:10px 'Space Mono',monospace
+}
+.scope-sample-info strong{color:#afffe3}
+.scope-action-row{border-top:1px solid #4c5385;padding:11px 12px;display:flex;gap:8px;
+  align-items:center;justify-content:space-between}
+.scope-action-row span{color:#849dbf;font:9px/1.6 'Space Mono',monospace}
+.scope-action-row button{padding:7px;color:#eebefa;border:1px solid #795bab;
+  background:#271f49;font:9px monospace}
+.vector-io-list{padding:5px 12px 12px}
+.vector-io-list .signal-section-label{padding-left:0}
+.vector-label{padding:5px 12px}
+.signal-vector-panel textarea{
+  box-sizing:border-box;display:block;width:calc(100% - 24px);margin:0 12px;
+  resize:vertical;min-height:65px;background:#071733;color:#d8fff2;
+  border:2px solid #6794b0;padding:10px;
+  font:14px/1.65 'Space Mono',monospace;letter-spacing:1.5px
+}
+.signal-vector-run{
+  display:block;width:calc(100% - 24px);margin:11px 12px 15px;
+  padding:13px 6px;background:#87edd2;border:2px solid #c6ffe7;
+  color:#0e2531;font:8px/1.5 var(--pixel);box-shadow:0 0 15px #82ffe35c
+}
+.signal-vector-run:hover{background:#c8ffec}
+.signal-vector-run:disabled{opacity:.45;cursor:not-allowed}
+.vector-output{
+  margin-top:8px;border:1px solid #4a729a;background:#0b1f3d;padding:12px 8px;
+  display:grid;grid-template-columns:38px 1fr;gap:9px;
+  color:#a7b9dd;font:10px monospace
+}
+.vector-output strong{color:#a4ffe3;font:14px 'Space Mono',monospace;letter-spacing:2px}
+.vector-footer{border-top:1px solid #3f477a;padding:12px;
+  color:#93a9d2;font:10px/1.7 'Space Mono',monospace}
+.signal-port-actions{display:flex;gap:4px;margin:4px 0}
+.signal-port-actions button{display:block;text-align:left;padding:8px 5px;flex:1;font-size:8px}
+.signal-port-actions button:first-child{flex:1.5}
+.signal-port-actions button:nth-child(2){color:#a8ffe6;border-color:#4caca3}
+.signal-port-actions button:hover{background:#373063}
+@media(max-width:1450px){
+  .signal-toolbar button.signal-instrument-button span{display:none}
+  .signal-tabs button{font-size:6px}
+}
+@media(max-width:740px){
+  .signal-toolbar button.signal-instrument-button{font-size:13px}
+  .signal-tabs button{font-size:7px}
+}

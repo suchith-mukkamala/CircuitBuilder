@@ -1,3 +1,51 @@
+# CircuitBuilder v0.6 — Signal Lab Modules + Waveform Tools
+
+CircuitBuilder has two separate neon pixel-art workbenches: Analog Lab and Signal Lab. This release expands **Signal Lab** with *reusable circuit blocks*, a four-channel logic-event waveform graph, and a typed input-vector tester.
+
+## Condense a circuit into a block
+1. Create a combinational digital circuit with one or more **INPUT switches**, at least one gate (or existing block), and one or more **LED outputs**.
+2. Open **Signal Lab → Parts Library → Reusable Circuit Blocks → Capture Current Circuit**.
+3. Give the module a descriptive name and click **Save as Block**.
+4. INPUT switches automatically become external module **IN** pins and LED indicators become **OUT** pins. The full circuit is stored as an immutable module definition.
+5. The current workspace is replaced with the condensed block and wired input/output controls. **Undo** brings back the original uncondensed design.
+6. Find the block under **Reusable Circuit Blocks**. Drag or click to insert another instance into an existing or newly created circuit. Each instance has isolated internal gate state and independently connected pins.
+
+Saved modules persist in their own browser library. Exported Signal Lab schematics embed their referenced module definitions and dependencies, so imported circuits remain portable. Larger blocks can contain instances of smaller blocks; self-referential definitions are rejected.
+
+Blocks support up to 12 external inputs and 12 outputs. Module definitions are snapshots: changing the source circuit afterward does not retroactively alter already saved modules. Regenerate a new module to publish an updated design.
+
+## Signal waveform probing
+- Right-click any **wire** and choose **Graph This Wire**, or right-click a component and choose **Probe** beside a named pin.
+- Alternatively, choose up to **four** pins/wires in the **WAVEFORM** panel.
+- Switch inputs to record a waveform, or enter a series of vectors in INPUT TEST. The chart plots the resulting 0/1/X/Z states against **input-change event number**.
+- Click the graph or enter an exact **Event #** to inspect the states recorded at that event, then use previous/next buttons.
+- The buffer stores the last 160 changes and can be reset.
+
+**Important:** A combinational simulator evaluates logic without real nanosecond timing or physical gate propagation delays. Therefore this chart is an **event history**, not an oscilloscope with real propagation-time measurements. Clock sources, propagation delays and sequential logic are future upgrades.
+
+## Type binary inputs and read outputs
+Open **INPUT TEST** in Signal Lab:
+- Enter a binary vector matching the number of INPUT switches (e.g. \`01\` for two inputs).
+- Click **Apply & Evaluate** to set every switch simultaneously and immediately read the LED output vector.
+- Enter a comma-separated sequence such as \`00, 01, 11, 10\` to step through several input combinations; the waveform panel records each event. Up to 32 vectors per submitted sequence.
+- Input order and output order are shown explicitly, using the circuit's component order.
+
+The digital engine supports four states: HIGH 1, LOW 0, undefined/conflict X, and undriven Z. Truth tables and embedded blocks use the same pure Boolean evaluation engine.
+
+## Development
+\`\`\`bash
+npm install
+npm run dev
+npm test
+npm run build
+\`\`\`
+
+This release retains the existing **Analog Lab** with its separate Modified Nodal Analysis and transient engine. It also preserves compatibility with previous Signal Lab documents lacking reusable blocks.
+
+---
+
+## Previous release notes
+
 # CircuitBuilder v0.5 · Analog Lab + Signal Lab
 
 Two neon pixel-art electronics laboratories, one React/TypeScript application.

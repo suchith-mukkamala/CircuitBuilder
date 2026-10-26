@@ -5,7 +5,7 @@ import {
 import {
   DigitalComponent, DigitalDocument, DigitalEndpoint, DigitalKind, DigitalPoint,
   DigitalSelection, DigitalWire, LogicResult, LogicValue,
-  digitalLabel, digitalSnap, isDigitalTerminal, pinAt, pinsOf,
+  digitalLabel, digitalSnap, isDigitalTerminal, pinAt, pinsOf, blockHeight,
 } from './types';
 import {
   digitalWirePath, endpointPoint, intentionalJunctions,
@@ -39,6 +39,12 @@ function distanceToSegment(p: DigitalPoint, a: DigitalPoint, b: DigitalPoint): n
 }
 function hitPart(c: DigitalComponent, p: DigitalPoint): boolean {
   // Intentional generous bounding boxes so pixel shapes remain easy to grab.
+  if (c.kind === 'block') {
+    const rad = -c.rotation * Math.PI / 180;
+    const x = (p.x-c.x)*Math.cos(rad)-(p.y-c.y)*Math.sin(rad);
+    const y = (p.x-c.x)*Math.sin(rad)+(p.y-c.y)*Math.cos(rad);
+    return Math.abs(x) < 66 && Math.abs(y) < blockHeight(c)/2;
+  }
   return Math.abs(c.x - p.x) < 35 && Math.abs(c.y - p.y) < 32;
 }
 function nearestOnTrace(p: DigitalPoint, path: DigitalPoint[]): {
@@ -61,13 +67,41 @@ function drawPixelPart(
   doc: DigitalDocument, result: LogicResult, selected: boolean,
 ) {
   const name = digitalLabel(c, doc.components);
-  const source = c.kind === 'input', led = c.kind === 'led';
+  const source = c.kind === 'input', led = c.kind === 'led', block = c.kind === 'block';
   const logical = led ? result.ledValues[c.id]
     : source ? (c.bit ?? 0) : result.gateValues[c.id];
   const tint = signalColor(logical ?? 'Z');
   ctx.save(); ctx.translate(c.x, c.y);
   ctx.rotate(c.rotation * Math.PI / 180);
   ctx.font = 'bold 11px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  if (block) {
+    const h=blockHeight(c);
+    if (selected) {
+      ctx.strokeStyle='#ffc9f5';ctx.setLineDash([5,5]);ctx.lineWidth=2;
+      ctx.strokeRect(-67,-h/2-7,134,h+14);ctx.setLineDash([]);
+    }
+    ctx.shadowColor='#be8bff';ctx.shadowBlur=18;
+    ctx.fillStyle='#121437';ctx.fillRect(-60,-h/2,120,h);
+    ctx.fillStyle='#362258';ctx.fillRect(-58,-h/2+3,116,h-6);
+    ctx.fillStyle='#171a3b';ctx.fillRect(-53,-h/2+8,106,h-16);
+    ctx.shadowBlur=0;ctx.strokeStyle='#ca95ff';ctx.lineWidth=3;
+    ctx.strokeRect(-60,-h/2,120,h);
+    ctx.fillStyle='#c0ffef';ctx.font='bold 20px monospace';ctx.fillText('▣',0,-5);
+    ctx.fillStyle='#ecc8fc';ctx.font='bold 10px monospace';
+    ctx.fillText(name.length>14?name.slice(0,13)+'…':name,0,17);
+    const ins=c.ports?.inputs??[],outs=c.ports?.outputs??[];
+    ctx.font='bold 9px monospace';
+    for (const [ports,side] of [[ins,-1],[outs,1]] as const) {
+      for(let i=0;i<ports.length;i++) {
+        const y=(i-(ports.length-1)/2)*24;
+        ctx.strokeStyle='#85ffe0';ctx.shadowColor='#76f9d4';ctx.shadowBlur=7;
+        ctx.beginPath();ctx.moveTo(side*60,y);ctx.lineTo(side*78,y);ctx.stroke();ctx.shadowBlur=0;
+        ctx.textAlign=side<0?'left':'right';ctx.fillStyle='#acbce8';
+        ctx.fillText(ports[i].replace(/^in/,'I').replace(/^out/,'O'),side*48,y-7);
+      }
+    }
+    ctx.restore();return;
+  }
   if (selected) {
     ctx.strokeStyle = '#ffb0ef'; ctx.shadowColor = ink.pink; ctx.shadowBlur = 14;
     ctx.lineWidth = 2; ctx.setLineDash([5, 4]); ctx.strokeRect(-38, -34, 76, 68);
@@ -244,7 +278,7 @@ function drawSignalCanvas(
   ctx.restore();
 }
 
-export function SignalCanvas({ result }: { result: LogicResult }) {
+export function SignalCanvas({ result, onProbe }: { result: LogicResult; onProbe?: () => void }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const wrapper = useRef<HTMLDivElement>(null);
   const dragging = useRef<Drag | null>(null);
@@ -270,6 +304,8 @@ export function SignalCanvas({ result }: { result: LogicResult }) {
   const straighten = useDigitalStore(s => s.straighten);
   const copy = useDigitalStore(s => s.copy);
   const duplicate = useDigitalStore(s => s.duplicate);
+  const addProbe = useDigitalStore(s => s.addProbe);
+  const addSavedBlock = useDigitalStore(s => s.addSavedBlock);
   const dragStart = useDigitalStore(s => s.dragStart);
   const dragEnd = useDigitalStore(s => s.dragEnd);
 
@@ -444,6 +480,12 @@ export function SignalCanvas({ result }: { result: LogicResult }) {
   };
   const onDrop = (e: DragEvent<HTMLCanvasElement>) => {
     e.preventDefault();
+    const blockId = e.dataTransfer.getData('application/x-signal-block');
+    if (blockId) {
+      try { addSavedBlock(blockId,world(e)); }
+      catch(error) {window.alert(error instanceof Error?error.message:'Unable to place block.');}
+      return;
+    }
     const kind = e.dataTransfer.getData('application/x-signal-kind') as DigitalKind;
     if (!['input','and','or','not','xor','nand','nor','xnor','buffer','led'].includes(kind)) return;
     add(kind,world(e));
@@ -487,10 +529,15 @@ export function SignalCanvas({ result }: { result: LogicResult }) {
             <div className="signal-menu-subtitle">{digitalLabel(menuPart,doc.components)} · {menuPart.kind.toUpperCase()}</div>
             {menuPart.kind==='input' && <button className="signal-menu-accent"
               onClick={action(()=>toggleInput(menuPart.id))}>↯ TOGGLE TO {menuPart.bit===1?'LOW':'HIGH'}</button>}
-            {pinsOf(menuPart).map(pin=><button key={pin}
-              onClick={action(()=>startWire({componentId:menuPart.id,pin}))}>
-              ⌁ WIRE FROM {pin.toUpperCase()}
-            </button>)}
+            {pinsOf(menuPart).map(pin=><div className="signal-port-actions" key={pin}>
+              <button onClick={action(()=>startWire({componentId:menuPart.id,pin}))}>
+                ⌁ WIRE {pin.toUpperCase()}
+              </button>
+              <button title={'Plot signal at '+pin} onClick={action(()=>{
+                addProbe('terminal',menuPart.id+':'+pin,digitalLabel(menuPart,doc.components)+'.'+pin);
+                onProbe?.();
+              })}>⌁ PROBE</button>
+            </div>)}
             <button onClick={action(()=>rotate(menuPart.id))}>↻ ROTATE 90°</button>
             <button onClick={action(copy)}>▣ COPY</button>
             <button onClick={action(duplicate)}>⊞ DUPLICATE</button>
@@ -499,6 +546,9 @@ export function SignalCanvas({ result }: { result: LogicResult }) {
             <div className="signal-menu-subtitle">SIGNAL WIRE</div>
             <button className="signal-menu-accent"
               onClick={action(()=>startWire(menu.wirePoint??menu.world))}>⌁ BRANCH HERE</button>
+            <button onClick={action(()=>{
+              addProbe('wire',wireSelected,'WIRE '+wireSelected.slice(0,5));onProbe?.();
+            })}>〰 GRAPH THIS WIRE</button>
             <button onClick={action(()=>straighten(wireSelected))}>⌁ STRAIGHTEN ROUTE</button>
             <button className="signal-danger" onClick={action(remove)}>× DELETE WIRE</button>
           </> : <>

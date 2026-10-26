@@ -1,8 +1,7 @@
 import {
   DigitalDocument, DigitalComponent, GateKind, LogicBit, LogicValue, LogicResult,
-  digitalLabel, isDigitalDocument, pinsOf,
 } from './types';
-import { buildSignalNetwork } from './network';
+import { compileSignals } from './compile';
 
 export function evaluateGate(kind: GateKind, a: LogicValue, b: LogicValue = 'Z'): LogicValue {
   const inputA: LogicValue = a === 'Z' ? 'X' : a;
@@ -25,86 +24,97 @@ export function evaluateGate(kind: GateKind, a: LogicValue, b: LogicValue = 'Z')
 }
 export const isBinary = (value: LogicValue): value is LogicBit => value === 0 || value === 1;
 
-/** Pure combinational 4-state circuit engine. No analog solver dependency. */
+/**
+ * Pure four-state combinational solver over a flattened hierarchy of modules.
+ * Modules reuse definitions but always have isolated gate instances.
+ * Input/LED interface components are nets, not duplicated active drivers.
+ */
 export function simulateLogic(doc: DigitalDocument): LogicResult {
-  if (!isDigitalDocument(doc)) throw new Error('Invalid Signal Lab circuit document.');
-  if (doc.components.length > 500 || doc.wires.length > 1200) {
-    throw new Error('Signal Lab v0.1 supports up to 500 components and 1200 wires.');
-  }
-  const network = buildSignalNetwork(doc);
-  const gates = doc.components.filter(c => c.kind !== 'input' && c.kind !== 'led');
-  const outputs = doc.components.filter(c => c.kind === 'input' || c.kind !== 'led');
-  let computed = new Map<string, LogicValue>(gates.map(c => [c.id, 'X']));
-  let voltages = new Map<string, LogicValue>();
-  const pinNet = (c: DigitalComponent, pin: string) => network.terminals[c.id + ':' + pin];
+  const network = compileSignals(doc);
+  const primitives = network.primitives;
+  const gates = primitives.filter(p => p.component.kind !== 'input' && p.component.kind !== 'led');
+  const drivers = primitives.filter(p => p.output);
+  let computed = new Map<string, LogicValue>(gates.map(p => [p.id, 'X']));
+  let netValues = new Map<string, LogicValue>();
   const conflicts = new Set<string>();
-  const updateNet = (values: Map<string, LogicValue>): Map<string, LogicValue> => {
-    const drivers = new Map<string, LogicValue[]>();
-    for (const root of network.roots) drivers.set(root, []);
-    for (const c of outputs) {
-      const root = pinNet(c, 'out');
-      if (!root) continue;
-      drivers.get(root)?.push(c.kind === 'input' ? (c.bit ?? 0) : (computed.get(c.id) ?? 'X'));
+  const updateNets = (): Map<string, LogicValue> => {
+    const incoming = new Map<string, LogicValue[]>();
+    for (const root of network.roots) incoming.set(root, []);
+    for (const p of drivers) {
+      if (!p.output) continue;
+      incoming.get(p.output)?.push(
+        p.component.kind === 'input' ? (p.component.bit ?? 0) : (computed.get(p.id) ?? 'X'),
+      );
     }
     const next = new Map<string, LogicValue>();
     for (const root of network.roots) {
-      const inputs = drivers.get(root) ?? [];
-      if (inputs.length > 1) {
-        next.set(root, 'X');
-        conflicts.add(root);
-      } else next.set(root, inputs.length ? inputs[0] : 'Z');
+      const sources = incoming.get(root) ?? [];
+      if (sources.length > 1) {
+        next.set(root, 'X'); conflicts.add(root);
+      } else next.set(root, sources.length ? sources[0] : 'Z');
     }
     return next;
   };
   let stabilized = false;
-  // Combinational circuits settle in at most gate-count depth for acyclic nets.
-  // Feedback without a stable binary result stays X rather than oscillating forever.
   for (let iteration = 0; iteration < Math.max(6, gates.length + 3); iteration++) {
-    const nextNets = updateNet(voltages);
+    const nextNet = updateNets();
     const nextGates = new Map<string, LogicValue>();
-    for (const c of gates) {
-      const kind = c.kind as GateKind;
-      const a = nextNets.get(pinNet(c, 'a')) ?? 'Z';
-      const b = pinsOf(c).includes('b') ? nextNets.get(pinNet(c, 'b')) ?? 'Z' : 'Z';
-      nextGates.set(c.id, evaluateGate(kind, a, b));
+    for (const p of gates) {
+      const kind = p.component.kind as GateKind;
+      const a = nextNet.get(p.a ?? '') ?? 'Z';
+      const b = p.b ? nextNet.get(p.b) ?? 'Z' : 'Z';
+      nextGates.set(p.id, evaluateGate(kind, a, b));
     }
     stabilized = [...nextGates].every(([id, value]) => computed.get(id) === value);
-    voltages = nextNets;
+    netValues = nextNet;
     computed = nextGates;
     if (stabilized) break;
   }
-  // Ensure the final net values reflect the last computed gate outputs.
-  voltages = updateNet(voltages);
+  netValues = updateNets();
   if (!stabilized) {
-    // Conservative interpretation for a potentially oscillating combinational loop.
-    for (const c of gates) computed.set(c.id, 'X');
-    voltages = updateNet(voltages);
+    for (const p of gates) computed.set(p.id, 'X');
+    netValues = updateNets();
   }
-
   const terminalValues: Record<string, LogicValue> = {};
   const wireValues: Record<string, LogicValue> = {};
-  const netValues: Record<string, LogicValue> = {};
-  for (const [root, value] of voltages) netValues[root] = value;
-  for (const [key, root] of Object.entries(network.terminals)) terminalValues[key] = netValues[root];
-  for (const [key, root] of Object.entries(network.wires)) wireValues[key] = netValues[root];
-  const ledValues: Record<string, LogicValue> = {}, gateValues: Record<string, LogicValue> = {};
+  for (const [key, root] of Object.entries(network.terminals)) {
+    terminalValues[key] = netValues.get(root) ?? 'Z';
+  }
+  for (const [key, root] of Object.entries(network.wires)) {
+    wireValues[key] = netValues.get(root) ?? 'Z';
+  }
+  const ledValues: Record<string, LogicValue> = {};
+  const gateValues: Record<string, LogicValue> = {};
   for (const c of doc.components) {
     if (c.kind === 'led') ledValues[c.id] = terminalValues[c.id + ':in'] ?? 'Z';
-    else if (c.kind !== 'input') gateValues[c.id] = computed.get(c.id) ?? 'X';
+    else if (c.kind === 'block') {
+      gateValues[c.id] = terminalValues[c.id + ':' + (c.ports?.outputs[0] ?? '')] ?? 'Z';
+    } else if (c.kind !== 'input') gateValues[c.id] = computed.get('top/' + c.id) ?? 'X';
   }
   const warnings: string[] = [];
-  for (const c of doc.components) {
-    if (c.kind === 'input') continue;
-    for (const pin of pinsOf(c).filter(pin => pin !== 'out')) {
+  for (const p of primitives) {
+    if (p.component.kind === 'input') continue;
+    const check = p.component.kind === 'led'
+      ? [{pin:'IN', net:p.input}]
+      : [{pin:'A',net:p.a}, ...(p.b ? [{pin:'B',net:p.b}] : [])];
+    for (const input of check) {
+      if ((netValues.get(input.net ?? '') ?? 'Z') === 'Z') {
+        warnings.push(p.label + '.' + input.pin + ' has no driver.');
+      }
+    }
+  }
+  for (const c of doc.components.filter(c => c.kind === 'block')) {
+    for (const pin of c.ports?.inputs ?? []) {
       if (terminalValues[c.id + ':' + pin] === 'Z') {
-        warnings.push(digitalLabel(c, doc.components) + '.' + pin.toUpperCase() + ' has no driver.');
+        warnings.push((c.name ?? 'BLOCK') + '.' + pin + ' has no driver.');
       }
     }
   }
   if (conflicts.size) warnings.push(conflicts.size + ' net(s) have multiple active outputs connected together.');
   if (!stabilized) warnings.push('Combinational feedback did not settle; check for loops without storage.');
   return {
-    terminalValues, wireValues, netValues,
+    terminalValues, wireValues,
+    netValues: Object.fromEntries(netValues),
     terminalNets: network.terminals, wireNets: network.wires,
     ledValues, gateValues, netCount: network.roots.length, warnings,
   };
