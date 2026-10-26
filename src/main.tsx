@@ -1,11 +1,12 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { App } from './App';
+import { LabHub } from './LabHub';
 import './styles.css';
 import './neon.css';
 import './v03.css';
 import './v04.css';
+import './signal.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode><App /></React.StrictMode>,
+  <React.StrictMode><LabHub /></React.StrictMode>,
 );

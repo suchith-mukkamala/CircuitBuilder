@@ -1,3 +1,59 @@
+# CircuitBuilder v0.5 · Analog Lab + Signal Lab
+
+Two neon pixel-art electronics laboratories, one React/TypeScript application.
+
+## Switch labs
+Use the laboratory navigator across the top of the app:
+- **01 Analog Lab:** existing analog DC and RLC simulation workbench. The underlying Modified Nodal Analysis engine and saved analog schematics remain intact.
+- **02 Signal Lab:** a standalone Boolean logic engine, its own editor, local autosave, and dedicated .signal.json document schema.
+
+### Signal Lab v0.1 — what's included
+- **Eight gates:** AND, OR, NOT, XOR, NAND, NOR, XNOR, BUFFER.
+- **Inputs:** click an INPUT switch to change between 0 and 1.
+- **Outputs:** LED indicators glow for HIGH, dim for LOW, pink for undefined.
+- **Digital netlist and logic engine:** electrically connected terminals drive signal nets; switching inputs instantly recomputes results. There is no analog solver dependency.
+- **Four-state simulation:** HIGH (1), LOW (0), unknown/conflict (X), and undriven (Z). Multiple output drivers on a net are flagged as conflicts. Floating gate inputs are reported.
+- **Automatic truth tables:** enumerate every combination of up to six input switches, including all LED outputs (up to 64 rows).
+- **Retro editor:** glowing signal traces, pixel-drawn gates, snap/pan/zoom, free-ended wires and junctions, right-click editing, multi-select, copy/paste, undo/redo.
+- **Examples:** XOR Playground, AND Gate Lab, NOT Gate Lab and a two-output half adder.
+
+### Quick start in Signal Lab
+1. Click **SIGNAL LAB** in the top lab switcher.
+2. Drop two INPUT components, one gate, and an LED.
+3. Click terminal pins to connect. You may leave a wire dangling in empty space and attach it later.
+4. Click the INPUT switches to toggle their bits. Observe live wire colors and LED state.
+5. Open **TRUTH TABLE** and click **GENERATE TRUTH TABLE** to evaluate all input permutations.
+6. Export via **FILE → EXPORT .SIGNAL.JSON**, import later through the same menu.
+
+Signal files include \`"lab": "signal"\` and \`"version": 1\`, preventing accidental loading into Analog Lab. Each lab maintains its own browser autosave; switching labs does not delete the other lab's work.
+
+### Visual semantics
+- HIGH/1: luminous mint green, with animated propagation markers.
+- LOW/0: dim blue.
+- X: bright pink for invalid or undefined results.
+- Z: gray for undriven signals.
+
+Signal animations are decorative representations of logical HIGH propagation, not a physical delay or current model. Pure trace crossings do not connect; free-end junctions and terminal contacts do.
+
+### Scope
+Signal Lab currently handles **combinational logic**. Clocks, flip-flops, buses, counters, propagation delay and waveform timing are future milestones; feedback that fails to stabilize returns X. This engine is separate from Analog Lab's DC/transient solver.
+
+## Development
+Requires Node.js 20+ (22 recommended).
+
+\`\`\`bash
+npm install
+npm run dev
+npm test
+npm run build
+\`\`\`
+
+GitHub Actions validates both laboratories on each pull request.
+
+---
+
+## Previous Analog Lab release notes
+
 # CircuitBuilder v0.4 — Arcade Editor Polish
 
 **Latest:** animated conventional-current particles on electrically unbranched wires, voltage-based neon coloring, deliberately marked junctions, undo/redo, group editing, quick SI-unit input, and hideable panels. The physics is still computed by the existing DC / transient MNA solvers.
