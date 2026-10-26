@@ -1,0 +1,121 @@
+/* v0.7 — searchable, categorized neon arcade parts library */
+.signal-catalog{background:linear-gradient(180deg,#151234,#0e1431 70%,#0a1530);color:#e5e7ff}
+.signal-catalog-search{padding:6px 10px 11px;border-bottom:1px solid #574477;background:#101a36}
+.signal-catalog-search .signal-section-label{padding:9px 0 8px;font-size:7px}
+.signal-search-field{display:flex;align-items:center;gap:6px;min-height:40px;
+  background:#060d26;border:2px solid #7557a5;padding:0 9px;box-shadow:inset 0 0 12px #463e8444}
+.signal-search-field:focus-within{border-color:#9affdf;box-shadow:0 0 13px #6dfccc63,inset 0 0 10px #22525c}
+.signal-search-field>span{color:#8bffdc;font:bold 21px monospace}
+.signal-search-field input{flex:1;min-width:0;height:35px;background:transparent;border:0;outline:0;
+  font:10px 'Space Mono',monospace;color:#e7fff8}
+.signal-search-field input::placeholder{color:#8b9ec1}
+.signal-search-field input::-webkit-search-cancel-button{display:none}
+.signal-search-field kbd{font:11px monospace;color:#c49ae5;border:1px solid #6d4b99;
+  min-width:19px;height:20px;text-align:center;padding-top:2px;background:#20163d}
+.signal-search-field>button{border:1px solid #78549d;background:#281a48;
+  color:#f3bfff;font:17px monospace;padding:1px 6px;cursor:pointer}
+.signal-catalog-meta{display:flex;align-items:center;justify-content:space-between;
+  gap:6px;padding-top:9px;color:#93c8d3;font:9px 'Space Mono',monospace}
+.signal-catalog-meta button{padding:5px 7px;border:1px solid #62548c;background:#21183f;
+  color:#ffbaf1;font:9px monospace}
+.signal-catalog-filters{display:flex;gap:5px;overflow-x:auto;scrollbar-width:thin;
+  scrollbar-color:#7950bd #14152d;padding:11px 9px;background:#171638;
+  border-bottom:2px solid #55417b}
+.signal-filter-chip{display:flex;align-items:center;gap:5px;flex:0 0 auto;
+  color:#aeb2d6;background:#1b1c40;border:1px solid #564676;padding:8px 7px;
+  font:8px 'Space Mono',monospace;white-space:nowrap;cursor:pointer}
+.signal-filter-chip span{font:13px monospace;color:#b18ddd}
+.signal-filter-chip:hover{border-color:#aa7ed9;color:#fff;background:#30264f}
+.signal-filter-chip.selected{border-color:#9cffe1;color:#c8fff0;background:#1a4b4b;
+  box-shadow:0 0 11px #71ffd154}
+.signal-filter-chip.selected span{color:#91ffe0}
+.signal-catalog-category{margin:5px 7px 4px;border:1px solid #42386b;
+  background:#121431}
+.signal-catalog-category summary{cursor:pointer;display:flex;align-items:center;
+  gap:8px;min-height:49px;padding:10px 8px;list-style:none;
+  background:#1e1a40;border-bottom:1px solid transparent}
+.signal-catalog-category summary::-webkit-details-marker{display:none}
+.signal-catalog-category[open] summary{border-bottom-color:#5a467c;background:#25204a}
+.signal-catalog-category summary:hover{background:#322657}
+.signal-catalog-icon{width:26px;height:26px;display:flex;align-items:center;justify-content:center;
+  flex:0 0 26px;border:1px solid #7e64b5;background:#101634;color:#dbabff;
+  font:17px monospace;box-shadow:0 0 9px #bc65ed42}
+.signal-catalog-category-title{min-width:0;flex:1;display:flex;flex-direction:column;
+  gap:4px;color:#f0cafa;font:7px/1.5 var(--pixel)}
+.signal-catalog-category-title small{color:#94a9cc;font:9px/1.4 'Space Mono',monospace}
+.signal-catalog-count{padding:3px 5px;color:#a6f8e1;border:1px solid #37776d;
+  background:#173939;font:10px monospace}
+.signal-catalog-chevron{color:#c998f7;font-size:15px;transition:transform .12s}
+.signal-catalog-category[open] .signal-catalog-chevron{transform:rotate(180deg)}
+.signal-catalog-category .signal-palette-grid{display:grid;gap:7px;padding:10px 7px}
+.signal-catalog-entry{display:flex;position:relative;min-width:0}
+.signal-catalog-entry .signal-palette-item{width:100%;padding-right:35px;min-width:0;cursor:grab}
+.signal-catalog-entry .signal-palette-item:active{cursor:grabbing}
+.signal-catalog-entry .signal-palette-words{flex:1}
+.signal-catalog-entry .signal-palette-words strong{font:7px/1.55 var(--pixel);letter-spacing:-.2px}
+.signal-catalog-entry .signal-palette-words small{font:9px/1.5 'Space Mono',monospace;
+  white-space:normal;overflow-wrap:anywhere}
+.signal-catalog-entry .signal-palette-glyph{flex-basis:39px;width:39px;height:39px}
+.signal-catalog-entry .signal-plus{position:absolute;top:8px;right:6px;font:15px monospace;pointer-events:none}
+.signal-catalog-entry .signal-favorite{position:absolute;right:4px;bottom:5px;
+  width:29px;height:24px;background:#151330;color:#867ba8;border:1px solid #47406a;
+  font:18px monospace;cursor:pointer}
+.signal-catalog-entry .signal-favorite:hover{color:#ffe6a5;border-color:#ffd47b}
+.signal-catalog-entry .signal-favorite.is-favorite{color:#ffdfa1;text-shadow:0 0 9px #ffdc6b;
+  background:#42332d;border-color:#a89054}
+.signal-catalog-shortcuts{padding:6px 9px 11px;background:#121632;border-bottom:1px solid #4b4176}
+.signal-catalog-shortcuts .signal-section-label{padding:7px 0 8px}
+.signal-mini-tiles{display:flex;gap:6px;flex-wrap:wrap}
+.signal-mini-tiles button{font:9px/1.6 'Space Mono',monospace;color:#b9ffe7;
+  border:1px solid #477e78;background:#173336;padding:7px;cursor:pointer}
+.signal-mini-tiles button:hover{background:#28515d;box-shadow:0 0 12px #70ffe64f}
+.signal-catalog-empty{padding:24px 14px;text-align:center;border-bottom:1px solid #4c4375}
+.signal-catalog-empty strong{color:#dfaff2;font:9px/2 var(--pixel)}
+.signal-catalog-empty p{font:10px/1.85 'Space Mono',monospace;color:#aeb6d6}
+.signal-catalog-empty button{border:1px solid #a6fbe7;background:#1c4b50;
+  color:#adffe6;padding:12px;font:8px var(--pixel)}
+.signal-catalog .signal-block-library{margin-top:8px}
+.signal-catalog .signal-block-empty{line-height:1.8;padding-inline:4px}
+.signal-catalog .signal-presets{margin-top:9px}
+.signal-catalog .signal-palette-tip{position:sticky;bottom:0;z-index:2;
+  background:#0e1f33ee;color:#aaffde;text-shadow:0 0 6px #80ffd373}
+.signal-menu-category{border-bottom:1px solid #654c95;margin-top:3px;font-size:7px}
+.signal-context-menu .signal-menu-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:4px}
+.signal-context-menu .signal-menu-grid button{font:9px/1.45 'Space Mono',monospace;
+  white-space:normal;min-height:37px;padding:8px 3px}
+.signal-context-menu{scrollbar-color:#7955ac #171132}
+@media(max-width:1510px){
+  .signal-catalog-category-title{font-size:6px}
+  .signal-catalog-entry .signal-palette-words strong{font-size:6px}
+  .signal-catalog-entry .signal-palette-glyph{width:33px;flex-basis:33px;height:33px;font-size:19px}
+}
+@media(max-width:740px){
+  .signal-catalog-filters{flex-wrap:nowrap}
+  .signal-catalog-category .signal-palette-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .signal-catalog-entry .signal-palette-item{min-height:77px}
+  .signal-catalog-entry .signal-palette-words small{font-size:8px}
+}
+@media(prefers-reduced-motion:reduce){.signal-catalog-chevron{transition:none}}
+
+/* Analog Lab uses the same arcade search/category affordances. */
+.analog-catalog{min-height:0;overflow-y:auto;background:#11112f}
+.analog-catalog .signal-catalog-search{padding:5px 8px 10px}
+.analog-catalog .signal-catalog-search .sidebar-section-label{display:block;padding:8px 0;color:#b7ffe7;font:7px/1.6 var(--pixel)}
+.analog-catalog .signal-catalog-filters{padding:8px 7px;gap:4px}
+.analog-catalog .signal-filter-chip{font-size:8px;padding:6px}
+.analog-catalog .signal-catalog-category{margin:6px 7px}
+.analog-catalog .signal-catalog-category summary{padding:9px 6px}
+.analog-catalog .signal-catalog-category-title{font-size:6px}
+.analog-catalog .signal-catalog-category-title small{font-size:8px}
+.analog-catalog .signal-catalog-category .palette-list{display:flex;flex-direction:column;gap:6px;padding:9px 6px}
+.analog-catalog .signal-catalog-category .palette-item{min-height:47px;padding:6px;gap:6px;width:100%}
+.analog-catalog .signal-catalog-category .palette-icon{width:33px;flex:0 0 33px;height:33px;font-size:21px}
+.analog-catalog .signal-catalog-category .palette-text strong{font-size:6.5px}
+.analog-catalog .signal-catalog-category .palette-text small{font-size:9px}
+.analog-catalog .signal-catalog-category .palette-plus{font-size:14px}
+.analog-catalog-groups{min-width:0}
+.analog-catalog .palette-mini-tip{position:sticky;bottom:0;background:#0e1c37ee;z-index:3}
+@media(max-width:650px){
+  .analog-catalog .signal-catalog-category .palette-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+  .analog-catalog .signal-catalog-category .palette-item{min-height:58px}
+}

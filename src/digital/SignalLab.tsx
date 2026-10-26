@@ -1,38 +1,15 @@
-import { ChangeEvent, DragEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { SignalCanvas } from './SignalCanvas';
 import {
-  DigitalDocument, DigitalKind, LogicValue, digitalKinds,
-  digitalLabel, pinsOf, initialDigitalCircuit,
+  DigitalDocument, LogicValue, gateKinds, GateKind,
+  digitalLabel, pinsOf, isOutput, initialDigitalCircuit,
 } from './types';
 import { simulateLogic, generateTruthTable, TruthTable } from './engine';
 import { useDigitalStore } from './useDigitalStore';
-import { andDemo, halfAdderDemo, notDemo } from './samples';
+import { SignalPalette } from './SignalPalette';
+import { partByKind } from './catalog';
 import { SignalScopePanel, SignalVectorPanel } from './SignalTools';
 
-const groups: { heading: string; entries: { kind: DigitalKind; icon: string; label: string; detail: string }[] }[] = [
-  { heading: '01 / INPUT & OUTPUT', entries: [
-    {kind:'input',icon:'▣',label:'INPUT SWITCH',detail:'Click to toggle 0/1'},
-    {kind:'led',icon:'◉',label:'NEON LED',detail:'Live output display'},
-  ]},
-  { heading: '02 / BASIC GATES', entries: [
-    {kind:'and',icon:'∧',label:'AND',detail:'A · B'},
-    {kind:'or',icon:'∨',label:'OR',detail:'A + B'},
-    {kind:'not',icon:'¬',label:'NOT',detail:'Invert A'},
-    {kind:'xor',icon:'⊕',label:'XOR',detail:'A ⊕ B'},
-  ]},
-  { heading: '03 / ADVANCED GATES', entries: [
-    {kind:'nand',icon:'⊼',label:'NAND',detail:'NOT (A · B)'},
-    {kind:'nor',icon:'⊽',label:'NOR',detail:'NOT (A + B)'},
-    {kind:'xnor',icon:'⊙',label:'XNOR',detail:'Equal inputs'},
-    {kind:'buffer',icon:'▷',label:'BUFFER',detail:'Pass A through'},
-  ]},
-];
-const samples = [
-  { label: 'XOR PLAYGROUND', document: initialDigitalCircuit },
-  { label: 'AND GATE LAB', document: andDemo },
-  { label: 'NOT GATE LAB', document: notDemo },
-  { label: 'HALF ADDER', document: halfAdderDemo },
-];
 const logicTone = (v: LogicValue | undefined) => v === 1 ? 'high' : v === 0 ? 'low'
   : v === 'X' ? 'unknown' : 'floating';
 
@@ -51,87 +28,6 @@ function downloadSignal(doc: DigitalDocument) {
   document.body.appendChild(link); link.click(); link.remove();
   URL.revokeObjectURL(url);
 }
-function SignalPalette() {
-  const add = useDigitalStore(s=>s.add);
-  const load = useDigitalStore(s=>s.load);
-  const count = useDigitalStore(s=>s.document.components.length);
-  const library = useDigitalStore(s=>s.blockLibrary);
-  const capture = useDigitalStore(s=>s.captureAsBlock);
-  const placeBlock = useDigitalStore(s=>s.addSavedBlock);
-  const circuitName = useDigitalStore(s=>s.document.name);
-  const [blockName,setBlockName] = useState('MY LOGIC BLOCK');
-  const [blockError,setBlockError] = useState('');
-  const saveBlock = () => {
-    try {capture(blockName);setBlockError('');setBlockName(circuitName.replace(/ · BLOCK$/, '')+' MODULE');}
-    catch(e){setBlockError(e instanceof Error?e.message:'Unable to capture this circuit.');}
-  };
-  const drag = (event: DragEvent<HTMLButtonElement>, kind: DigitalKind) => {
-    event.dataTransfer.setData('application/x-signal-kind',kind);
-    event.dataTransfer.effectAllowed = 'copy';
-  };
-  return (
-    <aside className="signal-palette">
-      <div className="signal-panel-heading">▦ LOGIC COMPONENTS <span>/ 10</span></div>
-      {groups.map(group=><div className="signal-palette-group" key={group.heading}>
-        <div className="signal-section-label">{group.heading}</div>
-        <div className="signal-palette-grid">
-          {group.entries.map(item=>
-            <button key={item.kind} draggable
-              title={'Drag onto canvas or click to place ' + item.label}
-              onDragStart={e=>drag(e,item.kind)}
-              onClick={()=>{
-                const offset=count%6;
-                add(item.kind,{x:240+offset*72,y:192+offset*48});
-              }} className={'signal-palette-item kind-'+item.kind}>
-              <span className="signal-palette-glyph">{item.icon}</span>
-              <span className="signal-palette-words"><strong>{item.label}</strong>
-                <small>{item.detail}</small></span>
-              <span className="signal-plus">+</span>
-            </button>
-          )}
-        </div>
-      </div>)}
-      <section className="signal-block-library">
-        <div className="signal-section-label">04 / REUSABLE CIRCUIT BLOCKS</div>
-        <details className="signal-block-creator">
-          <summary>▣ CAPTURE CURRENT CIRCUIT <span>▸</span></summary>
-          <p>INPUT switches become input ports. LED outputs become output ports.
-            The circuit collapses into a single reusable module; undo restores it.</p>
-          <label htmlFor="signal-new-block-name">MODULE NAME</label>
-          <input id="signal-new-block-name" maxLength={40} value={blockName}
-            onChange={e=>setBlockName(e.target.value)}/>
-          <button onClick={saveBlock}>✦ SAVE AS BLOCK</button>
-          {blockError&&<p className="signal-block-error" role="alert">{blockError}</p>}
-        </details>
-        <div className="signal-saved-block-list">
-          {library.length===0&&<p className="signal-block-empty">No modules saved yet.</p>}
-          {library.map(def=><button key={def.id} draggable
-            onDragStart={event=>{
-              event.dataTransfer.setData('application/x-signal-block',def.id);
-              event.dataTransfer.effectAllowed='copy';
-            }}
-            title={'Click to insert '+def.name+' or drag it onto the canvas'}
-            onClick={()=>{
-              try {placeBlock(def.id,{x:384+count%3*120,y:252+count%4*72});setBlockError('');}
-              catch(error){setBlockError(error instanceof Error?error.message:'Block failed to load.');}
-            }}>
-            <span className="saved-block-glyph">▣</span>
-            <span><strong>{def.name}</strong>
-              <small>{def.inputs.length} IN / {def.outputs.length} OUT</small></span>
-            <span className="saved-block-plus">+</span>
-          </button>)}
-        </div>
-      </section>
-      <details className="signal-presets">
-        <summary>◇ SAMPLE CIRCUITS <span>▸</span></summary>
-        {samples.map(preset=><button key={preset.label}
-          onClick={()=>load(preset.document())}>✦ {preset.label}</button>)}
-      </details>
-      <div className="signal-palette-tip">✦ WIRE HIGH = MINT · LOW = DIM BLUE · X = MAGENTA</div>
-    </aside>
-  );
-}
-
 function SignalInspector({ result }: { result: ReturnType<typeof simulateLogic> }) {
   const doc = useDigitalStore(s=>s.document);
   const selected = useDigitalStore(s=>s.selection);
@@ -157,8 +53,11 @@ function SignalInspector({ result }: { result: ReturnType<typeof simulateLogic> 
             <button onClick={remove}>DELETE ALL</button></div>
         </div>}
         <div className="signal-selected">
-          <div className="signal-selected-sprite">{part.kind==='input'?'▣':part.kind==='led'?'◉':'◇'}</div>
-          <div><strong>{digitalLabel(part,doc.components)}</strong><small>{part.kind.toUpperCase()}</small></div>
+          <div className="signal-selected-sprite">{part.kind==='block'?'▣':
+            partByKind[part.kind]?.glyph??'◇'}</div>
+          <div><strong>{digitalLabel(part,doc.components)}</strong>
+            <small>{part.kind==='block'?'REUSABLE MODULE':partByKind[part.kind]?.name??part.kind.toUpperCase()}</small>
+          </div>
         </div>
         <label className="signal-field-label" htmlFor="signal-component-name">DISPLAY LABEL</label>
         <input id="signal-component-name" className="signal-text-field" value={draft}
@@ -190,8 +89,7 @@ function SignalInspector({ result }: { result: ReturnType<typeof simulateLogic> 
               ? doc.blocks?.find(d=>d.id===part.blockId)?.[
                   part.ports?.inputs.includes(pin)?'inputs':'outputs']
                   .find(port=>port.pin===pin)?.label??pin
-              :pin.toUpperCase()} {part.kind==='block'
-                ?part.ports?.outputs.includes(pin)?'→':'←':pin==='out'?'→':'←'}</span>
+              :pin.toUpperCase()} {isOutput(part,pin)?'→':'←'}</span>
             <LogicChip value={result.terminalValues[part.id+':'+pin]}/>
           </div>)}
         </div>
@@ -235,7 +133,7 @@ function SignalTruthPanel({ doc, result }: {
   // (but not for every input toggle, since all rows cover both values).
   const shape = JSON.stringify({
     components: doc.components.map(c=>[c.id,c.kind,c.name,c.rotation,c.x,c.y]),
-    wires: doc.wires,
+    wires: doc.wires, blocks: doc.blocks,
   });
   useEffect(()=>{setTable(null);setGeneratedFor('');},[shape]);
   const generate = () => {
@@ -310,7 +208,7 @@ export function SignalLab() {
   const [panelOpen,setPanelOpen] = useState(true);
   const [tab,setTab] = useState<'inspect'|'truth'|'scope'|'vector'>('inspect');
   const result = useMemo(()=>simulateLogic(doc),[doc]);
-  const gates = doc.components.filter(c=>digitalKinds.includes(c.kind) && c.kind!=='input' && c.kind!=='led');
+  const gates = doc.components.filter(c=>gateKinds.includes(c.kind as GateKind)||c.kind==='block');
   useEffect(()=>{
     const handle=(e:KeyboardEvent)=>{
       const target=e.target as HTMLElement|null;
@@ -349,7 +247,7 @@ export function SignalLab() {
   return <div className="signal-lab-shell">
     <header className="signal-workbench-header">
       <div className="signal-lab-brand"><span className="signal-lab-glyph">▧</span>
-        <div><strong>SIGNAL LAB</strong><small>LAB 02 / DIGITAL LOGIC v0.3</small></div></div>
+        <div><strong>SIGNAL LAB</strong><small>LAB 02 / DIGITAL LOGIC v0.4</small></div></div>
       <input aria-label="Signal circuit name" className="signal-circuit-title"
         title="Rename circuit" value={doc.name} onChange={e=>rename(e.target.value)}/>
       <nav className="signal-toolbar" aria-label="Signal Lab actions">
@@ -408,7 +306,8 @@ export function SignalLab() {
         <div className="signal-editor-heading">
           <span><i/> {inBlock ? 'MODULE INTERNALS' : 'DIGITAL SCHEMATIC'}
             <small>/ {doc.name.toUpperCase()}</small></span>
-          <span className="signal-editor-tags"><b>{gates.length} GATES</b><b>{doc.wires.length} NETS</b></span>
+          <span className="signal-editor-tags"><b>{gates.length} LOGIC PARTS</b>
+            <b>{result.netCount} NETS</b></span>
         </div>
         <SignalCanvas key={editStack.map(e=>e.blockId).join('/') || 'root'}
           result={result} onProbe={()=>{setPanelOpen(true);setTab('scope');}}/>
@@ -437,6 +336,7 @@ export function SignalLab() {
           <p>Click an INPUT to flip its bit. Wire pins by clicking the first pin and then another.</p>
           <p>Right-click any part to rotate, copy or delete. Drag blank canvas to pan.</p>
           <p>Shift-click to multi-select; Ctrl/Cmd+Z undo, C copy, V paste, D duplicate, A select all.</p>
+          <p>Press / when the Parts Library is visible to search for a component. ★ favorites and Recent shortcuts are saved locally. Fold categories to reclaim space.</p>
           <p>Signal colors: green = HIGH (1), blue = LOW (0), pink = undefined (X), gray = undriven (Z).</p>
           <p>Save a complete circuit as a block from the Parts Library. Probe any wire or pin with right-click; use INPUT TEST for binary vectors and SCOPE to inspect event history.</p>
           <p>Double-click a reusable block to edit its internals. SAVE BLOCK updates all instances. CANCEL/BACK discards internal changes. Keep original INPUT and LED boundary components to preserve connected ports.</p>

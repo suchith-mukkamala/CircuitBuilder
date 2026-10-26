@@ -6,11 +6,13 @@ import {
   DigitalComponent, DigitalDocument, DigitalEndpoint, DigitalKind, DigitalPoint,
   DigitalSelection, DigitalWire, LogicResult, LogicValue,
   digitalLabel, digitalSnap, isDigitalTerminal, pinAt, pinsOf, blockHeight,
+  isWidePart, partHeight, localPinAt, outputsOf, inputsOf, digitalKinds,
 } from './types';
 import {
   digitalWirePath, endpointPoint, intentionalJunctions,
 } from './network';
 import { useDigitalStore } from './useDigitalStore';
+import { paletteCategories,partByKind } from './catalog';
 
 type Camera = { x: number; y: number; zoom: number };
 type Drag = {
@@ -45,6 +47,12 @@ function hitPart(c: DigitalComponent, p: DigitalPoint): boolean {
     const y = (p.x-c.x)*Math.sin(rad)+(p.y-c.y)*Math.cos(rad);
     return Math.abs(x) < 66 && Math.abs(y) < blockHeight(c)/2;
   }
+  if(isWidePart(c)) {
+    const rad=-c.rotation*Math.PI/180;
+    const x=(p.x-c.x)*Math.cos(rad)-(p.y-c.y)*Math.sin(rad);
+    const y=(p.x-c.x)*Math.sin(rad)+(p.y-c.y)*Math.cos(rad);
+    return Math.abs(x)<49&&Math.abs(y)<partHeight(c)/2;
+  }
   return Math.abs(c.x - p.x) < 35 && Math.abs(c.y - p.y) < 32;
 }
 function nearestOnTrace(p: DigitalPoint, path: DigitalPoint[]): {
@@ -67,9 +75,11 @@ function drawPixelPart(
   doc: DigitalDocument, result: LogicResult, selected: boolean,
 ) {
   const name = digitalLabel(c, doc.components);
-  const source = c.kind === 'input', led = c.kind === 'led', block = c.kind === 'block';
+  const source = c.kind === 'input' || c.kind === 'high' || c.kind === 'low';
+  const led = c.kind === 'led', block = c.kind === 'block';
   const logical = led ? result.ledValues[c.id]
-    : source ? (c.bit ?? 0) : result.gateValues[c.id];
+    : c.kind === 'high' ? 1 : c.kind === 'low' ? 0
+      : source ? (c.bit ?? 0) : result.gateValues[c.id];
   const tint = signalColor(logical ?? 'Z');
   ctx.save(); ctx.translate(c.x, c.y);
   ctx.rotate(c.rotation * Math.PI / 180);
@@ -105,6 +115,39 @@ function drawPixelPart(
     }
     ctx.restore();return;
   }
+  if(isWidePart(c)) {
+    const h=partHeight(c),label=partByKind[c.kind as Exclude<DigitalKind,'block'>]?.name??c.kind.toUpperCase();
+    if(selected) {
+      ctx.strokeStyle='#ffbaf0';ctx.lineWidth=2;ctx.setLineDash([5,4]);
+      ctx.strokeRect(-49,-h/2-6,98,h+12);ctx.setLineDash([]);
+    }
+    ctx.shadowColor='#d28bff';ctx.shadowBlur=15;
+    ctx.fillStyle='#100d30';ctx.fillRect(-44,-h/2,88,h);
+    ctx.fillStyle='#422758';ctx.fillRect(-41,-h/2+3,82,h-6);
+    ctx.fillStyle='#161c3e';ctx.fillRect(-37,-h/2+7,74,h-14);
+    ctx.shadowBlur=0;ctx.strokeStyle='#df9eff';ctx.lineWidth=2.5;
+    ctx.strokeRect(-44,-h/2,88,h);
+    ctx.fillStyle='#f4c7ff';ctx.textAlign='center';ctx.font='bold 11px monospace';
+    const short = c.kind==='majority'?'MAJ3':c.kind==='demux2'?'DEMUX':
+      c.kind==='halfadder'?'H-ADD':c.kind==='fulladder'?'F-ADD':
+      c.kind==='mux2'?'MUX2':c.kind.toUpperCase();
+    ctx.shadowColor='#dc85fe';ctx.shadowBlur=8;ctx.fillText(short,0,0);ctx.shadowBlur=0;
+    for(const [pins,side] of [[inputsOf(c),-1],[outputsOf(c),1]] as const){
+      for(const pin of pins){
+        const local=localPinAt(c,pin);
+        ctx.strokeStyle='#a5e9ef';ctx.lineWidth=3;
+        ctx.beginPath();ctx.moveTo(side*44,local.y);ctx.lineTo(local.x,local.y);ctx.stroke();
+        ctx.fillStyle='#a9cdec';ctx.font='bold 8px monospace';
+        ctx.textAlign=side===-1?'left':'right';
+        ctx.fillText(pin.toUpperCase(),side*38,local.y-8);
+      }
+    }
+    ctx.textAlign='center';ctx.fillStyle='#ffebae';ctx.font='bold 10px monospace';
+    ctx.fillText(name,0,-h/2-13);
+    ctx.fillStyle=tint;ctx.font='bold 10px monospace';
+    ctx.fillText(String(logical??'X'),0,h/2+13);
+    ctx.restore();return;
+  }
   if (selected) {
     ctx.strokeStyle = '#ffb0ef'; ctx.shadowColor = ink.pink; ctx.shadowBlur = 14;
     ctx.lineWidth = 2; ctx.setLineDash([5, 4]); ctx.strokeRect(-38, -34, 76, 68);
@@ -114,10 +157,7 @@ function drawPixelPart(
   ctx.save();
   ctx.lineWidth = 3; ctx.lineCap = 'square'; ctx.strokeStyle = '#a6e3f5';
   for (const pin of pinsOf(c)) {
-    const local = pin === 'out' ? {x:48,y:0}
-      : pin === 'in' ? {x:-48,y:0}
-        : pin === 'a' ? {x:-48,y:pinsOf(c).includes('b')?-12:0}
-          : {x:-48,y:12};
+    const local = localPinAt(c,pin);
     ctx.beginPath();
     ctx.moveTo(local.x < 0 ? -30 : 30, local.y);
     ctx.lineTo(local.x, local.y); ctx.stroke();
@@ -138,7 +178,7 @@ function drawPixelPart(
   if (source) {
     ctx.font = 'bold 24px monospace'; ctx.fillStyle = tint;
     ctx.shadowColor = tint; ctx.shadowBlur = 12;
-    ctx.fillText(String(c.bit ?? 0), 0, 2); ctx.shadowBlur = 0;
+    ctx.fillText(String(logical ?? 0), 0, 2); ctx.shadowBlur = 0;
   } else if (led) {
     ctx.fillStyle = logical === 1 ? '#9dffe1' : logical === 0 ? '#2d536b' : '#ff9de7';
     ctx.shadowColor = logical === 1 ? '#44ffc3' : '#ff76cd';
@@ -192,10 +232,11 @@ function drawSignalCanvas(
     ctx.strokeStyle = y%5 === 0 ? ink.major : ink.grid;
     ctx.beginPath(); ctx.moveTo(minX,y*24); ctx.lineTo(maxX,y*24); ctx.stroke();
   }
+  const selectedPart = selected?.type==='component'
+    ? doc.components.find(c=>c.id===selected.id) : undefined;
+  const focusPin=selectedPart&&(outputsOf(selectedPart)[0]??inputsOf(selectedPart)[0]);
   const focusedNet = selected?.type === 'wire' ? result.wireNets[selected.id]
-    : selected?.type === 'component'
-      ? result.terminalNets[selected.id + ':out'] ??
-        result.terminalNets[selected.id + ':in'] : null;
+    : selectedPart&&focusPin ? result.terminalNets[selectedPart.id+':'+focusPin] : null;
 
   for (const wire of doc.wires) {
     const points = digitalWirePath(doc, wire);
@@ -265,7 +306,8 @@ function drawSignalCanvas(
       ctx.fillRect(point.x-5, point.y-5, 10, 10);
       ctx.shadowBlur = 0; ctx.font = 'bold 9px monospace'; ctx.textAlign = 'center';
       ctx.fillStyle = '#e8defb';
-      ctx.fillText(pin.toUpperCase(), point.x, point.y < c.y ? point.y-13 : point.y+20);
+      if(!isWidePart(c)&&c.kind!=='block')
+        ctx.fillText(pin.toUpperCase(), point.x, point.y < c.y ? point.y-13 : point.y+20);
       ctx.restore();
     }
   }
@@ -501,7 +543,7 @@ export function SignalCanvas({ result, onProbe }: { result: LogicResult; onProbe
       return;
     }
     const kind = e.dataTransfer.getData('application/x-signal-kind') as DigitalKind;
-    if (!['input','and','or','not','xor','nand','nor','xnor','buffer','led'].includes(kind)) return;
+    if (!digitalKinds.includes(kind) || kind==='block') return;
     add(kind,world(e));
   };
   const action = (fn: () => void) => () => { fn(); setMenu(null); };
@@ -576,12 +618,15 @@ export function SignalCanvas({ result, onProbe }: { result: LogicResult; onProbe
             <div className="signal-menu-subtitle">GRID · {menu.world.x}, {menu.world.y}</div>
             <button className="signal-menu-accent"
               onClick={action(()=>startWire(menu.world))}>⌁ START FREE WIRE</button>
-            <div className="signal-menu-section">PLACE A COMPONENT</div>
-            <div className="signal-menu-grid">
-              {(['input','and','or','not','xor','nand','nor','xnor','buffer','led'] as DigitalKind[])
-                .map(kind=><button key={kind} onClick={action(()=>add(kind,menu.world))}>
-                  + {kind.toUpperCase()}</button>)}
-            </div>
+            <div className="signal-menu-section">PLACE A COMPONENT · OR PRESS / TO SEARCH</div>
+            {paletteCategories.map(group=><div key={group.id}>
+              <div className="signal-menu-section signal-menu-category">{group.icon} {group.name}</div>
+              <div className="signal-menu-grid">
+                {group.parts.map(part=><button key={part.kind}
+                  title={part.description} onClick={action(()=>add(part.kind,menu.world))}>
+                  {part.glyph} {part.name}</button>)}
+              </div>
+            </div>)}
           </>}
         </div>
       </>}

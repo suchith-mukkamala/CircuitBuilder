@@ -1,3 +1,67 @@
+# CircuitBuilder v0.7 — Arcade Parts Catalog & Advanced Digital Components
+
+Signal Lab's neon pixel-art parts library now contains **20 built-in components**, searchable and organized into categories with favorites and recently used shortcuts. The digital engine supports three-input logic, fixed logic levels, data routing, and two-output arithmetic devices. Analog Lab and saved reusable blocks remain supported.
+
+## Search and organize digital components
+
+- Expand **PARTS** and use the search box, or press **/** to focus the search when the catalog is visible. Search by part name, circuit concept, or alias: \`mux\`, \`carry\`, \`3-input\`, \`inverter\`, \`ground\`, \`majority\`.
+- Browse categorized sections: **Inputs & Sources**, **Basic Logic Gates**, **Multi-Input Gates**, **Data Routing**, **Binary Arithmetic**, and **Output & Display**.
+- Choose a category filter to narrow the catalog. Fold any section to get more canvas space.
+- Star a component using **☆** to pin it under Favorites. Recently placed components appear in a second quick-access strip. Favorite and recent kinds persist locally across browser reloads.
+- Saved user-designed circuit blocks remain under **Your Reusable Blocks**, searchable by block name.
+- Right-click an empty grid cell for an organized list of components to place at the clicked position. Click or drag built-in parts directly from the catalog.
+
+## 10 new simulated components
+
+| Part | Pins | Digital behavior |
+| --- | --- | --- |
+| Logic HIGH | OUT | Constant digital \`1\`; not a user-toggleable input |
+| Logic LOW | OUT | Constant digital \`0\`; not a user-toggleable input |
+| 3-input AND | A, B, C → OUT | HIGH when all three inputs are HIGH |
+| 3-input OR | A, B, C → OUT | HIGH when any input is HIGH |
+| 3-input XOR | A, B, C → OUT | Odd parity across three input bits |
+| Majority | A, B, C → OUT | HIGH when two or more inputs are HIGH |
+| MUX 2:1 | A, B, SEL → OUT | Select A when SEL=0, B when SEL=1 |
+| DEMUX 1:2 | IN, SEL → OUT0, OUT1 | Route IN to one output; unused output LOW |
+| Half Adder | A, B → SUM, CARRY | SUM = A xor B; CARRY = A and B |
+| Full Adder | A, B, CIN → SUM, CARRY | SUM = A xor B xor CIN; CARRY = majority(A,B,CIN) |
+
+**Full adder example:** three inputs \`A=1,B=1,CIN=0\` produce \`SUM=0,CARRY=1\`. Connect independent LEDs to SUM and CARRY, or capture the full circuit as a reusable module and combine modules for larger arithmetic circuits.
+
+The Boolean engine retains four-state semantics: HIGH (1), LOW (0), unknown/conflict (X), undriven (Z). Known controlling values produce deterministic results, even alongside unknowns where mathematically justified (for example \`AND3(0,X,Z)=0\` and \`MAJORITY(1,1,Z)=1\`). These are combinational components, not clocked or propagation-delay models.
+
+
+
+### Analog Lab search and organization
+
+Analog Lab now shares the neon search-and-category experience. Its existing eight
+simulated parts are grouped under **Passives & Reference**, **Sources & Controls**,
+and **Energy Storage**, with collapsible categories, quick category filters,
+and keyword searching (for example \`coil\`, \`current\`, or \`variable resistor\`).
+No analog component model or solver behavior has been changed.
+
+## Improvements under the hood
+
+- A single part-definition catalog drives search, category navigation, and right-click placement.
+- New multi-pin, multi-output component geometry is shared between the canvas and electrical connectivity checks.
+- The hierarchical compiler and Boolean solver now handle any number of named inputs and outputs on a primitive; reusable blocks can contain the new devices.
+- Full-adder and demultiplexer outputs are independent signal nets rather than a combined fake output.
+- Automated tests cover Boolean truth tables, four-state propagation, pin geometry and wiring, hierarchy compatibility, and catalog search/favorites.
+
+## Update & run
+
+\`\`\`bash
+git pull origin main
+npm install
+npm run dev
+npm test
+npm run build
+\`\`\`
+
+---
+
+## Previous releases
+
 # CircuitBuilder v0.6.1 — Block Wiring & Circuit Drilldown
 
 This release fixes Signal Lab's reusable-block pin connections and adds a direct way to edit the original circuit inside any saved module.
