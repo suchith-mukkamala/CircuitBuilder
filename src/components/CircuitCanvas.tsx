@@ -1,13 +1,17 @@
-import { DragEvent, PointerEvent, WheelEvent, MouseEvent, useEffect, useRef, useState } from 'react';
+import { DragEvent, PointerEvent, WheelEvent, MouseEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useCircuitStore } from '../state/useCircuitStore';
 import {
   CircuitComponent, CircuitDocument, ComponentKind, Point, Wire, WireEndpoint,
   pinPosition, pinsFor, snap, formatElectrical, labelFor, terminalKey, isTerminal,
 } from '../circuit/types';
 import { wirePath, endpointPosition } from '../circuit/geometry';
+import { circuitNodes } from '../circuit/connectivity';
+import { junctionPoints, unbranchedWireCurrents, voltageTint } from '../editor/wireVisuals';
+import { parseEngineering } from '../editor/units';
 
 type View = { x: number; y: number; zoom: number };
 type Drag = { type: 'component'; id: string; x: number; y: number; at: Point } |
+  { type: 'free-tip'; wireId: string; side: 'from' | 'to'; x: number; y: number; at: Point } |
   { type: 'pan'; clientX: number; clientY: number; originalX: number; originalY: number };
 
 const colors = {
@@ -167,11 +171,57 @@ function drawComponent(ctx: CanvasRenderingContext2D, c: CircuitComponent, selec
   ctx.restore();
 }
 
+type CanvasVisuals = {
+  wireNodes: Record<string, string>;
+  terminalNodes: Record<string, string>;
+  flowCurrents: Record<string, number>;
+  junctions: Point[];
+  focusedNet?: string;
+  showFlow: boolean;
+};
+
+/** Render directional particles only when conventional current is unambiguous. */
+function drawFlowParticles(
+  ctx: CanvasRenderingContext2D, points: Point[], current: number, seconds: number,
+): void {
+  if (!Number.isFinite(current) || Math.abs(current) < 1e-11 || points.length < 2) return;
+  const lengths: number[] = [];
+  let total = 0;
+  for (let i = 1; i < points.length; i++) {
+    const distance = Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y);
+    lengths.push(distance);
+    total += distance;
+  }
+  if (total < 2) return;
+  const particleCount = Math.max(1, Math.min(15, Math.floor(total / 65)));
+  const speed = Math.min(155, 30 + 26 * Math.log10(1 + Math.abs(current) / .0001));
+  ctx.save();
+  ctx.shadowColor = '#e6ffff';
+  ctx.shadowBlur = 15;
+  ctx.fillStyle = '#dcfffa';
+  for (let i = 0; i < particleCount; i++) {
+    let distance = ((i * total / particleCount +
+      Math.sign(current) * seconds * speed) % total + total) % total;
+    for (let section = 0; section < lengths.length; section++) {
+      if (distance <= lengths[section] || section === lengths.length - 1) {
+        const t = lengths[section] ? distance / lengths[section] : 0;
+        const x = points[section].x + (points[section + 1].x - points[section].x) * t;
+        const y = points[section].y + (points[section + 1].y - points[section].y) * t;
+        ctx.fillRect(Math.round(x) - 2, Math.round(y) - 2, 5, 5);
+        break;
+      }
+      distance -= lengths[section];
+    }
+  }
+  ctx.restore();
+}
+
 function drawCanvas(
   canvas: HTMLCanvasElement, doc: CircuitDocument, view: View,
   selection: { type: 'component' | 'wire'; id: string } | null,
-  pending: WireEndpoint | null,
+  selectedIds: string[], pending: WireEndpoint | null,
   hover: Point | null, simulation: ReturnType<typeof useCircuitStore.getState>['simulation'],
+  visuals: CanvasVisuals, seconds: number,
 ): void {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
@@ -207,18 +257,26 @@ function drawCanvas(
     const points = wirePath(wire, doc);
     if (points.length < 2) continue;
     const selectedWire = selection?.type === 'wire' && selection.id === wire.id;
+    const root = visuals.wireNodes[wire.id];
+    const focused = !!visuals.focusedNet && root === visuals.focusedNet;
+    const nodeVoltage = simulation?.nodeVoltages[root];
+    const tint = voltageTint(nodeVoltage);
     ctx.save();
-    ctx.strokeStyle = selectedWire ? '#ff88e8' : colors.wire;
-    ctx.shadowColor = selectedWire ? '#ff78e1' : '#2eeadc';
-    ctx.shadowBlur = selectedWire ? 24 : (simulation ? 20 : 12);
+    ctx.globalAlpha = visuals.focusedNet && !focused ? .24 : 1;
+    ctx.strokeStyle = focused || selectedWire ? '#ff88e8' : tint;
+    ctx.shadowColor = focused || selectedWire ? '#ff78e1' : tint;
+    ctx.shadowBlur = focused || selectedWire ? 26 : (simulation ? 17 : 11);
     ctx.lineWidth = selectedWire ? 5 : 3;
     ctx.lineJoin = 'bevel';
     ctx.beginPath(); ctx.moveTo(points[0].x, points[0].y);
     for (const p of points.slice(1)) ctx.lineTo(p.x, p.y);
     ctx.stroke();
     ctx.shadowBlur = 0; ctx.lineWidth = 1;
-    ctx.strokeStyle = selectedWire ? '#fff0fc' : '#d0fffb';
+    ctx.strokeStyle = selectedWire || focused ? '#fff0fc' : '#d0fffb';
     ctx.stroke();
+    if (simulation && visuals.showFlow) {
+      drawFlowParticles(ctx, points, visuals.flowCurrents[wire.id] ?? 0, seconds);
+    }
     ctx.restore();
     for (const [index, p] of [points[0], points[points.length - 1]].entries()) {
       const endpoint = index === 0 ? wire.from : wire.to;
@@ -237,8 +295,18 @@ function drawCanvas(
     }
   }
 
+  // Junction dots mark deliberate connectivity; simple line crossings do not.
+  for (const p of visuals.junctions) {
+    ctx.save();
+    ctx.fillStyle = '#f5b3ff'; ctx.shadowColor = '#ed6cff'; ctx.shadowBlur = 16;
+    ctx.fillRect(p.x - 6, p.y - 6, 12, 12);
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
+    ctx.restore();
+  }
+
   for (const c of doc.components) {
-    const isSelected = selection?.type === 'component' && selection.id === c.id;
+    const isSelected = selectedIds.includes(c.id) ||
+      (selection?.type === 'component' && selection.id === c.id);
     drawComponent(ctx, c, isSelected);
     ctx.font = 'bold 13px monospace';
     ctx.textBaseline = 'middle';
@@ -281,7 +349,12 @@ function drawCanvas(
         if (root !== undefined) {
           ctx.fillStyle = '#ffe994'; ctx.shadowColor = '#e9ab47'; ctx.shadowBlur = 7;
           ctx.font = 'bold 10px monospace'; ctx.textAlign = 'center';
-          ctx.fillText(formatElectrical(simulation.nodeVoltages[root], 'V'), p.x, p.y - 16);
+          // Keep voltage labels from obscuring the schematic at default zoom:
+          // only show full readings for selected components or focused nets.
+          if (isSelected || (visuals.focusedNet && root === visuals.focusedNet)) {
+            ctx.fillText(formatElectrical(simulation.nodeVoltages[root], 'V'), p.x, p.y - 16);
+          }
+          ctx.shadowBlur = 0;
         }
       }
     }
@@ -325,12 +398,23 @@ export function CircuitCanvas() {
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [menu, setMenu] = useState<Menu | null>(null);
   const [quickValue, setQuickValue] = useState('');
+  const [quickError, setQuickError] = useState(false);
+  const [reducedMotion, setReducedMotion] = useState(false);
   const doc = useCircuitStore(s => s.document);
   const selection = useCircuitStore(s => s.selection);
+  const selectedIds = useCircuitStore(s => s.selectedIds);
+  const showFlow = useCircuitStore(s => s.showFlow);
+  const setFlowEnabled = useCircuitStore(s => s.setFlowEnabled);
   const pendingPin = useCircuitStore(s => s.pendingPin);
   const simulation = useCircuitStore(s => s.simulation);
   const select = useCircuitStore(s => s.select);
   const move = useCircuitStore(s => s.moveComponent);
+  const moveFreeEnd = useCircuitStore(s => s.moveFreeEnd);
+  const straightenWire = useCircuitStore(s => s.straightenWire);
+  const beginDrag = useCircuitStore(s => s.beginDrag);
+  const endDrag = useCircuitStore(s => s.endDrag);
+  const copySelection = useCircuitStore(s => s.copySelection);
+  const duplicateSelection = useCircuitStore(s => s.duplicateSelection);
   const connect = useCircuitStore(s => s.startOrFinishWire);
   const beginWire = useCircuitStore(s => s.beginWire);
   const add = useCircuitStore(s => s.addComponent);
@@ -359,8 +443,43 @@ export function CircuitCanvas() {
   }, []);
 
   useEffect(() => {
-    if (canvas.current) drawCanvas(canvas.current, doc, view, selection, pendingPin, hover, simulation);
-  }, [doc, view, selection, pendingPin, hover, simulation, size]);
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const update = () => setReducedMotion(media.matches);
+    update(); media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
+
+  // Keep connectivity extraction and geometry off the animation frame path.
+  const looseNodes = useMemo(() => circuitNodes(doc, { allowIncomplete: true }), [doc]);
+  const flowCurrents = useMemo(() => simulation
+    ? unbranchedWireCurrents(doc, simulation, looseNodes.wireNodes) : {},
+    [doc, simulation, looseNodes]);
+  const junctions = useMemo(() => junctionPoints(doc), [doc]);
+  const focusNet = selection?.type === 'wire'
+    ? looseNodes.wireNodes[selection.id]
+    : selection?.type === 'component'
+      ? looseNodes.terminalNodes[selection.id + ':a'] ??
+        looseNodes.terminalNodes[selection.id + ':g'] : undefined;
+  const visuals: CanvasVisuals = {
+    wireNodes: looseNodes.wireNodes, terminalNodes: looseNodes.terminalNodes,
+    flowCurrents, junctions, focusedNet: focusNet,
+    showFlow: showFlow && !reducedMotion,
+  };
+  useEffect(() => {
+    let frameId = 0;
+    const draw = (time: number) => {
+      if (canvas.current) {
+        drawCanvas(canvas.current, doc, view, selection, selectedIds,
+          pendingPin, hover, simulation, visuals, time / 1000);
+      }
+      if (visuals.showFlow && simulation && Object.keys(flowCurrents).length) {
+        frameId = window.requestAnimationFrame(draw);
+      }
+    };
+    draw(0);
+    return () => window.cancelAnimationFrame(frameId);
+  }, [doc, view, selection, selectedIds, pendingPin, hover, simulation, size,
+      showFlow, reducedMotion, flowCurrents, focusNet, junctions]);
 
   const screenPoint = (e: { clientX: number; clientY: number }) => {
     const rect = canvas.current!.getBoundingClientRect();
@@ -391,11 +510,14 @@ export function CircuitCanvas() {
     }
     return closest;
   };
-  const nearestFreeTip = (p: Point): WireEndpoint | null => {
+  const nearestFreeTip = (p: Point): { wireId: string; side: 'from' | 'to'; point: Point } | null => {
     for (const w of [...doc.wires].reverse()) {
-      for (const endpoint of [w.from, w.to]) {
+      for (const side of ['from', 'to'] as const) {
+        const endpoint = w[side];
         if (!isTerminal(endpoint) &&
-          Math.hypot(endpoint.x - p.x, endpoint.y - p.y) <= 10 / view.zoom) return endpoint;
+            Math.hypot(endpoint.x - p.x, endpoint.y - p.y) <= 10 / view.zoom) {
+          return { wireId: w.id, side, point: endpoint };
+        }
       }
     }
     return null;
@@ -409,7 +531,16 @@ export function CircuitCanvas() {
       const terminal = findTerminal(p);
       if (terminal) { connect(terminal); return; }
       const tip = nearestFreeTip(p);
-      if (tip) { connect(tip); return; }
+      if (tip) {
+        if (e.shiftKey && !pendingPin) {
+          select({ type: 'wire', id: tip.wireId });
+          beginDrag();
+          dragging.current = { type: 'free-tip', wireId: tip.wireId, side: tip.side,
+            x: tip.point.x, y: tip.point.y, at: p };
+          e.currentTarget.setPointerCapture(e.pointerId);
+        } else connect(tip.point);
+        return;
+      }
       if (pendingPin) {
         // A free endpoint can be left anywhere on the workbench, or exactly
         // on an existing wire to create an electrically connected junction.
@@ -419,7 +550,12 @@ export function CircuitCanvas() {
       }
       for (const c of [...doc.components].reverse()) {
         if (hitComponent(c, p)) {
-          select({ type: 'component', id: c.id });
+          if (e.shiftKey || e.metaKey) {
+            select({ type: 'component', id: c.id }, true);
+            return;
+          }
+          if (!selectedIds.includes(c.id)) select({ type: 'component', id: c.id });
+          beginDrag();
           dragging.current = { type: 'component', id: c.id, x: c.x, y: c.y, at: p };
           e.currentTarget.setPointerCapture(e.pointerId);
           return;
@@ -445,14 +581,17 @@ export function CircuitCanvas() {
         ...v, x: d.originalX + e.clientX - d.clientX,
         y: d.originalY + e.clientY - d.clientY,
       }));
-    } else {
+    } else if (d.type === 'component') {
       const newX = snap(d.x + p.x - d.at.x);
       const newY = snap(d.y + p.y - d.at.y);
       const current = useCircuitStore.getState().document.components.find(c => c.id === d.id);
       if (current && (current.x !== newX || current.y !== newY)) move(d.id, { x: newX, y: newY });
+    } else if (d.type === 'free-tip') {
+      moveFreeEnd(d.wireId, d.side, { x: d.x + p.x - d.at.x, y: d.y + p.y - d.at.y });
     }
   };
   const onPointerUp = (e: PointerEvent<HTMLCanvasElement>) => {
+    if (dragging.current?.type === 'component' || dragging.current?.type === 'free-tip') endDrag();
     dragging.current = null;
     if (e.currentTarget.hasPointerCapture(e.pointerId)) {
       e.currentTarget.releasePointerCapture(e.pointerId);
@@ -489,6 +628,7 @@ export function CircuitCanvas() {
     if (hit) {
       target = { type: 'component', id: hit.id };
       setQuickValue(String(hit.value));
+      setQuickError(false);
     } else {
       const trace = findWire(at);
       if (trace) {
@@ -509,8 +649,10 @@ export function CircuitCanvas() {
     ? doc.components.find(c => c.id === menu.selection?.id) : undefined;
   const commitQuickValue = () => {
     if (!menuPart) return;
-    const parsed = Number(quickValue);
-    if (quickValue.trim() && Number.isFinite(parsed)) setValue(menuPart.id, parsed);
+    const parsed = parseEngineering(quickValue, menuPart.kind);
+    if (parsed === null) { setQuickError(true); return; }
+    setQuickError(false);
+    setValue(menuPart.id, parsed);
   };
   const menuAction = (action: () => void) => () => { action(); setMenu(null); };
   const usePin = (pin: 'a' | 'b' | 'w') => {
@@ -529,10 +671,14 @@ export function CircuitCanvas() {
         onDrop={onDrop}
       />
       <div className="canvas-hint">
-        ◈ CLICK PIN → EMPTY GRID FOR FREE WIRES <span>·</span>
-        RIGHT-CLICK FOR ACTIONS <span>·</span> DRAG PARTS TO CONNECT
+        ◈ RIGHT-CLICK TO EDIT <span>·</span> SHIFT+CLICK MULTI-SELECT <span>·</span>
+        SHIFT+DRAG FREE TIP TO MOVE
       </div>
       <div className="canvas-controls">
+        <button className={showFlow && !reducedMotion ? 'flow-on' : ''}
+          title="Toggle animated conventional current on unbranched wires (requires simulation)"
+          aria-pressed={showFlow && !reducedMotion}
+          onClick={() => setFlowEnabled(!showFlow)}>{reducedMotion ? '◌ STILL' : showFlow ? '◉ FLOW' : '○ FLOW'}</button>
         <button title="Zoom out" onClick={() => setView(v => ({ ...v, zoom: Math.max(.35, v.zoom / 1.25) }))}>−</button>
         <span>{Math.round(view.zoom * 100)}%</span>
         <button title="Zoom in" onClick={() => setView(v => ({ ...v, zoom: Math.min(2.5, v.zoom * 1.25) }))}>+</button>
@@ -557,7 +703,8 @@ export function CircuitCanvas() {
                       : menuPart.kind === 'current_source' ? 'AMPS' : 'VOLTS'}
               </label>
               <div className="context-value-row">
-                <input id="quick-value" type="number" step="any" value={quickValue}
+                <input id="quick-value" type="text" value={quickValue}
+                  aria-invalid={quickError} placeholder="4.7k, 100uF, 10mH"
                   onChange={e => setQuickValue(e.target.value)}
                   onKeyDown={e => {
                     e.stopPropagation();
@@ -567,6 +714,7 @@ export function CircuitCanvas() {
                 />
                 <button onClick={menuAction(commitQuickValue)}>SET</button>
               </div>
+              {quickError && <div className="value-error">Invalid value or unit for this component.</div>}
             </>}
             {menuPart.kind === 'switch' && <button className="context-option highlight"
               onClick={menuAction(() => toggleSwitch(menuPart.id))}>
@@ -576,6 +724,7 @@ export function CircuitCanvas() {
               <label>WIPER · {Math.round((menuPart.wiper ?? .5) * 100)}%</label>
               <input type="range" min="1" max="99"
                 value={Math.round((menuPart.wiper ?? .5) * 100)}
+                onPointerDown={beginDrag} onPointerUp={endDrag}
                 onChange={e => setPotWiper(menuPart.id, Number(e.target.value) / 100)} />
             </div>}
             {menuPart.kind !== 'ground' && <>
@@ -589,11 +738,16 @@ export function CircuitCanvas() {
               <button className="context-option" onClick={() => {
                 beginWire({ componentId: menuPart.id, pin: 'g' }); setMenu(null);
               }}>⌁ WIRE FROM GROUND</button>}
+            <button className="context-option" onClick={menuAction(copySelection)}>▣ COPY SELECTED</button>
+            <button className="context-option" onClick={menuAction(duplicateSelection)}>⊞ DUPLICATE</button>
             <button className="context-option danger" onClick={menuAction(remove)}>× DELETE COMPONENT</button>
           </> : menu.selection?.type === 'wire' ? <>
             <div className="context-target">NEON WIRE · CONNECTION</div>
             <button className="context-option highlight"
               onClick={menuAction(() => beginWire(menu.wirePoint ?? menu.world))}>⌁ START BRANCH HERE</button>
+            <button className="context-option" onClick={menuAction(() => {
+              if (menu.selection?.type === 'wire') straightenWire(menu.selection.id);
+            })}>⌁ STRAIGHTEN ROUTE</button>
             <button className="context-option danger" onClick={menuAction(remove)}>× DELETE WIRE</button>
           </> : <>
             <div className="context-target">GRID · {Math.round(menu.world.x)}, {Math.round(menu.world.y)}</div>

@@ -14,9 +14,11 @@ export function TransientPanel() {
   const transient = useCircuitStore(s => s.transient);
   const timeIndex = useCircuitStore(s => s.timeIndex);
   const duration = useCircuitStore(s => s.transientDuration);
+  const steps = useCircuitStore(s => s.transientSteps);
   const run = useCircuitStore(s => s.simulateTransient);
   const setTimeIndex = useCircuitStore(s => s.setTimeIndex);
   const setDuration = useCircuitStore(s => s.setTransientDuration);
+  const setSteps = useCircuitStore(s => s.setTransientSteps);
   const [playing, setPlaying] = useState(false);
   const [traceKind, setTraceKind] = useState<'voltage' | 'current'>('voltage');
 
@@ -82,6 +84,15 @@ export function TransientPanel() {
                 setDuration(Number(e.target.value) / 1000);
             }}
           />
+        </div>
+        <div className="time-setup">
+          <label htmlFor="transient-steps">SAMPLE STEPS</label>
+          <select id="transient-steps" value={steps} onChange={e => setSteps(Number(e.target.value))}>
+            <option value={60}>60 · FAST</option>
+            <option value={120}>120 · BALANCED</option>
+            <option value={240}>240 · STANDARD</option>
+            <option value={500}>500 · PRECISE</option>
+          </select>
         </div>
         <button className="transient-run" onClick={() => {
           setPlaying(false); run();

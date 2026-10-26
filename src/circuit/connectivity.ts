@@ -30,8 +30,9 @@ const endpointKey = (e: WireEndpoint) => isTerminal(e) ? terminalKey(e) : pointK
  * connect. A free wire end can be attached by placing a component pin there,
  * or by branching from that point later.
  */
-export function circuitNodes(doc: CircuitDocument): {
+export function circuitNodes(doc: CircuitDocument, options: { allowIncomplete?: boolean } = {}): {
   terminalNodes: Record<string, string>;
+  wireNodes: Record<string, string>;
   ground: string;
 } {
   const set = new DisjointSet();
@@ -53,7 +54,9 @@ export function circuitNodes(doc: CircuitDocument): {
     }
   }
   const grounds = terminals.filter(t => componentMap.get(t.componentId)?.kind === 'ground');
-  if (grounds.length === 0) throw new Error('Add a ground component (GND) before simulating.');
+  if (!grounds.length && !options.allowIncomplete) {
+    throw new Error('Add a ground component (GND) before simulating.');
+  }
   for (const g of grounds.slice(1)) set.union(grounds[0].key, g.key);
 
   const freeEnds: Point[] = [];
@@ -113,7 +116,7 @@ export function circuitNodes(doc: CircuitDocument): {
       t.point.x === other.point.x && t.point.y === other.point.y)) connected.add(t.key);
   }
   for (const c of doc.components) {
-    if (c.kind === 'ground') continue;
+    if (options.allowIncomplete || c.kind === 'ground') continue;
     for (const pin of pinsFor(c)) {
       const key = terminalKey({ componentId: c.id, pin });
       if (!connected.has(key)) {
@@ -126,5 +129,7 @@ export function circuitNodes(doc: CircuitDocument): {
 
   const terminalNodes: Record<string, string> = {};
   for (const t of terminals) terminalNodes[t.key] = set.find(t.key);
-  return { terminalNodes, ground: set.find(grounds[0].key) };
+  const wireNodes: Record<string, string> = {};
+  for (const w of doc.wires) wireNodes[w.id] = set.find('wire:' + w.id);
+  return { terminalNodes, wireNodes, ground: grounds.length ? set.find(grounds[0].key) : '' };
 }
