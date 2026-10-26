@@ -4,12 +4,16 @@ import { useDigitalStore } from './useDigitalStore';
 import { paletteCategories, allParts, partByKind, searchParts, type PartCategory } from './catalog';
 import { initialDigitalCircuit } from './types';
 import { andDemo, halfAdderDemo, notDemo } from './samples';
+import { counterDemo,flipFlopDemo,cpuCoreDemo } from './computerSamples';
 
 const exampleCircuits = [
   {label:'XOR PLAYGROUND',document:initialDigitalCircuit},
   {label:'AND GATE LAB',document:andDemo},
   {label:'NOT GATE LAB',document:notDemo},
   {label:'HALF ADDER',document:halfAdderDemo},
+  {label:'D FLIP-FLOP',document:flipFlopDemo},
+  {label:'CLOCKED 4-BIT COUNTER',document:counterDemo},
+  {label:'4-BIT CPU DATAPATH',document:cpuCoreDemo},
 ];
 type CategoryFilter = PartCategory | 'all' | 'custom';
 

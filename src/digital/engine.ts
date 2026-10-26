@@ -1,6 +1,7 @@
 import {
   DigitalDocument, DigitalComponent, DigitalKind, GateKind,
-  LogicBit, LogicValue, LogicResult, outputsOf,
+  LogicBit, LogicValue, LogicResult, DigitalRuntime,
+  emptyDigitalRuntime, defaultRomWords, outputsOf,
 } from './types';
 import { compileSignals } from './compile';
 
@@ -76,7 +77,62 @@ export function evaluateComponent(
       return {sum:allXor([a,b]),carry:allAnd([a,b])};
     case 'fulladder':
       return {sum:allXor([a,b,read('cin')]),carry:majority([a,b,read('cin')])};
+    case 'alu4': return calculateAlu4(raw);
+    case 'rom16x4': return nibbleOutput(0);
+    case 'clock':return {out:0};
+    case 'dff':case 'tff':return {q:0};
+    case 'register4':case 'counter4':case 'ram16x4':return nibbleOutput(0);
   }
+}
+
+
+/** Every bus bit is a separate named 1-bit terminal; suffix 0 is LSB. */
+export const nibbleOutput = (word:number):Record<string,LogicValue> =>
+  Object.fromEntries([0,1,2,3].map(i=>['q'+i,((word>>i)&1) as LogicBit]));
+export function readNibble(values:Record<string,LogicValue>,prefix:string):number|null {
+  let word=0;
+  for(let i=0;i<4;i++) {
+    const bit=values[prefix+i];
+    if(bit!==0&&bit!==1)return null;
+    word |= bit<<i;
+  }
+  return word;
+}
+export function calculateAlu4(raw:Record<string,LogicValue>):Record<string,LogicValue> {
+  const unknown=Object.fromEntries([
+    ...[0,1,2,3].map(i=>['y'+i,'X' as LogicValue]),
+    ['carry','X' as LogicValue],['zero','X' as LogicValue],
+  ]);
+  const op0=normalized(raw.op0),op1=normalized(raw.op1);
+  if(!isBinary(op0)||!isBinary(op1))return unknown;
+  const a=readNibble(raw,'a'),b=readNibble(raw,'b');
+  if(a===null||b===null)return unknown;
+  const operation=op0|(op1<<1);
+  const total=operation===0?a+b:operation===1?a&b:operation===2?a|b:a^b;
+  const result=total&15;
+  return Object.fromEntries([
+    ...[0,1,2,3].map(i=>['y'+i,((result>>i)&1) as LogicValue]),
+    ['carry',(operation===0&&total>15?1:0) as LogicValue],
+    ['zero',(result===0?1:0) as LogicValue],
+  ]);
+}
+function stateOutputs(
+  kind:DigitalKind,id:string,raw:Record<string,LogicValue>,
+  component:DigitalComponent,runtime:DigitalRuntime,clockHigh:boolean,
+):Record<string,LogicValue> {
+  if(kind==='clock')return {out:clockHigh?1:0};
+  if(kind==='dff'||kind==='tff')return {q:runtime.registers[id]?.q??0};
+  if(kind==='register4'||kind==='counter4')return Object.fromEntries(
+    [0,1,2,3].map(i=>['q'+i,runtime.registers[id]?.['q'+i]??0]));
+  if(kind==='rom16x4'||kind==='ram16x4') {
+    const address=readNibble(raw,'a');
+    if(address===null)return Object.fromEntries(
+      [0,1,2,3].map(i=>['q'+i,'X' as LogicValue]));
+    const words=kind==='rom16x4'?component.words??defaultRomWords():
+      runtime.memories[id]??Array(16).fill(0);
+    return nibbleOutput(words[address]??0);
+  }
+  return evaluateComponent(kind,raw);
 }
 
 /**
@@ -84,11 +140,14 @@ export function evaluateComponent(
  * Independent module instances get independent gate state, including multiple
  * named outputs on adders and demultiplexers.
  */
-export function simulateLogic(doc: DigitalDocument): LogicResult {
+export function simulateLogic(
+  doc:DigitalDocument, runtime:DigitalRuntime=emptyDigitalRuntime(),
+  options:{clockHigh?:boolean}={},
+):LogicResult {
   const network = compileSignals(doc);
   const primitives = network.primitives;
   const gates = primitives.filter(p =>
-    !['input','high','low','led'].includes(p.component.kind));
+    !['input','high','low','clock','led'].includes(p.component.kind));
   const drivers = primitives.filter(p => Object.keys(p.outputs).length>0);
   let computed = new Map<string,Record<string,LogicValue>>(
     gates.map(p=>[p.id,Object.fromEntries(
@@ -104,7 +163,8 @@ export function simulateLogic(doc: DigitalDocument): LogicResult {
         const value = p.component.kind === 'input' ? (p.component.bit??0)
           : p.component.kind === 'high' ? 1
             : p.component.kind === 'low' ? 0
-              : computed.get(p.id)?.[pin] ?? 'X';
+              : p.component.kind === 'clock' ? (options.clockHigh?1:0)
+                : computed.get(p.id)?.[pin] ?? 'X';
         incoming.get(net)?.push(value);
       }
     }
@@ -123,7 +183,8 @@ export function simulateLogic(doc: DigitalDocument): LogicResult {
     for(const p of gates) {
       const inputs=Object.fromEntries(Object.entries(p.inputs)
         .map(([pin,net])=>[pin,nextNets.get(net)??'Z']));
-      nextGates.set(p.id,evaluateComponent(p.component.kind,inputs));
+      nextGates.set(p.id,stateOutputs(p.component.kind,p.id,inputs,
+        p.component,runtime,!!options.clockHigh));
     }
     stabilized=[...nextGates].every(([id,outputs])=>
       Object.entries(outputs).every(([pin,value])=>computed.get(id)?.[pin]===value));
@@ -181,6 +242,10 @@ export type TruthTable = {
   rows: { inputs: LogicBit[]; outputs: LogicValue[] }[];
 };
 export function generateTruthTable(doc: DigitalDocument): TruthTable {
+  const sequential=['clock','dff','tff','register4','counter4','ram16x4'];
+  if(doc.components.some(c=>sequential.includes(c.kind))||doc.blocks?.some(def=>
+    def.circuit.components.some(c=>sequential.includes(c.kind))))
+    throw new Error('Truth tables are for combinational designs. Use CLOCK STEP and WAVEFORM for stateful circuits.');
   const inputs = doc.components.filter(c => c.kind === 'input');
   const outputs = doc.components.filter(c => c.kind === 'led');
   if (!inputs.length) throw new Error('Add at least one INPUT switch to generate a truth table.');

@@ -1,3 +1,70 @@
+# CircuitBuilder v0.8 — Computer Foundations & CPU Home Screen
+
+CircuitBuilder is becoming a hardware design workbench. Alongside Analog Lab's DC/RLC electrical solver, Signal Lab can now simulate **combinational AND sequential digital circuits**, including small RAM, programmable ROM, registers, counters, and a 4-bit arithmetic/logic unit. The app opens to a new **retro neon home screen featuring a live CPU datapath**.
+
+## What you can build today
+
+The v0.8 foundation can build an actual *small clocked digital computer datapath* using these new parts:
+
+| New part | Pins and behavior |
+| --- | --- |
+| CLOCK SOURCE | OUT; emits one logical 0→1→0 pulse on every CLOCK STEP |
+| D FLIP-FLOP | D, CLK → Q; captures D on a **rising** clock edge |
+| T FLIP-FLOP | T, CLK → Q; toggles when T=1 on a rising edge |
+| 4-BIT REGISTER | D0–D3, CLK, EN → Q0–Q3; stores one 4-bit word when EN=1 |
+| 4-BIT COUNTER | CLK, EN, RESET → Q0–Q3; synchronous 4-bit increment and reset |
+| 16×4 RAM | A0–A3, D0–D3, WE, CLK → Q0–Q3; 16 words of 4 bits, synchronous write and asynchronous read |
+| 16×4 ROM | A0–A3 → Q0–Q3; editable program table persisted in the circuit JSON |
+| 4-BIT ALU | A0–A3, B0–B3, OP0, OP1 → Y0–Y3, CARRY, ZERO; ADD / AND / OR / XOR |
+
+The bit numbering convention is **bit 0 = least-significant bit (LSB)**. Clocked parts update together based on the previous state, so a chain of registers won't accidentally propagate several cycles in one edge. The CPU datapath uses that exact behavior.
+
+### How to try the CPU demo
+
+1. Open the **Home** page. The CPU chip illustration is **live**: use **CLOCK STEP**, **+8 CYCLES**, or **RESET** to watch the program counter and accumulator evolve.
+2. Click **OPEN THE 4-BIT CPU DEMO** to load its actual wired schematic in Signal Lab. This starter connects a CLOCK to a PC counter and accumulator; PC → ROM → ALU → ACC with ACC feedback to ALU and output LEDs.
+3. Open the **▣ CPU** tab in Signal Lab to step once, run 8/16 cycles, autoplay at 1/2/4/8 Hz, or reset the simulation state.
+4. Select the ROM and edit its **16 hexadecimal words** in the Inspector, then save the program. ROM bytes (nibbles) are stored in the JSON schematic, while runtime register and RAM values reset when restarting simulation or editing circuit topology.
+5. Probe any pin or wire using right-click and open **WAVEFORM** to inspect the changes after each tick. The existing binary input tester also supports manual rising-edge triggers when an INPUT switch is wired to CLK.
+6. Try the **D Flip-Flop** and **Clocked 4-Bit Counter** samples. For arithmetic, connect four ALU output bits to LEDs and wire its OP0/OP1 lines to choose a logical operation.
+
+### Simulation model
+
+- CLOCK STEP creates one **discrete logical event**, not a calibrated nanosecond time delay.
+- On a rising clock edge, all stateful components sample *pre-edge* values simultaneously. RAM writes only if WE=1 at the edge; RAM reads are asynchronous.
+- Clocked state is separate from schematic geometry. Simulation resets clear registers/counters/RAM, while ROM definitions are part of the saved circuit.
+- Every 4-bit data channel uses **four separate named pins and wires**. Bundled multi-bit buses are a future UI/data-model feature.
+- Four-state signal semantics are preserved: 0, 1, X (unknown), Z (undriven). The digital engine reports floating pins and output-driver conflicts.
+- Truth tables remain available for **combinational** designs. Sequential circuits use clock stepping and waveform analysis, not a misleading static truth table.
+
+### What would still be required for a more advanced computer?
+
+You can build educational 4-bit CPU *datapaths* now, but **not yet a complete programmable general-purpose CPU**. The provided CPU example repeatedly adds ROM data to an accumulator; it does not decode or execute machine instructions. To expand toward an 8/16/32-bit computer, planned milestones include:
+
+1. **Instruction decoder / control unit, program branching, flags and jump conditions**.
+2. **Register files, RAM/ROM scaling, integrated multi-bit buses and signal grouping**.
+3. **Assembler or machine-code program loader, ISA definition and debugger**.
+4. **Large-design performance, stronger sequential/timing tests, validation tools, memory addressing and peripherals**.
+5. **Configurable propagation delays and richer clock scheduling**, if physical timing becomes a goal.
+
+A modern multicore computer also needs sophisticated pipelines, caches, interrupts, external IO and an optimized simulation backend. v0.8 makes the fundamentals possible without implying those features already exist.
+
+## Development
+
+\`\`\`bash
+git pull origin main
+npm install
+npm run dev
+npm test
+npm run build
+\`\`\`
+
+Your original Analog Lab, Signal Lab Boolean gates, searchable catalog, clockless custom modules, JSON files, and block drilldown remain supported.
+
+---
+
+## Previous release notes
+
 # CircuitBuilder v0.7 — Arcade Parts Catalog & Advanced Digital Components
 
 Signal Lab's neon pixel-art parts library now contains **20 built-in components**, searchable and organized into categories with favorites and recently used shortcuts. The digital engine supports three-input logic, fixed logic levels, data routing, and two-output arithmetic devices. Analog Lab and saved reusable blocks remain supported.
