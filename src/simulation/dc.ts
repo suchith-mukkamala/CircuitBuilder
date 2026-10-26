@@ -30,6 +30,12 @@ export function solveDC(doc: CircuitDocument): DCResult {
         Math.abs(c.value) > 1e9) {
       throw new Error('Source magnitude is too large (maximum 1e9 SI units).');
     }
+    if (c.kind === 'capacitor' && (c.value < 1e-12 || c.value > 1e3)) {
+      throw new Error('Capacitance must be between 1 pF and 1000 F.');
+    }
+    if (c.kind === 'inductor' && (c.value < 1e-9 || c.value > 1e3)) {
+      throw new Error('Inductance must be between 1 nH and 1000 H.');
+    }
     if (c.kind === 'potentiometer' && (c.wiper ?? 0.5) < 0.001) {
       throw new Error('Potentiometer wiper must be between 0.1% and 99.9%.');
     }
@@ -42,7 +48,7 @@ export function solveDC(doc: CircuitDocument): DCResult {
   const indexes = new Map(roots.map((root, i) => [root, i]));
   const n = roots.length;
   const constrainedParts = parts.filter(c => c.kind === 'voltage_source' ||
-    (c.kind === 'switch' && c.closed));
+    c.kind === 'inductor' || (c.kind === 'switch' && c.closed));
   const size = n + constrainedParts.length;
   if (size > 400) throw new Error('Circuit exceeds the v0.2 solver limit (400 unknowns).');
   if (size === 0) throw new Error('No electrical nodes to analyze.');
@@ -111,11 +117,12 @@ export function solveDC(doc: CircuitDocument): DCResult {
     } else if (c.kind === 'current_source') {
       current = c.value;
       power = voltage * current;
-    } else if (c.kind === 'voltage_source' || (c.kind === 'switch' && c.closed)) {
+    } else if (c.kind === 'voltage_source' || c.kind === 'inductor' || (c.kind === 'switch' && c.closed)) {
       const branchIndex = constrainedParts.findIndex(p => p.id === c.id);
       current = solution[n + branchIndex];
       power = voltage * current;
     }
+    // Steady-state DC: capacitors are open, inductors are ideal shorts.
     // Open switches have zero current and signed open-circuit voltage.
     readings[c.id] = { voltage, current, power };
   }

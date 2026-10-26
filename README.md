@@ -1,4 +1,41 @@
-# CIRCUITBUILDER — NEON ARCADE v0.2
+# CircuitBuilder v0.3 — Neon Time Lab
+
+**New in v0.3:** Free-ended traces, right-click menus, real capacitors and inductors, and a time-position scrubber over an RLC transient simulation.
+
+## Free wiring and junctions
+
+- Click any glowing terminal to begin a wire.
+- **Click blank grid** to leave a free endpoint; the free tip glows pink. Continue the path with more clicks, or press **ESC** to leave it dangling.
+- To add a part later, drag and position one of its terminals exactly over the free tip. The contact is electrically recognized when a pin matches the free wire endpoint. The editor uses a **24 px visual grid with 12 px snapping** so every kind of pin (including ground) can meet a dangling tip.
+- A free endpoint laid on an existing wire forms a junction (no component required). You can also **right-click a wire → START BRANCH HERE**.
+- Right-click empty canvas to **START FREE WIRE HERE** or place one of eight components.
+- **Right-click a component** to edit its numeric value, rotate, toggle a switch, start a wire from a particular pin, adjust a potentiometer wiper, or delete it.
+- **Right-click a wire** to branch or delete it. The inspector remains available for detailed readings.
+- Mid-wire crossings without explicit wire endpoints or component pads do **not** connect. Older terminal-to-terminal wiring behavior is retained.
+
+## Transient RLC analysis
+
+Two new energy-storage components join the existing six basic analog parts:
+
+| Component | Default value | Unit |
+| --- | --- | --- |
+| Capacitor (C) | 100 µF | Farads (100 µF = 0.0001 F) |
+| Inductor (L) | 100 mH | Henrys (100 mH = 0.1 H) |
+
+Select the **RC CHARGING** or **RL RESPONSE** lab in the left palette, then click **RUN TRANSIENT** in the **TIME MACHINE** panel. You can:
+
+1. Choose a time window in **milliseconds**.
+2. Drag the time slider to any simulated time step, or use **PLAY / PAUSE**.
+3. See the voltages/currents update on your canvas and inspector at the selected time.
+4. Select another part and switch between **V** and **I** graphs to inspect its waveform.
+
+Transient analysis uses **Backward Euler** companion models and Modified Nodal Analysis. It simulates a **constant independent DC source step starting at t = 0**, with **initial capacitor voltages of 0 V and initial inductor currents of 0 A**. The default timeline uses 240 equal time steps. This is a linear lumped-circuit simulator, not a full SPICE transient system: no nonlinear diodes, varying waveforms, switches changing state mid-run, arbitrary user-set initial conditions, or adaptive step size yet.
+
+Steady-state **DC** still works: a capacitor is an open circuit and an inductor is an ideal short. v0.1 and v0.2 exported documents remain readable because the document schema version stays at 1.
+
+---
+
+## Background: v0.2 Neon Arcade
 
 A neon pixel-arcade **analog circuit workbench** powered by real circuit equations. Place components, wire their glowing terminal pins, run DC analysis, and explore how voltage and current flow.
 

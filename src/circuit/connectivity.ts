@@ -1,11 +1,14 @@
-import { CircuitDocument, PinName, pinsFor, terminalKey } from './types';
+import {
+  CircuitDocument, PinName, pinsFor, terminalKey, isTerminal, pinPosition, WireEndpoint, Point,
+} from './types';
+import { endpointPosition, onWire } from './geometry';
 
 export class DisjointSet {
   private parent = new Map<string, string>();
   add(key: string): void { if (!this.parent.has(key)) this.parent.set(key, key); }
   find(key: string): string {
     const parent = this.parent.get(key);
-    if (parent === undefined) throw new Error('Unknown terminal: ' + key);
+    if (parent === undefined) throw new Error('Unknown electrical node: ' + key);
     if (parent === key) return key;
     const root = this.find(parent);
     this.parent.set(key, root);
@@ -17,47 +20,97 @@ export class DisjointSet {
   }
 }
 
-export function circuitNodes(doc: CircuitDocument): { terminalNodes: Record<string, string>; ground: string } {
+/** Free ends and terminal pads share the same coordinate anchors. */
+const pointKey = (p: Point) => 'xy:' + p.x + ',' + p.y;
+const endpointKey = (e: WireEndpoint) => isTerminal(e) ? terminalKey(e) : pointKey(e);
+
+/**
+ * Connectivity only occurs where a terminal pad or wire endpoint actually
+ * touches a wire. Two wires merely crossing without an endpoint/pad do NOT
+ * connect. A free wire end can be attached by placing a component pin there,
+ * or by branching from that point later.
+ */
+export function circuitNodes(doc: CircuitDocument): {
+  terminalNodes: Record<string, string>;
+  ground: string;
+} {
   const set = new DisjointSet();
-  const terminals = new Set<string>();
   const componentMap = new Map(doc.components.map(c => [c.id, c]));
-  for (const component of doc.components) {
-    for (const pin of pinsFor(component)) {
-      const key = terminalKey({ componentId: component.id, pin });
-      terminals.add(key);
+  const terminals: { key: string; point: Point; componentId: string; pin: PinName }[] = [];
+  const ensurePoint = (p: Point): string => {
+    const key = pointKey(p);
+    set.add(key);
+    return key;
+  };
+  for (const c of doc.components) {
+    for (const pin of pinsFor(c)) {
+      const term = { componentId: c.id, pin };
+      const key = terminalKey(term);
+      const point = pinPosition(c, pin);
       set.add(key);
+      set.union(key, ensurePoint(point));
+      terminals.push({ key, point, ...term });
     }
   }
-  const grounds = doc.components.filter(c => c.kind === 'ground');
+  const grounds = terminals.filter(t => componentMap.get(t.componentId)?.kind === 'ground');
   if (grounds.length === 0) throw new Error('Add a ground component (GND) before simulating.');
-  const groundKey = terminalKey({ componentId: grounds[0].id, pin: 'g' });
-  for (const g of grounds.slice(1)) set.union(groundKey, terminalKey({ componentId: g.id, pin: 'g' }));
-  const degrees = new Map<string, number>();
-  for (const wire of doc.wires) {
-    const a = terminalKey(wire.from), b = terminalKey(wire.to);
-    const ca = componentMap.get(wire.from.componentId);
-    const cb = componentMap.get(wire.to.componentId);
-    const correctPin = (kind: string | undefined, pin: PinName) =>
-      kind === 'ground' ? pin === 'g'
-        : kind === 'potentiometer' ? (pin === 'a' || pin === 'b' || pin === 'w')
-        : kind !== undefined && (pin === 'a' || pin === 'b');
-    if (!terminals.has(a) || !terminals.has(b) ||
-      !correctPin(ca?.kind, wire.from.pin) || !correctPin(cb?.kind, wire.to.pin)) {
-      throw new Error('A wire references a missing component or terminal.');
+  for (const g of grounds.slice(1)) set.union(grounds[0].key, g.key);
+
+  const freeEnds: Point[] = [];
+  const explicitlyWired = new Set<string>();
+  for (const w of doc.wires) {
+    const wireNode = 'wire:' + w.id;
+    set.add(wireNode);
+    for (const end of [w.from, w.to]) {
+      if (isTerminal(end)) {
+        const c = componentMap.get(end.componentId);
+        if (!c || !pinsFor(c).includes(end.pin)) {
+          throw new Error('A wire references a missing component or terminal.');
+        }
+        set.union(wireNode, terminalKey(end));
+        explicitlyWired.add(terminalKey(end));
+      } else {
+        set.union(wireNode, ensurePoint(end));
+        freeEnds.push(end);
+      }
     }
-    set.union(a, b);
-    degrees.set(a, (degrees.get(a) ?? 0) + 1);
-    degrees.set(b, (degrees.get(b) ?? 0) + 1);
+    if (!endpointPosition(w.from, doc) || !endpointPosition(w.to, doc)) {
+      throw new Error('A wire endpoint could not be resolved.');
+    }
   }
-  for (const component of doc.components) {
-    if (component.kind === 'ground') continue;
-    for (const pin of pinsFor(component)) {
-      if (!degrees.has(terminalKey({ componentId: component.id, pin }))) {
-        throw new Error('Connect both terminals of ' + component.id.toUpperCase() + ' before simulating.');
+
+  // A *free endpoint* on a wire segment is an intentional junction.
+  // Pure crossings, and pads underneath an unrelated trace, DO NOT join.
+  for (const w of doc.wires) {
+    const wireNode = 'wire:' + w.id;
+    for (const p of freeEnds) {
+      if (onWire(p, w, doc)) set.union(wireNode, pointKey(p));
+    }
+  }
+
+  const connected = new Set<string>(explicitlyWired);
+  for (const t of terminals) {
+    if (freeEnds.some(p => p.x === t.point.x && p.y === t.point.y)) {
+      connected.add(t.key);
+    }
+  }
+  // A component pad touching another component pad is a direct connection.
+  for (const t of terminals) {
+    if (terminals.some(other => other.key !== t.key &&
+      t.point.x === other.point.x && t.point.y === other.point.y)) connected.add(t.key);
+  }
+  for (const c of doc.components) {
+    if (c.kind === 'ground') continue;
+    for (const pin of pinsFor(c)) {
+      const key = terminalKey({ componentId: c.id, pin });
+      if (!connected.has(key)) {
+        throw new Error('Connect both terminals of ' + c.id.toUpperCase() +
+          ' (and the W pin, for a potentiometer) before simulating.');
       }
     }
   }
+
   const terminalNodes: Record<string, string> = {};
-  for (const key of terminals) terminalNodes[key] = set.find(key);
-  return { terminalNodes, ground: set.find(groundKey) };
+  for (const t of terminals) terminalNodes[t.key] = set.find(t.key);
+  return { terminalNodes, ground: set.find(grounds[0].key) };
 }

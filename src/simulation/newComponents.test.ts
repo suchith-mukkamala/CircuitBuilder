@@ -62,7 +62,7 @@ describe('v0.2 source and control components', () => {
     expect(pinsFor(doc.components[1])).toEqual(['a', 'b', 'w']);
     const terminal = pinPosition(doc.components[1], 'w');
     expect(terminal.y).toBe(doc.components[1].y + 48);
-    doc.wires[0].from.pin = 'w'; // voltage sources have no wiper
+    doc.wires[0].from = { componentId: 'v1', pin: 'w' }; // voltage sources have no wiper
     expect(isCircuitDocument(doc)).toBe(false);
   });
 
