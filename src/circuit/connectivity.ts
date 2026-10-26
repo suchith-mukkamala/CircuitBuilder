@@ -37,11 +37,9 @@ export function circuitNodes(doc: CircuitDocument): {
   const set = new DisjointSet();
   const componentMap = new Map(doc.components.map(c => [c.id, c]));
   const terminals: { key: string; point: Point; componentId: string; pin: PinName }[] = [];
-  const coords = new Set<string>();
   const ensurePoint = (p: Point): string => {
     const key = pointKey(p);
     set.add(key);
-    coords.add(key);
     return key;
   };
   for (const c of doc.components) {
@@ -81,18 +79,10 @@ export function circuitNodes(doc: CircuitDocument): {
     }
   }
 
-  // Join wires that end on another wire's segment, plus any component terminal
-  // placed directly on an existing trace.
+  // A *free endpoint* on a wire segment is an intentional junction.
+  // Pure crossings, and pads underneath an unrelated trace, DO NOT join.
   for (const w of doc.wires) {
     const wireNode = 'wire:' + w.id;
-    for (const term of terminals) {
-      // Preserve legacy terminal-to-terminal drawings: a pad that already has
-      // an explicit wire does not automatically connect to an unrelated trace
-      // merely passing through its visible position.
-      if (!explicitlyWired.has(term.key) && onWire(term.point, w, doc)) {
-        set.union(wireNode, term.key);
-      }
-    }
     for (const p of freeEnds) {
       if (onWire(p, w, doc)) set.union(wireNode, pointKey(p));
     }
@@ -100,7 +90,7 @@ export function circuitNodes(doc: CircuitDocument): {
 
   const connected = new Set<string>(explicitlyWired);
   for (const t of terminals) {
-    if (!explicitlyWired.has(t.key) && doc.wires.some(w => onWire(t.point, w, doc))) {
+    if (freeEnds.some(p => p.x === t.point.x && p.y === t.point.y)) {
       connected.add(t.key);
     }
   }

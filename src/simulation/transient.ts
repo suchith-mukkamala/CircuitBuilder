@@ -45,12 +45,12 @@ export function runTransient(doc: CircuitDocument, options: {
     throw new Error('Simulation duration must be between 0 and 60 seconds.');
   if (!Number.isInteger(steps) || steps < 2 || steps > 500)
     throw new Error('Simulation must have 2–500 time steps.');
-  const { terminalNodes, ground } = circuitNodes(doc);
   const parts = doc.components.filter(c => c.kind !== 'ground');
   if (!parts.some(c => c.kind === 'voltage_source' || c.kind === 'current_source'))
     throw new Error('Add a voltage or current source before running transient analysis.');
   if (!parts.some(c => c.kind === 'capacitor' || c.kind === 'inductor'))
     throw new Error('Add a capacitor or inductor to see time-dependent behavior.');
+  const { terminalNodes, ground } = circuitNodes(doc);
   validateValues(parts);
   const nodeRoots = [...new Set(Object.values(terminalNodes))].filter(root => root !== ground).sort();
   const indexMap = new Map(nodeRoots.map((root, i) => [root, i]));

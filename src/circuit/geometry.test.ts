@@ -33,7 +33,8 @@ describe('free-ended traces and junction topology', () => {
     doc.wires.push(
       { id: 'branch1', from: { componentId: 'r3', pin: 'a' }, to: junction },
       { id: 'branch2', from: { componentId: 'r3', pin: 'b' },
-        to: { componentId: 'g1', pin: 'g' } },
+        to: { componentId: 'g1', pin: 'g' },
+        waypoints: [{ x: 816, y: 168 }, { x: 816, y: 504 }, { x: 336, y: 504 }] },
     );
     const result = solveDC(doc);
     const center = result.nodeVoltages[result.terminalNodes['r1:b']];

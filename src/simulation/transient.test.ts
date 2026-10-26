@@ -44,7 +44,7 @@ describe('transient capacitor and inductor analysis', () => {
     const r = runTransient(doc, { duration: .01, steps: 500 });
     expect(r.frames[0].readings.p.current).toBeCloseTo(0, 10);
     expect(r.frames[50].readings.p.current).toBeCloseTo(.01 * (1 - Math.exp(-1)), 4);
-    expect(r.frames[500].readings.p.current).toBeCloseTo(.01, 7);
+    expect(r.frames[500].readings.p.current).toBeCloseTo(.01 * (1 - Math.exp(-10)), 6);
     expect(solveDC(doc).readings.p.voltage).toBeCloseTo(0, 10);
     expect(solveDC(doc).readings.p.current).toBeCloseTo(.01, 8);
   });
