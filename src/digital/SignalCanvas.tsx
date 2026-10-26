@@ -90,6 +90,7 @@ function drawPixelPart(
     ctx.fillStyle='#ecc8fc';ctx.font='bold 10px monospace';
     ctx.fillText(name.length>14?name.slice(0,13)+'…':name,0,17);
     const ins=c.ports?.inputs??[],outs=c.ports?.outputs??[];
+    const definition=doc.blocks?.find(def=>def.id===c.blockId);
     ctx.font='bold 9px monospace';
     for (const [ports,side] of [[ins,-1],[outs,1]] as const) {
       for(let i=0;i<ports.length;i++) {
@@ -97,7 +98,9 @@ function drawPixelPart(
         ctx.strokeStyle='#85ffe0';ctx.shadowColor='#76f9d4';ctx.shadowBlur=7;
         ctx.beginPath();ctx.moveTo(side*60,y);ctx.lineTo(side*78,y);ctx.stroke();ctx.shadowBlur=0;
         ctx.textAlign=side<0?'left':'right';ctx.fillStyle='#acbce8';
-        ctx.fillText(ports[i].replace(/^in/,'I').replace(/^out/,'O'),side*48,y-7);
+        const port=side<0?definition?.inputs[i]:definition?.outputs[i];
+        const caption=(port?.label??ports[i]);
+        ctx.fillText(caption.length>9?caption.slice(0,8)+'…':caption,side*48,y-7);
       }
     }
     ctx.restore();return;
@@ -531,7 +534,11 @@ export function SignalCanvas({ result, onProbe }: { result: LogicResult; onProbe
               onClick={action(()=>toggleInput(menuPart.id))}>↯ TOGGLE TO {menuPart.bit===1?'LOW':'HIGH'}</button>}
             {pinsOf(menuPart).map(pin=><div className="signal-port-actions" key={pin}>
               <button onClick={action(()=>startWire({componentId:menuPart.id,pin}))}>
-                ⌁ WIRE {pin.toUpperCase()}
+                ⌁ {menuPart.kind==='block'
+                  ? doc.blocks?.find(d=>d.id===menuPart.blockId)?.[
+                      menuPart.ports?.inputs.includes(pin)?'inputs':'outputs']
+                      .find(port=>port.pin===pin)?.label??pin.toUpperCase()
+                  : pin.toUpperCase()}
               </button>
               <button title={'Plot signal at '+pin} onClick={action(()=>{
                 addProbe('terminal',menuPart.id+':'+pin,digitalLabel(menuPart,doc.components)+'.'+pin);

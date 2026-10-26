@@ -77,7 +77,7 @@ const patch = (
 ): Partial<DigitalStore> => ({
   document,
   ...(state.dragOrigin ? {} : { past: limit([...state.past, state.document]), future: [] }),
-  trace: [sample(document, 0)],
+  ...(state.dragOrigin ? {} : { trace: [sample(document, 0)] }),
   ...extras,
 });
 const same = (a: DigitalEndpoint, b: DigitalEndpoint) =>
@@ -267,7 +267,8 @@ export const useDigitalStore = create<DigitalStore>()(persist((set, get) => ({
   dragEnd: () => set(state => {
     if (!state.dragOrigin) return {};
     if (state.dragOrigin === state.document) return { dragOrigin: null };
-    return { dragOrigin: null, past: limit([...state.past, state.dragOrigin]), future: [] };
+    return { dragOrigin: null, past: limit([...state.past, state.dragOrigin]),
+      future: [], trace:[sample(state.document,0)] };
   }),
   undo: () => set(state => {
     if (!state.past.length) return {};
@@ -336,6 +337,9 @@ export const useDigitalStore = create<DigitalStore>()(persist((set, get) => ({
     if (!isDigitalDocument(input)) {
       throw new Error('Not a Signal Lab JSON schematic (expected lab:"signal", version:1).');
     }
+    // Validate the expanded hierarchy BEFORE saving it to browser storage.
+    // This also detects recursive module definitions on imported files.
+    simulateLogic(input);
     set(state => patch(state, input, {
       selection: null, selectedIds: [], pending: null, probes:[],
       blockLibrary: [...new Map([...state.blockLibrary, ...(input.blocks ?? [])]

@@ -172,10 +172,20 @@ function SignalInspector({ result }: { result: ReturnType<typeof simulateLogic> 
           </button>
           <small>Click this button or the pixel switch on canvas.</small>
         </div>}
+        {part.kind==='block'&&<div className="signal-block-inspect">
+          <strong>▣ REUSABLE MODULE</strong>
+          <p>Logic inside this block is simulated independently in each instance.</p>
+          <small>{doc.blocks?.find(def=>def.id===part.blockId)?.circuit.components.length??0} internal components</small>
+        </div>}
         <div className="signal-pin-list">
           <div className="signal-section-label">LIVE TERMINALS</div>
           {pinsOf(part).map(pin=><div className="signal-readout" key={pin}>
-            <span>{pin.toUpperCase()} {pin==='out'?'→':'←'}</span>
+            <span>{part.kind==='block'
+              ? doc.blocks?.find(d=>d.id===part.blockId)?.[
+                  part.ports?.inputs.includes(pin)?'inputs':'outputs']
+                  .find(port=>port.pin===pin)?.label??pin
+              :pin.toUpperCase()} {part.kind==='block'
+                ?part.ports?.outputs.includes(pin)?'→':'←':pin==='out'?'→':'←'}</span>
             <LogicChip value={result.terminalValues[part.id+':'+pin]}/>
           </div>)}
         </div>
