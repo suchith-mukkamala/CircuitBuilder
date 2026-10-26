@@ -86,3 +86,22 @@ export function potentiometerCircuit(): CircuitDocument {
     ],
   };
 }
+
+
+/** 10 V step into 1 kΩ and 100 µF. Time constant: 100 ms. */
+export function rcCircuit(): CircuitDocument {
+  const doc = starterCircuit();
+  doc.name = 'RC charging lab';
+  doc.components = doc.components.map(c => c.id === 'r2'
+    ? { ...c, kind: 'capacitor', value: .0001 } : c);
+  return doc;
+}
+
+/** 10 V step into 1 kΩ and 1 H. Time constant: 1 ms. */
+export function rlCircuit(): CircuitDocument {
+  const doc = starterCircuit();
+  doc.name = 'RL inductor lab';
+  doc.components = doc.components.map(c => c.id === 'r2'
+    ? { ...c, kind: 'inductor', value: 1 } : c);
+  return doc;
+}

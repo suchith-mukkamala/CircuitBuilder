@@ -1,10 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useCircuitStore } from '../state/useCircuitStore';
-import { formatElectrical, labelFor } from '../circuit/types';
+import { formatElectrical, labelFor, isTerminal, WireEndpoint } from '../circuit/types';
+
+const endpointLabel = (e: WireEndpoint) => isTerminal(e)
+  ? e.componentId + ' : ' + e.pin : '(' + e.x + ', ' + e.y + ')';
 
 const symbols = {
   resistor: '▤', ground: '⏚', voltage_source: '⊕',
   switch: '╱', current_source: '↓', potentiometer: '◩',
+  capacitor: '▥', inductor: '∿',
 };
 
 export function Inspector() {
@@ -23,7 +27,8 @@ export function Inspector() {
   useEffect(() => { setDraft(c ? String(c.value) : ''); }, [c?.id, c?.value]);
   const isSource = c?.kind === 'voltage_source' || c?.kind === 'current_source';
   const isResistive = c?.kind === 'resistor' || c?.kind === 'potentiometer';
-  const hasValue = isSource || isResistive;
+  const isReactive = c?.kind === 'capacitor' || c?.kind === 'inductor';
+  const hasValue = isSource || isResistive || isReactive;
 
   return (
     <div className="panel section-inspector neon-panel">
@@ -36,7 +41,9 @@ export function Inspector() {
           </div>
           {hasValue && <>
             <label className="field-label" htmlFor="component-value">
-              {isResistive ? 'RESISTANCE (OHMS)' : c.kind === 'current_source' ? 'CURRENT (AMPS)' : 'VOLTAGE (VOLTS)'}
+              {isResistive ? 'RESISTANCE (OHMS)' : c.kind === 'current_source' ? 'CURRENT (AMPS)'
+                : c.kind === 'capacitor' ? 'CAPACITANCE (FARADS)'
+                : c.kind === 'inductor' ? 'INDUCTANCE (HENRYS)' : 'VOLTAGE (VOLTS)'}
             </label>
             <input
               id="component-value" className="input" type="number" step="any"
@@ -46,11 +53,11 @@ export function Inspector() {
                 if (e.target.value.trim() && Number.isFinite(num)) setValue(c.id, num);
               }}
             />
-            <div className="field-note">{isResistive
-              ? 'Enter ohms (1000 = 1 kΩ)'
-              : c.kind === 'current_source'
-                ? 'Positive current flows from A to B (0.005 = 5 mA)'
-                : 'Positive voltage is A relative to B'}</div>
+            <div className="field-note">{isResistive ? 'Enter ohms (1000 = 1 kΩ)'
+              : c.kind === 'capacitor' ? 'Farads · 0.0001 = 100 µF. Starts uncharged at t = 0.'
+              : c.kind === 'inductor' ? 'Henrys · 0.1 = 100 mH. Starts with 0 A at t = 0.'
+              : c.kind === 'current_source' ? 'Positive current flows from A to B (0.005 = 5 mA)'
+              : 'Positive voltage is A relative to B'}</div>
           </>}
           {c.kind === 'switch' && (
             <div className="switch-section">
@@ -89,7 +96,7 @@ export function Inspector() {
           </div>
           {reading && <div className="readings">
             <div className="sidebar-section-label">DC TELEMETRY</div>
-            <div className="readout"><span>{c.kind === 'potentiometer' ? 'VOLTAGE A→B' : 'VOLTAGE A→B'}</span>
+            <div className="readout"><span>VOLTAGE A→B</span>
               <strong>{formatElectrical(reading.voltage, 'V')}</strong></div>
             <div className="readout"><span>{c.kind === 'potentiometer' ? 'CURRENT A→W' : 'CURRENT A→B'}</span>
               <strong>{formatElectrical(reading.current, 'A')}</strong></div>
@@ -100,8 +107,8 @@ export function Inspector() {
       ) : wire ? (
         <div className="panel-content inspector-content">
           <div className="selected-heading"><span className="selected-symbol">⌁</span><div><strong>WIRE</strong><small>CONNECTION</small></div></div>
-          <div className="info-pair"><span>FROM</span><b>{wire.from.componentId} : {wire.from.pin}</b></div>
-          <div className="info-pair"><span>TO</span><b>{wire.to.componentId} : {wire.to.pin}</b></div>
+          <div className="info-pair"><span>FROM</span><b>{endpointLabel(wire.from)}</b></div>
+          <div className="info-pair"><span>TO</span><b>{endpointLabel(wire.to)}</b></div>
           <button className="small-action danger-action" onClick={remove}>✕ DELETE WIRE</button>
         </div>
       ) : (
@@ -122,7 +129,7 @@ export function SimulationPanel() {
   const message = useCircuitStore(s => s.message);
   return (
     <div className={'panel simulation-panel neon-panel ' + (result ? 'simulation-live' : '')}>
-      <div className="panel-heading">◉ VOLTAGE ARCADE <span className="tiny-muted">/ MNA</span></div>
+      <div className="panel-heading">◉ VOLTAGE ARCADE <span className="tiny-muted">/ DC</span></div>
       <div className="panel-content">
         <div className="status-line"><span className={'status-dot ' + (result ? 'success' : '')}></span>
           {result ? '● CIRCUIT ANALYZED' : '○ READY TO COMPUTE'}</div>

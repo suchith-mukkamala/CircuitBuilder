@@ -2,6 +2,7 @@ import { ChangeEvent, useEffect, useRef } from 'react';
 import { Palette } from './components/Palette';
 import { CircuitCanvas } from './components/CircuitCanvas';
 import { Inspector, SimulationPanel } from './components/Inspector';
+import { TransientPanel } from './components/TransientPanel';
 import { starterCircuit } from './circuit/sample';
 import { useCircuitStore } from './state/useCircuitStore';
 
@@ -70,7 +71,7 @@ export function App() {
       <header className="topbar">
         <div className="brand">
           <span className="brand-chip"><span className="chip-center">▣</span></span>
-          <div className="brand-name">CIRCUIT<span>BUILDER</span><small>V0.2</small></div>
+          <div className="brand-name">CIRCUIT<span>BUILDER</span><small>V0.3</small></div>
         </div>
         <div className="topbar-separator" />
         <div className="file-name"><span className="folder-icon">▰</span>
@@ -106,12 +107,14 @@ export function App() {
         <aside className="right-panel">
           <Inspector />
           <SimulationPanel />
+          <TransientPanel />
           <div className="help-panel">
             <span className="help-title">⌘ SHORTCUTS</span>
             <div><kbd>R</kbd><span>Rotate selected component</span></div>
             <div><kbd>DEL</kbd><span>Delete component / wire</span></div>
             <div><kbd>ESC</kbd><span>Cancel wire</span></div>
             <div><kbd>SPACE</kbd><span>Flip selected switch</span></div>
+            <div><kbd>R-CLICK</kbd><span>Quick-edit components and wires</span></div>
             <div><kbd>⌘ / CTRL + S</kbd><span>Save in browser</span></div>
             <button className="help-sim-link" onClick={run}>▶ RE-RUN ANALYSIS</button>
           </div>
@@ -119,7 +122,7 @@ export function App() {
       </div>
       <footer className="global-footer">
         <span>✦ BUILT FOR CURIOUS MINDS</span>
-        <span>NEON PIXELS. REAL ELECTRICAL MATH.</span>
+        <span>FREE WIRES · TIME SCRUBBER · REAL ANALOG PHYSICS.</span>
         <span>© CIRCUITBUILDER · 2026</span>
       </footer>
     </div>
