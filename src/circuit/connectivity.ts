@@ -1,5 +1,5 @@
 import {
-  CircuitDocument, PinName, pinsFor, terminalKey, isTerminal, pinPosition, WireEndpoint, Point,
+  CircuitDocument, PinName, pinsFor, labelFor, terminalKey, isTerminal, pinPosition, WireEndpoint, Point,
 } from './types';
 import { endpointPosition, onWire } from './geometry';
 
@@ -89,9 +89,22 @@ export function circuitNodes(doc: CircuitDocument): {
   }
 
   const connected = new Set<string>(explicitlyWired);
+  // A terminal deliberately placed onto the middle of a visible wire must
+  // become part of that electrical net. Previously this looked connected
+  // on screen but was silently omitted from the MNA connectivity graph,
+  // producing misleading "floating node" / singular-matrix errors.
+  // Pads already wired explicitly keep their original connections: merely
+  // dragging their body across a different trace cannot short two nets.
   for (const t of terminals) {
     if (freeEnds.some(p => p.x === t.point.x && p.y === t.point.y)) {
       connected.add(t.key);
+    }
+    if (explicitlyWired.has(t.key)) continue;
+    for (const w of doc.wires) {
+      if (onWire(t.point, w, doc)) {
+        set.union(t.key, 'wire:' + w.id);
+        connected.add(t.key);
+      }
     }
   }
   // A component pad touching another component pad is a direct connection.
@@ -104,8 +117,9 @@ export function circuitNodes(doc: CircuitDocument): {
     for (const pin of pinsFor(c)) {
       const key = terminalKey({ componentId: c.id, pin });
       if (!connected.has(key)) {
-        throw new Error('Connect both terminals of ' + c.id.toUpperCase() +
-          ' (and the W pin, for a potentiometer) before simulating.');
+        throw new Error('Connect both terminals of ' + labelFor(c, doc.components) +
+          ' before simulating. Open pin: ' + pin.toUpperCase() +
+          '. Drag the pin onto a wire or connect it directly (green contact must snap to trace).');
       }
     }
   }
