@@ -43,7 +43,7 @@ describe('Evolution Lab integration and first-time user experience',()=>{
     expect(markup).toContain('SETTLEMENT REGISTER');
     expect(markup).toContain('TOTAL BIRTHS');
     expect(markup).toContain('Toggle species on the graph');
-    expect(markup).toContain('population');
+    expect(markup).toContain('POPULATION');
   });
   it('renders the interactive canvas with keyboard-accessible selection labels',()=>{
     const world=createWorld({seed:143});

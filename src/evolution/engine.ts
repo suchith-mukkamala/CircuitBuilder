@@ -167,7 +167,7 @@ export function createWorld(input:Partial<WorldSettings>={}):World{
         info.maturity+Math.floor(random(state)*info.lifespan*.28);
       world.agents.push({id:world.nextAgentId++,species:s,
         x:point.x,y:point.y,age,energy:round(78+random(state)*19),
-        health:round(84+random(state)*16),genes:genes(state),born:-age});
+        health:round(84+random(state)*16),genes:genes(state),born:age===0?0:-age});
     }
   }
   world.rngState=state.n;
