@@ -1,9 +1,19 @@
+/** Simulation-only state. Circuit JSON stays a structural schematic. */
+export type DigitalRuntime = {
+  cycle: number;
+  registers: Record<string, Record<string, LogicValue>>;
+  memories: Record<string, number[]>;
+};
+export const emptyDigitalRuntime = (): DigitalRuntime => ({cycle:0, registers:{}, memories:{}});
+export const defaultRomWords = (): number[] => [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,0];
+
 export type LogicBit = 0 | 1;
 export type LogicValue = 0 | 1 | 'X' | 'Z';
 export type GateKind = 'and' | 'or' | 'not' | 'xor' | 'nand' | 'nor' | 'xnor' | 'buffer'
   | 'and3' | 'or3' | 'xor3' | 'majority' | 'mux2' | 'demux2'
-  | 'halfadder' | 'fulladder';
-export type DigitalKind = GateKind | 'input' | 'high' | 'low' | 'led' | 'block';
+  | 'halfadder' | 'fulladder' | 'alu4' | 'rom16x4';
+export type SequentialKind = 'clock' | 'dff' | 'tff' | 'register4' | 'counter4' | 'ram16x4';
+export type DigitalKind = GateKind | SequentialKind | 'input' | 'high' | 'low' | 'led' | 'block';
 export type DigitalPin = string;
 export type DigitalPoint = { x: number; y: number };
 export type DigitalTerminal = { componentId: string; pin: DigitalPin };
@@ -18,6 +28,8 @@ export type DigitalComponent = {
   name?: string;
   blockId?: string;
   ports?: { inputs: string[]; outputs: string[] };
+  /** ROM program: 16 addressable 4-bit words, editable in the inspector. */
+  words?: number[];
 };
 export type DigitalWire = {
   id: string;
@@ -60,8 +72,14 @@ export const digitalId = () => Math.random().toString(36).slice(2, 11);
 export const gateKinds: GateKind[] = [
   'and','or','not','xor','nand','nor','xnor','buffer',
   'and3','or3','xor3','majority','mux2','demux2','halfadder','fulladder',
+  'alu4','rom16x4',
 ];
-export const digitalKinds: DigitalKind[] = ['input','high','low',...gateKinds,'led','block'];
+export const sequentialKinds: SequentialKind[] = [
+  'clock','dff','tff','register4','counter4','ram16x4',
+];
+export const isSequential = (kind: DigitalKind): kind is SequentialKind =>
+  sequentialKinds.includes(kind as SequentialKind);
+export const digitalKinds: DigitalKind[] = ['input','high','low',...gateKinds,...sequentialKinds,'led','block'];
 export const isDigitalTerminal = (p: DigitalEndpoint): p is DigitalTerminal => 'componentId' in p;
 export const isGate = (c: DigitalComponent): boolean => gateKinds.includes(c.kind as GateKind);
 export const pinId = (t: DigitalTerminal) => t.componentId + ':' + t.pin;
@@ -70,14 +88,25 @@ const multiInputs: Partial<Record<DigitalKind, string[]>> = {
   and3:['a','b','c'], or3:['a','b','c'], xor3:['a','b','c'],
   majority:['a','b','c'], mux2:['a','b','sel'],
   demux2:['in','sel'], halfadder:['a','b'], fulladder:['a','b','cin'],
+  dff:['d','clk'], tff:['t','clk'],
+  register4:['d0','d1','d2','d3','clk','en'],
+  counter4:['clk','en','reset'],
+  rom16x4:['a0','a1','a2','a3'],
+  ram16x4:['a0','a1','a2','a3','d0','d1','d2','d3','we','clk'],
+  alu4:['a0','a1','a2','a3','b0','b1','b2','b3','op0','op1'],
 };
 const multiOutputs: Partial<Record<DigitalKind, string[]>> = {
   demux2:['out0','out1'], halfadder:['sum','carry'],
   fulladder:['sum','carry'],
+  dff:['q'],tff:['q'],register4:['q0','q1','q2','q3'],
+  counter4:['q0','q1','q2','q3'],
+  rom16x4:['q0','q1','q2','q3'],
+  ram16x4:['q0','q1','q2','q3'],
+  alu4:['y0','y1','y2','y3','carry','zero'],
 };
 export const inputsOf = (c: DigitalComponent): DigitalPin[] => {
   if (c.kind === 'block') return [...(c.ports?.inputs ?? [])];
-  if (c.kind === 'input' || c.kind === 'high' || c.kind === 'low') return [];
+  if (c.kind === 'input' || c.kind === 'high' || c.kind === 'low' || c.kind==='clock') return [];
   if (c.kind === 'led') return ['in'];
   if (multiInputs[c.kind]) return [...multiInputs[c.kind]!];
   if (c.kind === 'not' || c.kind === 'buffer') return ['a'];
@@ -162,7 +191,10 @@ export function isDigitalDocument(input: unknown): input is DigitalDocument {
           !validNumber(c.x) || !validNumber(c.y) ||
           ![0, 90, 180, 270].includes(c.rotation) ||
           (c.bit !== undefined && c.bit !== 0 && c.bit !== 1) ||
-          (c.name !== undefined && (typeof c.name !== 'string' || c.name.length > 80))) return false;
+          (c.name !== undefined && (typeof c.name !== 'string' || c.name.length > 80)) ||
+          (c.words !== undefined && (c.kind !== 'rom16x4' ||
+            !Array.isArray(c.words) || c.words.length !== 16 ||
+            !c.words.every(v=>Number.isInteger(v)&&v>=0&&v<=15)))) return false;
       if (c.kind === 'block') {
         const def = definitions.get(c.blockId ?? '');
         if (!def || !c.ports || !Array.isArray(c.ports.inputs) || !Array.isArray(c.ports.outputs) ||

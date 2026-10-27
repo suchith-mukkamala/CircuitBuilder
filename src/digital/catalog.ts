@@ -1,6 +1,6 @@
 import type { DigitalKind } from './types';
 
-export type PartCategory = 'sources'|'basic'|'multi'|'routing'|'arithmetic'|'outputs';
+export type PartCategory = 'sources'|'basic'|'multi'|'routing'|'arithmetic'|'memory'|'compute'|'outputs';
 export type PartInfo = {
   kind: Exclude<DigitalKind,'block'>;
   glyph: string;
@@ -21,6 +21,7 @@ export const paletteCategories: CategoryInfo[] = [
       {kind:'input',glyph:'▣',name:'INPUT SWITCH',description:'Click to toggle 0 / 1',keywords:'toggle bit digital variable switch'},
       {kind:'high',glyph:'↥',name:'LOGIC HIGH',description:'Constant HIGH (1)',keywords:'constant 1 one vcc power true on'},
       {kind:'low',glyph:'↧',name:'LOGIC LOW',description:'Constant LOW (0)',keywords:'constant 0 zero gnd ground false off'},
+      {kind:'clock',glyph:'◷',name:'CLOCK SOURCE',description:'One rising edge per clock step',keywords:'clock oscillator pulse cpu tick synchronous edge'},
     ]},
   {id:'basic',name:'BASIC LOGIC GATES',icon:'◇',description:'Classic Boolean logic',
     parts:[
@@ -49,6 +50,19 @@ export const paletteCategories: CategoryInfo[] = [
     parts:[
       {kind:'halfadder',glyph:'Σ',name:'HALF ADDER',description:'A + B → SUM, CARRY',keywords:'half-adder arithmetic addition sum carry'},
       {kind:'fulladder',glyph:'Σ+',name:'FULL ADDER',description:'A + B + CIN → SUM, CARRY',keywords:'full-adder arithmetic ripple carry in cin'},
+    ]},
+  {id:'memory',name:'STATE & MEMORY',icon:'▦',description:'Stateful clocked storage',
+    parts:[
+      {kind:'dff',glyph:'D▣',name:'D FLIP-FLOP',description:'Samples D on rising CLK',keywords:'dff latch bit register storage positive edge'},
+      {kind:'tff',glyph:'T▣',name:'T FLIP-FLOP',description:'Toggle on rising CLK when T=1',keywords:'tff divide frequency sequential'},
+      {kind:'register4',glyph:'R4',name:'4-BIT REGISTER',description:'Latches D0–D3 when EN=1',keywords:'register4 memory 4 bit storage state enable'},
+      {kind:'counter4',glyph:'C4',name:'4-BIT COUNTER',description:'Increments on rising CLK',keywords:'counter4 pc program counter reset clock enable'},
+      {kind:'ram16x4',glyph:'RAM',name:'16×4 RAM',description:'16 words × 4 bits; clocked write',keywords:'ram16x4 random access memory 64 bit synchronous write'},
+    ]},
+  {id:'compute',name:'COMPUTING UNITS',icon:'▤',description:'Arithmetic, logic and instruction storage',
+    parts:[
+      {kind:'alu4',glyph:'ALU',name:'4-BIT ALU',description:'ADD / AND / OR / XOR',keywords:'alu4 arithmetic logic unit processor cpu zero carry'},
+      {kind:'rom16x4',glyph:'ROM',name:'16×4 ROM',description:'Editable 16-word program table',keywords:'rom16x4 read only memory instructions program firmware lookup'},
     ]},
   {id:'outputs',name:'OUTPUT & DISPLAY',icon:'◉',description:'Visualize logic states',
     parts:[

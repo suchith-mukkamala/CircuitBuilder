@@ -4,8 +4,10 @@ import {
   DigitalComponent, DigitalDocument, DigitalEndpoint, DigitalKind, DigitalPoint,
   DigitalSelection, DigitalWire, DigitalBlock, LogicValue, digitalId, digitalSnap,
   initialDigitalCircuit, isDigitalDocument, isDigitalTerminal, pinsOf, digitalKinds,
+  DigitalRuntime, emptyDigitalRuntime, defaultRomWords,
 } from './types';
 import { simulateLogic } from './engine';
+import { stepCircuit,transitionInputs,resetComputer } from './computerEngine';
 import { applyInputVector, captureBlock, placeBlock, reviseBlockDefinition, updatedBlockCatalog } from './blocks';
 
 type Clip = { components: DigitalComponent[]; wires: DigitalWire[] };
@@ -25,6 +27,7 @@ export type BlockEditFrame = {
   trace: SignalSample[];
   clipboard: Clip | null;
   pasteCount: number;
+  runtime: DigitalRuntime;
 };
 
 export type SignalProbe = { id: string; kind: 'terminal' | 'wire'; key: string; label: string };
@@ -34,14 +37,14 @@ export type SignalSample = {
   terminals: Record<string, LogicValue>;
   wires: Record<string, LogicValue>;
 };
-const sample = (doc: DigitalDocument, step: number): SignalSample => {
-  const result = simulateLogic(doc);
+const sample = (doc: DigitalDocument, step: number, runtime:DigitalRuntime=emptyDigitalRuntime()): SignalSample => {
+  const result = simulateLogic(doc,runtime);
   return { step, vector: doc.components.filter(c => c.kind === 'input').map(c => c.bit ?? 0).join(''),
     terminals: result.terminalValues, wires: result.wireValues };
 };
-const samples = (previous: SignalSample[], doc: DigitalDocument) => {
-  const nextStep = (previous.at(-1)?.step ?? -1) + 1;
-  return [...previous, sample(doc, nextStep)].slice(-160);
+const samples = (previous: SignalSample[],doc:DigitalDocument,runtime:DigitalRuntime=emptyDigitalRuntime()) => {
+  const nextStep=(previous.at(-1)?.step??-1)+1;
+  return [...previous,sample(doc,nextStep,runtime)].slice(-160);
 };
 export type DigitalStore = {
   document: DigitalDocument;
@@ -54,6 +57,11 @@ export type DigitalStore = {
   clipboard: Clip | null;
   pasteCount: number;
   message: string;
+  runtime: DigitalRuntime;
+  clockStep: () => void;
+  clockSteps: (count:number) => void;
+  resetClock: () => void;
+  setRomWords: (id:string,words:number[]) => void;
   blockLibrary: DigitalBlock[];
   favoriteKinds: DigitalKind[];
   recentKinds: DigitalKind[];
@@ -101,7 +109,7 @@ const patch = (
 ): Partial<DigitalStore> => ({
   document,
   ...(state.dragOrigin ? {} : { past: limit([...state.past, state.document]), future: [] }),
-  ...(state.dragOrigin ? {} : { trace: [sample(document, 0)] }),
+  ...(state.dragOrigin ? {} : {runtime:emptyDigitalRuntime(),trace:[sample(document,0)]}),
   ...extras,
 });
 const same = (a: DigitalEndpoint, b: DigitalEndpoint) =>
@@ -131,7 +139,36 @@ export const useDigitalStore = create<DigitalStore>()(persist((set, get) => ({
   past: [], future: [], dragOrigin: null,
   clipboard: null, pasteCount: 0,
   blockLibrary: [], favoriteKinds:[], recentKinds:[], editStack: [],
-  probes: [], trace: [sample(initialDigitalCircuit(), 0)],
+  probes: [], trace: [sample(initialDigitalCircuit(), 0)],runtime:emptyDigitalRuntime(),
+  clockStep: () => set(state=>{
+    const next=stepCircuit(state.document,state.runtime);
+    return {runtime:next,trace:samples(state.trace,state.document,next),
+      message:'Clock pulse '+next.cycle+' · stateful components updated.'};
+  }),
+  clockSteps: count => set(state=>{
+    const n=Math.max(1,Math.min(64,Math.floor(count)));
+    let next=state.runtime,trace=state.trace;
+    for(let i=0;i<n;i++){
+      next=stepCircuit(state.document,next);
+      trace=samples(trace,state.document,next);
+    }
+    return {runtime:next,trace,message:'Advanced '+n+' clock pulse(s). Cycle '+next.cycle+'.'};
+  }),
+  resetClock: () => set(state=>{
+    const runtime=resetComputer();
+    return {runtime,trace:[sample(state.document,0,runtime)],
+      message:'Digital register, counter and RAM state reset.'};
+  }),
+  setRomWords: (id,words) => set(state=>{
+    if(!Array.isArray(words)||words.length!==16||
+       !words.every(v=>Number.isInteger(v)&&v>=0&&v<=15))
+      return {message:'ROM program requires exactly 16 values between 0 and 15.'};
+    const part=state.document.components.find(c=>c.id===id&&c.kind==='rom16x4');
+    if(!part)return {message:'Select a ROM to program.'};
+    return patch(state,{...state.document,components:state.document.components.map(c=>
+      c.id===id?{...c,words:[...words]}:c)},
+      {message:'ROM program saved · 16 addressable words.'});
+  }),
   toggleFavorite: kind => set(state => ({ favoriteKinds:
     state.favoriteKinds.includes(kind) ? state.favoriteKinds.filter(k => k!==kind) : [...state.favoriteKinds,kind],
   })),
@@ -161,7 +198,7 @@ export const useDigitalStore = create<DigitalStore>()(persist((set, get) => ({
       blockId: definition.id, instanceId, name: definition.name,
       document: state.document, past: state.past, future: state.future,
       selection: state.selection, selectedIds: state.selectedIds,
-      probes: state.probes, trace: state.trace,
+      probes: state.probes, trace: state.trace, runtime:state.runtime,
       clipboard: state.clipboard, pasteCount: state.pasteCount,
     };
     set({
@@ -169,7 +206,7 @@ export const useDigitalStore = create<DigitalStore>()(persist((set, get) => ({
       editStack: [...state.editStack, frame],
       past: [], future: [], selection: null, selectedIds: [],
       pending: null, dragOrigin: null, clipboard: null, pasteCount: 0,
-      probes: [], trace: [sample(working, 0)],
+      probes: [], trace: [sample(working, 0)],runtime:emptyDigitalRuntime(),
       message: 'Editing ' + definition.name + '. Save Block updates all instances; Cancel discards edits.',
     });
   },
@@ -202,7 +239,7 @@ export const useDigitalStore = create<DigitalStore>()(persist((set, get) => ({
       selectedIds: parent.components.some(c => c.id === frame.instanceId)
         ? [frame.instanceId] : frame.selectedIds,
       pending: null, dragOrigin: null,
-      probes: frame.probes, trace: [sample(parent, 0)],
+      probes: frame.probes, trace: [sample(parent, 0)],runtime:emptyDigitalRuntime(),
       clipboard: frame.clipboard, pasteCount: frame.pasteCount,
       message: 'Saved ' + revised.name + '. All instances now use the updated internal circuit.',
     });
@@ -217,7 +254,7 @@ export const useDigitalStore = create<DigitalStore>()(persist((set, get) => ({
       past: frame.past, future: frame.future,
       selection: frame.selection, selectedIds: frame.selectedIds,
       pending: null, dragOrigin: null, probes: frame.probes,
-      trace: frame.trace, clipboard: frame.clipboard,
+      trace: frame.trace, runtime:frame.runtime, clipboard: frame.clipboard,
       pasteCount: frame.pasteCount,
       message: 'Closed ' + frame.name + ' without saving internal edits.',
     });
@@ -248,11 +285,12 @@ export const useDigitalStore = create<DigitalStore>()(persist((set, get) => ({
     }));
   },
   applyVector: vector => {
-    const state = get();
-    const next = applyInputVector(state.document, vector);
-    set(current => patch(current, next, {
-      trace: samples(current.trace, next),
-      message: 'Applied input ' + vector + ' · outputs updated.',
+    const state=get();
+    const next=applyInputVector(state.document,vector);
+    const runtime=transitionInputs(state.document,next,state.runtime);
+    set(current=>patch(current,next,{
+      runtime,trace:samples(current.trace,next,runtime),
+      message:'Applied input '+vector+' · outputs updated.',
     }));
   },
   addProbe: (kind,key,label) => set(state => {
@@ -262,13 +300,14 @@ export const useDigitalStore = create<DigitalStore>()(persist((set, get) => ({
       message:'Probe attached to ' + label + '. Open WAVEFORM to inspect recorded logic events.'};
   }),
   removeProbe: id => set(state => ({probes:state.probes.filter(p=>p.id!==id)})),
-  clearTrace: () => set(state => ({trace:[sample(state.document,0)],message:'Signal history reset.'})),
+  clearTrace: () => set(state=>({trace:[sample(state.document,0,state.runtime)],message:'Signal history reset.'})),
   add: (kind, at) => set(state => {
     if (kind === 'block') return { message: 'Insert a block from the saved block library.' };
     if (!digitalKinds.includes(kind)) return {message:'Unknown Signal Lab part.'};
     const c: DigitalComponent = {
       id: digitalId(), kind, x: digitalSnap(at.x), y: digitalSnap(at.y), rotation: 0,
       ...(kind === 'input' ? { bit: 0 as const } : {}),
+      ...(kind === 'rom16x4' ? {words:defaultRomWords()} : {}),
     };
     return patch(state, {
       ...state.document, components: [...state.document.components, c],
@@ -307,16 +346,14 @@ export const useDigitalStore = create<DigitalStore>()(persist((set, get) => ({
         c.id === id ? { ...c, rotation: ((c.rotation + 90) % 360) as DigitalComponent['rotation'] } : c),
     });
   }),
-  toggleInput: id => set(state => {
-    const c = state.document.components.find(c => c.id === id && c.kind === 'input');
-    if (!c) return {};
-    return patch(state, {
-      ...state.document, components: state.document.components.map(part =>
-        part.id === id ? { ...part, bit: part.bit === 1 ? 0 : 1 } : part),
-    }, { trace: samples(state.trace, {
-        ...state.document, components: state.document.components.map(part =>
-          part.id === id ? { ...part, bit: part.bit === 1 ? 0 as const : 1 as const } : part),
-      }), message: (c.name ?? 'Input') + ' switched to ' + (c.bit === 1 ? 'LOW' : 'HIGH') + '.' });
+  toggleInput: id => set(state=>{
+    const c=state.document.components.find(c=>c.id===id&&c.kind==='input');
+    if(!c)return {};
+    const next:DigitalDocument={...state.document,components:state.document.components.map(p=>
+      p.id===id?{...p,bit:(p.bit===1?0:1) as 0|1}:p)};
+    const runtime=transitionInputs(state.document,next,state.runtime);
+    return patch(state,next,{runtime,trace:samples(state.trace,next,runtime),
+      message:(c.name??'Input')+' switched to '+(c.bit===1?'LOW':'HIGH')+'.'});
   }),
   setName: (id, name) => set(state => {
     const c = state.document.components.find(c => c.id === id);
@@ -399,7 +436,7 @@ export const useDigitalStore = create<DigitalStore>()(persist((set, get) => ({
     if (!state.dragOrigin) return {};
     if (state.dragOrigin === state.document) return { dragOrigin: null };
     return { dragOrigin: null, past: limit([...state.past, state.dragOrigin]),
-      future: [], trace:[sample(state.document,0)] };
+      future: [], runtime:emptyDigitalRuntime(),trace:[sample(state.document,0)] };
   }),
   undo: () => set(state => {
     if (!state.past.length) return {};
@@ -408,7 +445,7 @@ export const useDigitalStore = create<DigitalStore>()(persist((set, get) => ({
       past: state.past.slice(0, -1),
       future: [state.document, ...state.future].slice(0, 80),
       selection: null, selectedIds: [], pending: null,
-      dragOrigin: null, trace:[sample(state.past[state.past.length-1],0)],
+      dragOrigin: null,runtime:emptyDigitalRuntime(),trace:[sample(state.past[state.past.length-1],0)],
       message: 'Undo · previous digital schematic restored.',
     };
   }),
@@ -418,7 +455,7 @@ export const useDigitalStore = create<DigitalStore>()(persist((set, get) => ({
       document: state.future[0], future: state.future.slice(1),
       past: limit([...state.past, state.document]),
       selection: null, selectedIds: [], pending: null,
-      dragOrigin: null, trace:[sample(state.future[0],0)],
+      dragOrigin: null,runtime:emptyDigitalRuntime(),trace:[sample(state.future[0],0)],
       message: 'Redo · next schematic restored.',
     };
   }),

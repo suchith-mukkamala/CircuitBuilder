@@ -9,6 +9,8 @@ import { useDigitalStore } from './useDigitalStore';
 import { SignalPalette } from './SignalPalette';
 import { partByKind } from './catalog';
 import { SignalScopePanel, SignalVectorPanel } from './SignalTools';
+import { ComputerPanel,RomProgramEditor } from './ComputerPanel';
+import { cpuCoreDemo } from './computerSamples';
 
 const logicTone = (v: LogicValue | undefined) => v === 1 ? 'high' : v === 0 ? 'low'
   : v === 'X' ? 'unknown' : 'floating';
@@ -93,6 +95,7 @@ function SignalInspector({ result }: { result: ReturnType<typeof simulateLogic> 
             <LogicChip value={result.terminalValues[part.id+':'+pin]}/>
           </div>)}
         </div>
+        {part.kind==='rom16x4'&&<RomProgramEditor part={part}/>}
         {part.kind==='led' && <div className="signal-led-banner">
           <span className={'signal-led-pulse '+logicTone(result.ledValues[part.id])}></span>
           OUTPUT <LogicChip value={result.ledValues[part.id]}/>
@@ -204,10 +207,13 @@ export function SignalLab() {
   const newCircuit = useDigitalStore(s=>s.newCircuit);
   const load = useDigitalStore(s=>s.load);
   const rename = useDigitalStore(s=>s.renameDocument);
+  const runtime = useDigitalStore(s=>s.runtime);
+  const clockStep = useDigitalStore(s=>s.clockStep);
+  const resetClock = useDigitalStore(s=>s.resetClock);
   const [paletteOpen,setPaletteOpen] = useState(true);
   const [panelOpen,setPanelOpen] = useState(true);
-  const [tab,setTab] = useState<'inspect'|'truth'|'scope'|'vector'>('inspect');
-  const result = useMemo(()=>simulateLogic(doc),[doc]);
+  const [tab,setTab] = useState<'inspect'|'truth'|'scope'|'vector'|'computer'>('inspect');
+  const result = useMemo(()=>simulateLogic(doc,runtime),[doc,runtime]);
   const gates = doc.components.filter(c=>gateKinds.includes(c.kind as GateKind)||c.kind==='block');
   useEffect(()=>{
     const handle=(e:KeyboardEvent)=>{
@@ -247,7 +253,7 @@ export function SignalLab() {
   return <div className="signal-lab-shell">
     <header className="signal-workbench-header">
       <div className="signal-lab-brand"><span className="signal-lab-glyph">▧</span>
-        <div><strong>SIGNAL LAB</strong><small>LAB 02 / DIGITAL LOGIC v0.4</small></div></div>
+        <div><strong>SIGNAL LAB</strong><small>LAB 02 / COMPUTER FOUNDATIONS v0.8</small></div></div>
       <input aria-label="Signal circuit name" className="signal-circuit-title"
         title="Rename circuit" value={doc.name} onChange={e=>rename(e.target.value)}/>
       <nav className="signal-toolbar" aria-label="Signal Lab actions">
@@ -257,6 +263,11 @@ export function SignalLab() {
         <button disabled={!future} onClick={redo} title="Redo">↷ <span>REDO</span></button>
         <button disabled={!selectedIds.length} onClick={copy} title="Copy selection">▣ <span>COPY</span></button>
         <button onClick={paste} title="Paste copied selection">⊞ <span>PASTE</span></button>
+        <button className="signal-instrument-button" onClick={()=>{
+          setPanelOpen(true);setTab('computer');
+        }}>▣ <span>COMPUTER</span></button>
+        <button className="signal-clock-quick" title="Emit one rising CLOCK edge"
+          onClick={clockStep}>↯ <span>STEP</span></button>
         <button className="signal-instrument-button" onClick={()=>{
           setPanelOpen(true);setTab('vector');
         }}>101 <span>INPUT TEST</span></button>
@@ -274,6 +285,7 @@ export function SignalLab() {
           <button disabled={inBlock} title={inBlock?'Save or cancel block editing first':'New circuit'}
             onClick={()=>{if(window.confirm('Create an empty Signal Lab circuit? You can undo.'))newCircuit();close();}}>+ NEW SIGNAL CIRCUIT</button>
           <button disabled={inBlock} onClick={()=>{load(initialDigitalCircuit());close();}}>◇ LOAD DEMO</button>
+          <button disabled={inBlock} onClick={()=>{load(cpuCoreDemo());resetClock();setPanelOpen(true);setTab('computer');close();}}>▣ LOAD 4-BIT CPU DATAPATH</button>
           <button onClick={()=>{downloadSignal(doc);close();}}>⇩ EXPORT .SIGNAL.JSON</button>
           <button disabled={inBlock} onClick={()=>{fileRef.current?.click();close();}}>⇧ IMPORT SIGNAL JSON</button>
         </div>
@@ -307,12 +319,12 @@ export function SignalLab() {
           <span><i/> {inBlock ? 'MODULE INTERNALS' : 'DIGITAL SCHEMATIC'}
             <small>/ {doc.name.toUpperCase()}</small></span>
           <span className="signal-editor-tags"><b>{gates.length} LOGIC PARTS</b>
-            <b>{result.netCount} NETS</b></span>
+            <b>{result.netCount} NETS</b><b>CLK {runtime.cycle}</b></span>
         </div>
         <SignalCanvas key={editStack.map(e=>e.blockId).join('/') || 'root'}
           result={result} onProbe={()=>{setPanelOpen(true);setTab('scope');}}/>
         <div className="signal-status">
-          <span><i/> LIVE LOGIC</span><span className="signal-status-message">{message}</span>
+          <span><i/> {runtime.cycle>0?'CLOCKED LOGIC':'LIVE LOGIC'}</span><span className="signal-status-message">{message}</span>
           <span>{result.warnings.length?'⚠ '+result.warnings.length+' ISSUES':'✓ NO SIGNAL WARNINGS'}</span>
         </div>
       </main>
@@ -326,11 +338,14 @@ export function SignalLab() {
             className={tab==='scope'?'active':''} onClick={()=>setTab('scope')}>〰 SCOPE</button>
           <button role="tab" aria-selected={tab==='vector'}
             className={tab==='vector'?'active':''} onClick={()=>setTab('vector')}>101 TEST</button>
+          <button role="tab" aria-selected={tab==='computer'}
+            className={tab==='computer'?'active':''} onClick={()=>setTab('computer')}>▣ CPU</button>
         </div>
         {tab==='inspect' ? <SignalInspector result={result}/> :
           tab==='truth' ? <SignalTruthPanel doc={doc} result={result}/> :
           tab==='scope' ? <SignalScopePanel doc={doc}/> :
-          <SignalVectorPanel doc={doc} result={result}/>}
+          tab==='vector' ? <SignalVectorPanel doc={doc} result={result}/> :
+          <ComputerPanel doc={doc} result={result}/>}
         <details className="signal-help">
           <summary>⌘ SHORTCUTS & HELP</summary>
           <p>Click an INPUT to flip its bit. Wire pins by clicking the first pin and then another.</p>
@@ -338,6 +353,7 @@ export function SignalLab() {
           <p>Shift-click to multi-select; Ctrl/Cmd+Z undo, C copy, V paste, D duplicate, A select all.</p>
           <p>Press / when the Parts Library is visible to search for a component. ★ favorites and Recent shortcuts are saved locally. Fold categories to reclaim space.</p>
           <p>Signal colors: green = HIGH (1), blue = LOW (0), pink = undefined (X), gray = undriven (Z).</p>
+          <p>COMPUTER contains CLOCK STEP, 1–8 Hz autorun, reset, register readings and demos. Connect CLOCK OUT to CLK, then step time to update flip-flops, counters and RAM. Edit ROM contents in the inspector.</p>
           <p>Save a complete circuit as a block from the Parts Library. Probe any wire or pin with right-click; use INPUT TEST for binary vectors and SCOPE to inspect event history.</p>
           <p>Double-click a reusable block to edit its internals. SAVE BLOCK updates all instances. CANCEL/BACK discards internal changes. Keep original INPUT and LED boundary components to preserve connected ports.</p>
         </details>

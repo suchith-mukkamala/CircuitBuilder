@@ -1,0 +1,63 @@
+/* Computer Lab v0.8 — sequential controls, ROM programming, clock feedback */
+.signal-right-panel .signal-tabs{grid-template-columns:repeat(5,minmax(0,1fr))}
+.signal-right-panel .signal-tabs button{font-size:6px;padding:11px 0;white-space:nowrap}
+.signal-toolbar button.signal-clock-quick{
+  padding:9px 11px;background:#174a45;color:#b6ffe9;
+  border:2px solid #7cffce;box-shadow:0 0 13px #61f8ca58;
+  font-weight:bold
+}
+.signal-toolbar button.signal-clock-quick:hover{background:#29625e;box-shadow:0 0 19px #69ffd293}
+.signal-computer-panel{min-width:0;border:2px solid #584b8c;background:#101530;
+  display:flex;flex-direction:column}
+.computer-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:5px;padding:0 10px 13px}
+.computer-stats>div{display:flex;flex-direction:column;align-items:center;gap:6px;
+  border:1px solid #525284;background:#161d42;padding:11px 4px;min-width:0}
+.computer-stats small{color:#9fb6d2;font:9px/1.5 'Space Mono',monospace;text-align:center}
+.computer-stats strong{color:#8affe0;text-shadow:0 0 12px #65ffd38c;font:19px monospace}
+.computer-clock-row{display:flex;gap:5px;padding:0 10px 10px;align-items:center}
+.computer-clock-row button{flex:1;min-width:0;padding:11px 5px;font:9px/1.6 'Space Mono',monospace;
+  background:#24234a;border:1px solid #735b9b;color:#e9dcff;cursor:pointer}
+.computer-clock-row button:hover{background:#363163;box-shadow:0 0 10px #bd86f356}
+.computer-clock-row button.computer-step{
+  flex:2;background:#1d514b;border:2px solid #77ffdc;color:#baffea;
+  box-shadow:0 0 15px #6bffe562;font-weight:800}
+.computer-clock-row button.computer-run.active{border-color:#ffa3e2;color:#ffbbdb;background:#4d2448}
+.computer-clock-row label{font:9px monospace;color:#9cbee5}
+.computer-clock-row select{min-width:52px;padding:8px 5px;background:#11183b;
+  border:1px solid #7560ae;color:#dcf5f3;font:9px 'Space Mono',monospace}
+.computer-hint{margin:6px 11px 13px;padding:10px;border-left:2px solid #8273b0;
+  color:#a4b6d6;background:#141a39;font:10px/1.85 'Space Mono',monospace}
+.computer-readouts{padding:0 11px}
+.computer-readouts .signal-section-label{padding:10px 0;color:#9dfff0}
+.computer-readouts .signal-readout{gap:8px;flex-wrap:wrap}
+.computer-readouts .signal-readout span{overflow-wrap:anywhere}
+.computer-readouts .signal-readout strong{font:12px monospace;color:#9affdf;letter-spacing:.3px;
+  overflow-wrap:anywhere}
+.computer-demo-picker{display:flex;flex-direction:column;gap:7px;margin:9px 11px;
+  padding:9px;background:#161733;border:1px solid #514275}
+.computer-demo-picker .signal-section-label{padding:8px 0}
+.computer-demo-picker button{padding:10px 6px;text-align:left;background:#221b48;
+  border:1px solid #7662a4;color:#ebd4ff;font:9px/1.6 'Space Mono',monospace}
+.computer-demo-picker button:hover{border-color:#8fffe1;background:#203b4f}
+.computer-demo-picker button:disabled{opacity:.4;cursor:not-allowed}
+.computer-rom-editor{border:1px solid #7957ab;background:#171936;padding:9px}
+.computer-rom-editor .signal-section-label{padding:6px 0 8px;font-size:7px}
+.computer-rom-editor>p{font:10px/1.75 'Space Mono',monospace;color:#adc2d8}
+.computer-rom-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;
+  padding:10px 0 13px}
+.computer-rom-grid label{display:flex;flex-direction:column;align-items:center;gap:5px;
+  min-width:0;border:1px solid #50457c;background:#0f1634;padding:6px 4px}
+.computer-rom-grid label span{font:8px monospace;color:#9bbfdc}
+.computer-rom-grid input{min-width:0;width:100%;text-align:center;padding:7px 1px;
+  font:bold 15px monospace;color:#b0ffe3;background:#1c2c46;border:1px solid #5c729f}
+.computer-rom-grid input:focus{outline:1px solid #a3ffe7;box-shadow:0 0 8px #77fdd276}
+.computer-rom-editor .signal-generate{width:100%;margin:0 0 5px}
+@media(max-width:1430px){
+  .signal-toolbar button.signal-clock-quick span{display:none}
+  .signal-clock-quick{min-width:40px}
+}
+@media(max-width:740px){
+  .signal-right-panel .signal-tabs button{font-size:7px}
+  .computer-rom-grid{grid-template-columns:repeat(8,minmax(0,1fr))}
+}
