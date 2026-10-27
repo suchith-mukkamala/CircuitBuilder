@@ -1,5 +1,5 @@
 type LabChoice = {
-  id:'analog'|'signal'|'computer'|'evolution';
+  id:'analog'|'signal'|'computer';
   number:string;
   name:string;
   description:string;
@@ -85,9 +85,9 @@ function CpuCircuitArt() {
 }
 
 export function HomeScreen({
-  onAnalog,onSignal,onComputer,onEvolution,
+  onAnalog,onSignal,onComputer,
 }:{
-  onAnalog:()=>void;onSignal:()=>void;onComputer:()=>void;onEvolution:()=>void;
+  onAnalog:()=>void;onSignal:()=>void;onComputer:()=>void;
 }) {
   const labs:LabChoice[]=[
     {id:'analog',number:'01',name:'ANALOG LAB',
@@ -96,14 +96,12 @@ export function HomeScreen({
       description:'Logic & signals',symbol:'⊕',action:onSignal},
     {id:'computer',number:'03',name:'COMPUTER BUILDER',
       description:'Memory & processors',symbol:'▣',action:onComputer},
-    {id:'evolution',number:'04',name:'EVOLUTION LAB',
-      description:'Living civilizations & divine influence',symbol:'✦',action:onEvolution},
   ];
   return <main className="landing-home">
     <div className="landing-content">
       <div className="landing-eyebrow"><span/> THE ELECTRONICS PLAYGROUND</div>
       <h1>Build something <em>brilliant.</em></h1>
-      <p className="landing-subtitle">Design circuits. Program computers. Grow living worlds.</p>
+      <p className="landing-subtitle">Design circuits. Explore signals. Program computers.</p>
       <div className="landing-art">
         <CpuCircuitArt/>
       </div>
