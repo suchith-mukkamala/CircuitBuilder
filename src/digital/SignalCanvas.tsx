@@ -212,6 +212,7 @@ function drawSignalCanvas(
   result: LogicResult, selected: DigitalSelection, selectedIds: string[],
   pending: DigitalEndpoint | null, hover: DigitalPoint | null,
   frameTime: number, motion: boolean, pendingBus:BusGroup|null, issues:CircuitIssue[],
+  wirePaths:Map<string,DigitalPoint[]>,busPaths:Map<string,DigitalPoint[]>,
 ) {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
@@ -243,7 +244,7 @@ function drawSignalCanvas(
     : selectedPart&&focusPin ? result.terminalNets[selectedPart.id+':'+focusPin] : null;
 
   for (const wire of doc.wires) {
-    const points = digitalWirePath(doc, wire);
+    const points=wirePaths.get(wire.id)??[];
     if (points.length < 2) continue;
     const active = result.wireValues[wire.id] ?? 'Z';
     const tint = signalColor(active);
@@ -303,7 +304,7 @@ function drawSignalCanvas(
     }
   }
   for(const bus of doc.buses??[]){
-    const path=digitalBusPath(doc,bus);
+    const path=busPaths.get(bus.id)??[];
     if(path.length<2)continue;
     const bits=bus.from.pins.map(pin=>result.terminalValues[bus.from.componentId+':'+pin]??'Z');
     const selectedBus=selected?.type==='bus'&&selected.id===bus.id;
@@ -396,6 +397,9 @@ export function SignalCanvas({ result, onProbe }: { result: LogicResult; onProbe
   const pendingBus=useDigitalStore(s=>s.pendingBus);
   const focusTarget=useDigitalStore(s=>s.focusTarget);
   const issues=useMemo(()=>diagnoseDigitalCircuit(doc),[doc]);
+  // Route around obstacles once per document revision, never every animation frame.
+  const wirePaths=useMemo(()=>new Map(doc.wires.map(w=>[w.id,digitalWirePath(doc,w)])),[doc]);
+  const busPaths=useMemo(()=>new Map((doc.buses??[]).map(b=>[b.id,digitalBusPath(doc,b)])),[doc]);
   const startBus=useDigitalStore(s=>s.startBus);
   const finishBus=useDigitalStore(s=>s.finishBus);
   const flipBend=useDigitalStore(s=>s.flipBend);
@@ -446,9 +450,9 @@ export function SignalCanvas({ result, onProbe }: { result: LogicResult; onProbe
     const part=doc.components.find(c=>c.id===focusTarget.id);
     if(part)point={x:part.x,y:part.y};
     const wire=doc.wires.find(w=>w.id===focusTarget.id);
-    if(wire)point=digitalWirePath(doc,wire)[0]??null;
+    if(wire)point=wirePaths.get(wire.id)?.[0]??null;
     const bus=doc.buses?.find(b=>b.id===focusTarget.id);
-    if(bus)point=digitalBusPath(doc,bus)[0]??null;
+    if(bus)point=busPaths.get(bus.id)?.[0]??null;
     if(point)setView(v=>({...v,x:size.width/2-point.x*v.zoom,
       y:size.height/2-point.y*v.zoom}));
   },[focusTarget?.nonce,size.width,size.height]);
@@ -467,13 +471,13 @@ export function SignalCanvas({ result, onProbe }: { result: LogicResult; onProbe
       Object.values(result.wireValues).some(v => v === 1);
     const draw = (ms: number) => {
       if (canvas.current) drawSignalCanvas(canvas.current, doc, view, result, selection,
-        selectedIds,pending,hover,ms/1000,moving,pendingBus,issues);
+        selectedIds,pending,hover,ms/1000,moving,pendingBus,issues,wirePaths,busPaths);
       if (moving) raf = window.requestAnimationFrame(draw);
     };
     draw(0);
     return () => window.cancelAnimationFrame(raf);
   }, [doc, view, result, selection, selectedIds, pending, hover, size,
-    animate,reducedMotion,junctions,pendingBus,issues]);
+    animate,reducedMotion,junctions,pendingBus,issues,wirePaths,busPaths]);
 
   const localPoint = (event: { clientX: number; clientY: number }) => {
     const r = canvas.current!.getBoundingClientRect();
@@ -509,7 +513,7 @@ export function SignalCanvas({ result, onProbe }: { result: LogicResult; onProbe
   const findBus=(p:DigitalPoint)=>{
     let best:{id:string;point:DigitalPoint;distance:number}|null=null;
     for(const b of doc.buses??[]){
-      const next=nearestOnTrace(p,digitalBusPath(doc,b));
+      const next=nearestOnTrace(p,busPaths.get(b.id)??[]);
       if(next.distance<11/view.zoom&&(!best||next.distance<best.distance))
         best={id:b.id,...next};
     }
@@ -531,7 +535,7 @@ export function SignalCanvas({ result, onProbe }: { result: LogicResult; onProbe
   const findWire = (p: DigitalPoint) => {
     let best: { wire: DigitalWire; point: DigitalPoint; distance: number } | null = null;
     for (const wire of [...doc.wires].reverse()) {
-      const point = nearestOnTrace(p, digitalWirePath(doc,wire));
+      const point = nearestOnTrace(p,wirePaths.get(wire.id)??[]);
       if (point.distance < 10/view.zoom && (!best || point.distance < best.distance)) {
         best = { wire, ...point };
       }
