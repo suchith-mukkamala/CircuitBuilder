@@ -1,6 +1,6 @@
 import type { DigitalDocument } from './types';
 import { inputsOf, outputsOf, partHeight, pinAt } from './types';
-import { digitalWirePath } from './network';
+import { digitalWirePath, digitalBusPath } from './network';
 
 export type CircuitCamera = {x:number;y:number;zoom:number};
 export type Viewport = {width:number;height:number};
@@ -27,6 +27,7 @@ export function fitDigitalCircuit(
     for(const pin of [...inputsOf(c),...outputsOf(c)])pts.push(pinAt(c,pin));
   }
   for(const wire of doc.wires)pts.push(...digitalWirePath(doc,wire));
+  for(const bus of doc.buses??[])pts.push(...digitalBusPath(doc,bus));
   if(!pts.length)return {x:80,y:70,zoom:1};
   const minX=Math.min(...pts.map(p=>p.x)),maxX=Math.max(...pts.map(p=>p.x));
   const minY=Math.min(...pts.map(p=>p.y)),maxY=Math.max(...pts.map(p=>p.y));

@@ -45,6 +45,10 @@ export const paletteCategories: CategoryInfo[] = [
     parts:[
       {kind:'mux2',glyph:'⋈',name:'2:1 MULTIPLEXER',description:'SEL picks A or B',keywords:'mux mux2 selector data switch multiplexer choose'},
       {kind:'demux2',glyph:'⋉',name:'1:2 DEMULTIPLEXER',description:'SEL routes IN to OUT0/OUT1',keywords:'demux demux2 decoder split route distribute'},
+      {kind:'splitter4',glyph:'⇉4',name:'4-BIT SPLITTER',description:'Expose four individual bit taps',keywords:'4 bit bus splitter bundle breakout'},
+      {kind:'splitter8',glyph:'⇉8',name:'8-BIT SPLITTER',description:'Expose eight individual bit taps',keywords:'8 bit bus splitter bundle breakout'},
+      {kind:'splitter16',glyph:'⇉16',name:'16-BIT SPLITTER',description:'Expose sixteen individual bit taps',keywords:'16 bit bus splitter bundle breakout'},
+
     ]},
   {id:'arithmetic',name:'BINARY ARITHMETIC',icon:'⊞',description:'Add numbers from individual bits',
     parts:[

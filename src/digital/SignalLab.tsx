@@ -11,6 +11,8 @@ import { partByKind } from './catalog';
 import { SignalScopePanel, SignalVectorPanel } from './SignalTools';
 import { ComputerPanel,RomProgramEditor } from './ComputerPanel';
 import { cpuCoreDemo } from './computerSamples';
+import { SignalDiagnostics } from './SignalDiagnostics';
+import { diagnoseDigitalCircuit } from './diagnostics';
 
 const logicTone = (v: LogicValue | undefined) => v === 1 ? 'high' : v === 0 ? 'low'
   : v === 'X' ? 'unknown' : 'floating';
@@ -41,10 +43,18 @@ export function SignalInspector({ result }: { result: ReturnType<typeof simulate
   const copy = useDigitalStore(s=>s.copy);
   const duplicate = useDigitalStore(s=>s.duplicate);
   const openBlock = useDigitalStore(s=>s.openBlock);
+  const setWireLabel=useDigitalStore(s=>s.setWireLabel);
+  const setBusLabel=useDigitalStore(s=>s.setBusLabel);
+  const flipBend=useDigitalStore(s=>s.flipBend);
+  const autoRoute=useDigitalStore(s=>s.autoRoute);
   const part = selected?.type==='component' ? doc.components.find(c=>c.id===selected.id) : null;
-  const wire = selected?.type==='wire' ? doc.wires.find(w=>w.id===selected.id) : null;
+  const wire=selected?.type==='wire'?doc.wires.find(w=>w.id===selected.id):null;
+  const bus=selected?.type==='bus'?doc.buses?.find(b=>b.id===selected.id):null;
+  const [netDraft,setNetDraft]=useState('');
   const [draft,setDraft] = useState('');
   useEffect(() => { setDraft(part?.name??''); }, [part?.id,part?.name]);
+  useEffect(()=>{setNetDraft(wire?.label??bus?.label??'');},
+    [wire?.id,wire?.label,bus?.id,bus?.label]);
   return (
     <div className="signal-inspect-panel">
       <div className="signal-panel-heading">◈ SIGNAL INSPECTOR <span>/ EDIT</span></div>
@@ -107,15 +117,37 @@ export function SignalInspector({ result }: { result: ReturnType<typeof simulate
           <button onClick={duplicate}>⊞ DUPLICATE</button>
           <button className="danger" onClick={remove}>× DELETE</button>
         </div>
-      </div> : wire ? <div className="signal-inspect-body">
-        <div className="signal-selected"><div className="signal-selected-sprite">⌁</div>
-          <div><strong>WIRE</strong><small>SIGNAL CONNECTION</small></div></div>
-        <div className="signal-readout"><span>STATE</span><LogicChip value={result.wireValues[wire.id]}/></div>
-        <p className="signal-inspector-note">Use right-click on a wire to create a branch or delete it.</p>
-        <button className="signal-delete-button" onClick={remove}>× DELETE WIRE</button>
+      </div> : wire || bus ? <div className="signal-inspect-body">
+        <div className="signal-selected"><div className="signal-selected-sprite">{bus?'▰':'⌁'}</div>
+          <div><strong>{bus?bus.width+'-BIT BUS':'ONE-BIT WIRE'}</strong>
+            <small>{bus?'GROUPED ELECTRICAL CONNECTION':'SINGLE SIGNAL'}</small></div></div>
+        {bus&&<div className="signal-readout"><span>BIT CONNECTIONS</span><strong>{bus.width}</strong></div>}
+        {wire&&<div className="signal-readout"><span>STATE</span>
+          <LogicChip value={result.wireValues[wire.id]}/></div>}
+        <label className="signal-field-label" htmlFor="signal-net-label">
+          {bus?'BUS NAME':'NAMED SIGNAL'} · OPTIONAL
+        </label>
+        <input id="signal-net-label" className="signal-text-field" maxLength={24}
+          value={netDraft} placeholder={bus?'DATA':'CLK'}
+          onChange={e=>setNetDraft(e.target.value)}
+          onBlur={()=>{
+            if(wire&&netDraft!==(wire.label??''))setWireLabel(wire.id,netDraft);
+            if(bus&&netDraft!==(bus.label??''))setBusLabel(bus.id,netDraft);
+          }}
+          onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur();}}/>
+        <p className="signal-inspector-note">
+          {bus?'Buses with the same name and width connect corresponding bits, locally.':
+            'All one-bit wires with the same name connect electrically, even without a drawn trace.'}
+          {' '}Use a letter or underscore first, followed by letters, digits or underscores.
+        </p>
+        <div className="signal-inspector-actions">
+          <button onClick={()=>flipBend(bus?'bus':'wire',(bus??wire)!.id)}>↴ FLIP CORNER</button>
+          <button onClick={()=>autoRoute(bus?'bus':'wire',(bus??wire)!.id)}>⌁ AUTO ROUTE</button>
+          <button className="danger" onClick={remove}>× DELETE</button>
+        </div>
       </div> : <div className="signal-inspect-empty">
         <span>⌖</span><strong>SELECT A COMPONENT</strong>
-        <p>Inspect a gate, toggle an input, rename a signal, or follow connected wires.</p>
+        <p>Inspect a gate, name a wire, or create a multi-bit bus. Click a signal for its properties.</p>
       </div>}
       {!!result.warnings.length && <div className="signal-warnings">
         <div className="signal-section-label">⚠ SIGNAL DIAGNOSTICS</div>
@@ -208,11 +240,16 @@ export function SignalLab() {
   const load = useDigitalStore(s=>s.load);
   const rename = useDigitalStore(s=>s.renameDocument);
   const runtime = useDigitalStore(s=>s.runtime);
+  const focusTarget=useDigitalStore(s=>s.focusTarget);
+  const issues=useMemo(()=>diagnoseDigitalCircuit(doc),[doc]);
   const clockStep = useDigitalStore(s=>s.clockStep);
   const resetClock = useDigitalStore(s=>s.resetClock);
   const [paletteOpen,setPaletteOpen] = useState(true);
   const [panelOpen,setPanelOpen] = useState(true);
-  const [tab,setTab] = useState<'inspect'|'truth'|'scope'|'vector'|'computer'>('inspect');
+  const [tab,setTab] = useState<'inspect'|'truth'|'scope'|'vector'|'computer'|'check'>('inspect');
+  useEffect(()=>{
+    if(focusTarget){setPanelOpen(true);setTab('inspect');}
+  },[focusTarget?.nonce]);
   const result = useMemo(()=>simulateLogic(doc,runtime),[doc,runtime]);
   const gates = doc.components.filter(c=>gateKinds.includes(c.kind as GateKind)||c.kind==='block');
   useEffect(()=>{
@@ -277,6 +314,9 @@ export function SignalLab() {
         <button className="truth-shortcut" onClick={()=>{
           setPanelOpen(true);setTab('truth');
         }}>▦ <span>TRUTH TABLE</span></button>
+        <button className="signal-diagnostics-shortcut" onClick={()=>{
+          setPanelOpen(true);setTab('check');
+        }}>⚠ <span>CHECK {issues.length||'✓'}</span></button>
         <button className={panelOpen?'active':''} onClick={()=>setPanelOpen(v=>!v)}>◈ <span>PANEL</span></button>
       </nav>
       <details className="signal-file-menu" ref={fileMenu}>
@@ -340,12 +380,15 @@ export function SignalLab() {
             className={tab==='vector'?'active':''} onClick={()=>setTab('vector')}>101 TEST</button>
           <button role="tab" aria-selected={tab==='computer'}
             className={tab==='computer'?'active':''} onClick={()=>setTab('computer')}>▣ CPU</button>
+          <button role="tab" aria-selected={tab==='check'}
+            className={tab==='check'?'active':''} onClick={()=>setTab('check')}>⚠ CHECK</button>
         </div>
         {tab==='inspect' ? <SignalInspector result={result}/> :
           tab==='truth' ? <SignalTruthPanel doc={doc} result={result}/> :
           tab==='scope' ? <SignalScopePanel doc={doc}/> :
           tab==='vector' ? <SignalVectorPanel doc={doc} result={result}/> :
-          <ComputerPanel doc={doc} result={result}/>}
+          tab==='computer' ? <ComputerPanel doc={doc} result={result}/> :
+          <SignalDiagnostics/>}
         <details className="signal-help">
           <summary>⌘ SHORTCUTS & HELP</summary>
           <p>Click an INPUT to flip its bit. Wire pins by clicking the first pin and then another.</p>
