@@ -4,7 +4,7 @@ import { useDigitalStore } from './useDigitalStore';
 import { paletteCategories, allParts, partByKind, searchParts, type PartCategory } from './catalog';
 import { initialDigitalCircuit } from './types';
 import { andDemo, halfAdderDemo, notDemo } from './samples';
-import { counterDemo,flipFlopDemo,cpuCoreDemo } from './computerSamples';
+import { counterDemo,flipFlopDemo,cpuCoreDemo,programmableCpuDemo } from './computerSamples';
 
 const exampleCircuits = [
   {label:'XOR PLAYGROUND',document:initialDigitalCircuit},
@@ -14,6 +14,7 @@ const exampleCircuits = [
   {label:'D FLIP-FLOP',document:flipFlopDemo},
   {label:'CLOCKED 4-BIT COUNTER',document:counterDemo},
   {label:'4-BIT CPU DATAPATH',document:cpuCoreDemo},
+  {label:'CASM PROGRAMMABLE CPU',document:programmableCpuDemo},
 ];
 type CategoryFilter = PartCategory | 'all' | 'custom';
 

@@ -4,6 +4,7 @@ import {
   emptyDigitalRuntime, defaultRomWords, outputsOf,
 } from './types';
 import { compileSignals } from './compile';
+import {cpuOutputs} from './cpuCore';
 
 /**
  * Four-state Boolean logic: floating (Z) is unknown when used as an input.
@@ -82,9 +83,12 @@ export function evaluateComponent(
       return {sum:allXor([a,b,read('cin')]),carry:majority([a,b,read('cin')])};
     case 'alu4': return calculateAlu4(raw);
     case 'rom16x4': return nibbleOutput(0);
+    case 'rom16x8':return Object.fromEntries(
+      Array.from({length:8},(_,i)=>['data'+i,0 as LogicValue]));
     case 'clock':return {out:0};
     case 'dff':case 'tff':return {q:0};
     case 'register4':case 'counter4':case 'ram16x4':return nibbleOutput(0);
+    case 'cpu4':return cpuOutputs(emptyDigitalRuntime(),'');
   }
 }
 
@@ -124,9 +128,18 @@ function stateOutputs(
   component:DigitalComponent,runtime:DigitalRuntime,clockHigh:boolean,
 ):Record<string,LogicValue> {
   if(kind==='clock')return {out:clockHigh?1:0};
+  if(kind==='cpu4')return cpuOutputs(runtime,id);
   if(kind==='dff'||kind==='tff')return {q:runtime.registers[id]?.q??0};
   if(kind==='register4'||kind==='counter4')return Object.fromEntries(
     [0,1,2,3].map(i=>['q'+i,runtime.registers[id]?.['q'+i]??0]));
+  if(kind==='rom16x8'){
+    const address=readNibble(raw,'a');
+    if(address===null)return Object.fromEntries(
+      Array.from({length:8},(_,i)=>['data'+i,'X' as LogicValue]));
+    const byte=component.program?.[address]??0;
+    return Object.fromEntries(Array.from({length:8},(_,i)=>
+      ['data'+i,((byte>>i)&1) as LogicValue]));
+  }
   if(kind==='rom16x4'||kind==='ram16x4') {
     const address=readNibble(raw,'a');
     if(address===null)return Object.fromEntries(
@@ -245,7 +258,7 @@ export type TruthTable = {
   rows: { inputs: LogicBit[]; outputs: LogicValue[] }[];
 };
 export function generateTruthTable(doc: DigitalDocument): TruthTable {
-  const sequential=['clock','dff','tff','register4','counter4','ram16x4'];
+  const sequential=['clock','dff','tff','register4','counter4','ram16x4','cpu4'];
   if(doc.components.some(c=>sequential.includes(c.kind))||doc.blocks?.some(def=>
     def.circuit.components.some(c=>sequential.includes(c.kind))))
     throw new Error('Truth tables are for combinational designs. Use CLOCK STEP and WAVEFORM for stateful circuits.');

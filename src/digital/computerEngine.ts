@@ -4,6 +4,7 @@ import {
 } from './types';
 import { compileSignals, type Primitive } from './compile';
 import { simulateLogic, readNibble, isBinary } from './engine';
+import {encodeCpuRegisters,executeCasm,initialCpuState,readCpuState} from './cpuCore';
 
 /**
  * Clock edges are atomic and evaluated against OLD register values.
@@ -26,7 +27,7 @@ const copyState = (runtime:DigitalRuntime):DigitalRuntime => ({
   memories:{...runtime.memories},
 });
 const sequential = (kind:DigitalKind):boolean =>
-  ['dff','tff','register4','counter4','ram16x4'].includes(kind);
+  ['dff','tff','register4','counter4','ram16x4','cpu4'].includes(kind);
 
 function captureEdges(
   doc:DigitalDocument,runtime:DigitalRuntime, oldSnapshot:ReturnType<typeof simulateLogic>,
@@ -42,7 +43,23 @@ function captureEdges(
     const read=(pin:string)=>asInput(newSnapshot.netValues,p,pin);
     const previous=runtime.registers[p.id]??{};
     const store=(bits:Record<string,LogicValue>)=>{next.registers[p.id]=bits;};
-    if(p.component.kind==='dff') {
+    if(p.component.kind==='cpu4'){
+      const reset=read('reset');
+      if(reset===1){
+        store(encodeCpuRegisters(initialCpuState()));
+      }else if(reset!==0){
+        // Undriven reset must not silently execute an instruction.
+        store(encodeCpuRegisters({...readCpuState(runtime,p.id),halt:1,fault:1}));
+      }else{
+        const values=Array.from({length:8},(_,i)=>read('instr'+i));
+        const byte=values.every(isBinary)?values.reduce<number>((v,bit,i)=>v|((bit as number)<<i),0):null;
+        const previousCpu=readCpuState(runtime,p.id);
+        const previousRam=runtime.memories[p.id]??Array(16).fill(0);
+        const step=executeCasm(previousCpu,byte,previousRam);
+        store(encodeCpuRegisters(step.state));
+        next.memories[p.id]=step.ram;
+      }
+    }else if(p.component.kind==='dff') {
       const data=read('d');
       store({q:isBinary(data)?data:'X'});
     } else if(p.component.kind==='tff') {

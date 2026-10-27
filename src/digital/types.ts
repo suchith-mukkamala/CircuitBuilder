@@ -11,8 +11,8 @@ export type LogicBit = 0 | 1;
 export type LogicValue = 0 | 1 | 'X' | 'Z';
 export type GateKind = 'and' | 'or' | 'not' | 'xor' | 'nand' | 'nor' | 'xnor' | 'buffer'
   | 'and3' | 'or3' | 'xor3' | 'majority' | 'mux2' | 'demux2'
-  | 'halfadder' | 'fulladder' | 'alu4' | 'rom16x4';
-export type SequentialKind = 'clock' | 'dff' | 'tff' | 'register4' | 'counter4' | 'ram16x4';
+  | 'halfadder' | 'fulladder' | 'alu4' | 'rom16x4' | 'rom16x8';
+export type SequentialKind = 'clock' | 'dff' | 'tff' | 'register4' | 'counter4' | 'ram16x4' | 'cpu4';
 export type DigitalKind = GateKind | SequentialKind | 'input' | 'high' | 'low' | 'led' | 'block'
   | 'splitter4' | 'splitter8' | 'splitter16';
 export type DigitalPin = string;
@@ -31,6 +31,10 @@ export type DigitalComponent = {
   ports?: { inputs: string[]; outputs: string[] };
   /** ROM program: 16 addressable 4-bit words, editable in the inspector. */
   words?: number[];
+  /** 16 addressable eight-bit CASM instruction words (ROM16×8 only). */
+  program?:number[];
+  /** Editable CASM source kept with its ROM so JSON exports preserve programs. */
+  source?:string;
 };
 export type DigitalWire = {
   id: string;
@@ -88,10 +92,10 @@ export const digitalId = () => Math.random().toString(36).slice(2, 11);
 export const gateKinds: GateKind[] = [
   'and','or','not','xor','nand','nor','xnor','buffer',
   'and3','or3','xor3','majority','mux2','demux2','halfadder','fulladder',
-  'alu4','rom16x4',
+  'alu4','rom16x4','rom16x8',
 ];
 export const sequentialKinds: SequentialKind[] = [
-  'clock','dff','tff','register4','counter4','ram16x4',
+  'clock','dff','tff','register4','counter4','ram16x4','cpu4',
 ];
 export const isSequential = (kind: DigitalKind): kind is SequentialKind =>
   sequentialKinds.includes(kind as SequentialKind);
@@ -109,6 +113,8 @@ const multiInputs: Partial<Record<DigitalKind, string[]>> = {
   register4:['d0','d1','d2','d3','clk','en'],
   counter4:['clk','en','reset'],
   rom16x4:['a0','a1','a2','a3'],
+  rom16x8:['a0','a1','a2','a3'],
+  cpu4:[...Array.from({length:8},(_,i)=>'instr'+i),'clk','reset'],
   ram16x4:['a0','a1','a2','a3','d0','d1','d2','d3','we','clk'],
   alu4:['a0','a1','a2','a3','b0','b1','b2','b3','op0','op1'],
   splitter4:Array.from({length:4},(_,i)=>'bus'+i),
@@ -121,6 +127,11 @@ const multiOutputs: Partial<Record<DigitalKind, string[]>> = {
   dff:['q'],tff:['q'],register4:['q0','q1','q2','q3'],
   counter4:['q0','q1','q2','q3'],
   rom16x4:['q0','q1','q2','q3'],
+  rom16x8:Array.from({length:8},(_,i)=>'data'+i),
+  cpu4:[...Array.from({length:4},(_,i)=>'pc'+i),
+    ...Array.from({length:4},(_,i)=>'acc'+i),
+    ...Array.from({length:4},(_,i)=>'out'+i),
+    'zero','carry','halt','fault'],
   ram16x4:['q0','q1','q2','q3'],
   alu4:['y0','y1','y2','y3','carry','zero'],
   splitter4:Array.from({length:4},(_,i)=>'bit'+i),
@@ -239,7 +250,12 @@ export function isDigitalDocument(input: unknown): input is DigitalDocument {
           (c.name !== undefined && (typeof c.name !== 'string' || c.name.length > 80)) ||
           (c.words !== undefined && (c.kind !== 'rom16x4' ||
             !Array.isArray(c.words) || c.words.length !== 16 ||
-            !c.words.every(v=>Number.isInteger(v)&&v>=0&&v<=15)))) return false;
+            !c.words.every(v=>Number.isInteger(v)&&v>=0&&v<=15))) ||
+          (c.program!==undefined && (c.kind!=='rom16x8'||
+            !Array.isArray(c.program)||c.program.length!==16||
+            !c.program.every(v=>Number.isInteger(v)&&v>=0&&v<=255))) ||
+          (c.source!==undefined && (c.kind!=='rom16x8'||
+            typeof c.source!=='string'||c.source.length>8192)))return false;
       if (c.kind === 'block') {
         const def = definitions.get(c.blockId ?? '');
         if (!def || !c.ports || !Array.isArray(c.ports.inputs) || !Array.isArray(c.ports.outputs) ||

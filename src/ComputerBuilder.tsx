@@ -5,14 +5,15 @@ import { SignalPalette } from './digital/SignalPalette';
 import { SignalInspector } from './digital/SignalLab';
 import { SignalScopePanel,SignalVectorPanel } from './digital/SignalTools';
 import { ComputerPanel } from './digital/ComputerPanel';
+import { CasmProgramPanel } from './digital/CasmProgramPanel';
 import { SignalDiagnostics } from './digital/SignalDiagnostics';
 import { diagnoseDigitalCircuit } from './digital/diagnostics';
-import { cpuCoreDemo,counterDemo,flipFlopDemo } from './digital/computerSamples';
+import { cpuCoreDemo,counterDemo,flipFlopDemo,programmableCpuDemo } from './digital/computerSamples';
 import { simulateLogic } from './digital/engine';
 import type { DigitalDocument } from './digital/types';
 import { useDigitalStore } from './digital/useDigitalStore';
 
-type ComputerTab='run'|'inspect'|'scope'|'inputs'|'check';
+type ComputerTab='code'|'run'|'inspect'|'scope'|'inputs'|'check';
 
 /** A dedicated, persistent CPU-design workbench powered by the shared digital engine. */
 export function ComputerBuilder(){
@@ -35,7 +36,7 @@ export function ComputerBuilder(){
   const cancelBlock=useDigitalStore(s=>s.cancelBlockEdit);
   const [paletteOpen,setPaletteOpen]=useState(true);
   const [panelOpen,setPanelOpen]=useState(true);
-  const [tab,setTab]=useState<ComputerTab>('run');
+  const [tab,setTab]=useState<ComputerTab>('code');
   const [saveError,setSaveError]=useState('');
   const fileRef=useRef<HTMLInputElement>(null);
   const actionsRef=useRef<HTMLDetailsElement>(null);
@@ -45,7 +46,7 @@ export function ComputerBuilder(){
   const closeMenu=()=>{if(actionsRef.current)actionsRef.current.open=false;};
   const openExample=(make:()=>DigitalDocument)=>{
     if(inBlock){window.alert('Save or cancel the current block before loading a project.');return;}
-    try {load(make());reset();setTab('run');closeMenu();}
+    try {load(make());reset();setTab(make===programmableCpuDemo?'code':'run');closeMenu();}
     catch(err){window.alert(err instanceof Error?err.message:'Could not load this circuit.');}
   };
   const exportProject=()=>{
@@ -63,7 +64,7 @@ export function ComputerBuilder(){
     if(!file)return;
     try {
       const imported:unknown=JSON.parse(await file.text());
-      load(imported);reset();setTab('run');
+      load(imported);reset();setTab('code');
     } catch(err) {
       window.alert(err instanceof Error?err.message:'Invalid Signal Lab JSON file.');
     }
@@ -133,8 +134,11 @@ export function ComputerBuilder(){
           onClick={()=>setPaletteOpen(v=>!v)} title="Show or hide component library">▦ <span>PARTS</span></button>
         <button onClick={undo} disabled={!past} title="Undo circuit change">↶</button>
         <button onClick={redo} disabled={!future} title="Redo circuit change">↷</button>
-        <button className="computer-top-step" onClick={()=>{clock();setTab('run');setPanelOpen(true);}}
-          title="Simulate one rising clock edge">↯ <span>STEP CLOCK</span></button>
+        <button className="computer-top-step" onClick={()=>{clock();setTab('code');setPanelOpen(true);}}
+          title="Execute one clocked instruction / circuit edge">↯ <span>STEP CLOCK</span></button>
+        <button onClick={()=>{setPanelOpen(true);setTab('code');}} title="Open CASM assembler">
+          ⌘ <span>CASM</span>
+        </button>
         <button className={panelOpen?'is-selected':''}
           onClick={()=>setPanelOpen(v=>!v)} aria-pressed={panelOpen}
           title="Toggle computer tools">◈ <span>TOOLS</span></button>
@@ -144,6 +148,7 @@ export function ComputerBuilder(){
         <div>
           <strong>PROJECT</strong>
           <button disabled={inBlock} onClick={createNew}>+ NEW BLANK CIRCUIT</button>
+          <button disabled={inBlock} onClick={()=>openExample(programmableCpuDemo)}>⌘ LOAD PROGRAMMABLE CASM CPU</button>
           <button disabled={inBlock} onClick={()=>openExample(cpuCoreDemo)}>▣ LOAD CPU DATAPATH</button>
           <button disabled={inBlock} onClick={()=>openExample(counterDemo)}>04 LOAD 4-BIT COUNTER</button>
           <button disabled={inBlock} onClick={()=>openExample(flipFlopDemo)}>◈ LOAD FLIP-FLOP</button>
@@ -176,9 +181,9 @@ export function ComputerBuilder(){
     </div>}
 
     <div className="computer-journey" aria-label="Quick guide">
-      <span><b>01</b> PICK A PART</span>
-      <span><b>02</b> CONNECT THE PINS</span>
-      <span><b>03</b> STEP THE CLOCK</span>
+      <span><b>01</b> WRITE CASM</span>
+      <span><b>02</b> ASSEMBLE & LOAD</span>
+      <span><b>03</b> STEP THE CPU</span>
       <span className="computer-local-save">● AUTOSAVED ON THIS DEVICE</span>
     </div>
     <div className={'signal-workspace computer-workspace'+
@@ -207,20 +212,23 @@ export function ComputerBuilder(){
       {panelOpen&&<aside className="signal-right-panel computer-tools-panel">
         <div className="signal-tabs computer-tool-tabs" role="tablist" aria-label="Computer Builder tools">
           {([
-            ['run','↯ RUN'],['inspect','◈ EDIT'],['scope','〰 GRAPH'],
-            ['inputs','101 INPUT'],['check','⚠ CHECK'],
+            ['code','⌘ CODE'],['run','↯ CLOCK'],['inspect','◈ EDIT'],
+            ['scope','〰 GRAPH'],['inputs','101 INPUT'],['check','⚠ CHECK'],
           ] as [ComputerTab,string][]).map(([id,label])=><button
             key={id} role="tab" aria-selected={tab===id}
             className={tab===id?'active':''} onClick={()=>setTab(id)}>{label}</button>)}
         </div>
-        {tab==='run'?<ComputerPanel doc={doc} result={result}/>:
+        <div hidden={tab!=='code'}><CasmProgramPanel active={tab==='code'}/></div>
+        {tab==='code'?null:
+          tab==='run'?<ComputerPanel doc={doc} result={result}/>:
           tab==='inspect'?<SignalInspector result={result}/>:
           tab==='scope'?<SignalScopePanel doc={doc}/>:
           tab==='inputs'?<SignalVectorPanel doc={doc} result={result}/>:
           <SignalDiagnostics/>}
         <div className="computer-workbench-help">
           <strong>QUICK TIPS</strong>
-          <p>Select a ROM chip to edit its program in <b>EDIT</b>. Use
+          <p>Open <b>CODE</b> to assemble CASM and watch instructions execute.
+            For the original 4-bit ROM, use <b>EDIT</b>. Use
             <b> FIT</b> on the canvas to view the whole design. Right-click a
             four-bit port to create a bus, and use <b>CHECK</b> to locate wiring
             errors. Double-click custom blocks to edit them. Ctrl/Cmd+Z undoes a change,

@@ -13,6 +13,7 @@ import './home-v09.css';
 import './computer-v08.css';
 import './computer-v09.css';
 import './digital-v10.css';
+import './casm-v11.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode><LabHub /></React.StrictMode>,
