@@ -47,6 +47,27 @@ export const DEFAULT_CASM_SOURCE = [
   '    HLT',
 ].join('\n');
 
+export const CASM_EXAMPLES = [
+  {id:'first',name:'3 + 5 · FIRST PROGRAM',source:DEFAULT_CASM_SOURCE},
+  {id:'count',name:'COUNTDOWN LOOP',source:[
+    '; Loop until accumulator reaches zero',
+    'LDI 4',
+    'LOOP: SUB 1',
+    'JNZ LOOP',
+    'OUT',
+    'HLT',
+  ].join('\n')},
+  {id:'memory',name:'RAM SAVE & LOAD',source:[
+    '; Write 7 to RAM[2], then read it back',
+    'LDI 7',
+    'STORE 2',
+    'LDI 0',
+    'LOAD 2',
+    'OUT',
+    'HLT',
+  ].join('\n')},
+] as const;
+
 export type AsmIssue={line:number;column:number;message:string};
 export type AsmListing={
   address:number;
