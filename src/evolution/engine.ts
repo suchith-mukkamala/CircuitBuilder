@@ -14,6 +14,8 @@ import {prepareDevelopment,cloneDevelopment,helpDependent,developSociety,
   type Development,type Household,type CareOutcome} from './development';
 import {activeEffects,cloneDivine,divineFactor,divineState,inheritDivinity,
   validDivinity,type DivineEffect,type DivineWhisper,type DivineState} from './divine';
+import {advanceConstruction,archiveRuins,cloneInfrastructure,
+  validConstruction,type SettlementInfrastructure,type RuinSite,type Trail} from './construction';
 export type Species='human'|'elf'|'dwarf'|'demon';
 export type Biome='plains'|'forest'|'mountain'|'cave'|'wasteland'|'volcanic'|'water';
 export type WorldSize='small'|'medium'|'large'|'vast';
@@ -44,7 +46,8 @@ export type WorldCodex={favoritePeople:number[];favoriteSettlements:number[];
   settlements:SettlementLegacy[]};
 export type Tile={biome:Biome;food:number};
 export type Settlement={id:number;species:Species;name:string;x:number;y:number;
-  founded:number;population:number;stores:number;emptyYears:number};
+  founded:number;population:number;stores:number;emptyYears:number;
+  infrastructure?:SettlementInfrastructure};
 export type WorldEvent={id:number;year:number;
   type:'world'|'birth'|'death'|'settlement'|'collapse'|'milestone'|'bond'|'hybrid';message:string};
 export type DeathCause='old_age'|'starvation'|'exposure'|'ill_health';
@@ -67,7 +70,8 @@ export type World={version:2;settings:WorldSettings;width:number;height:number;
   settlements:Settlement[];bonds:Bond[];lineage:LineageRecord[];
   events:WorldEvent[];history:Sample[];totalBirths:number;totalDeaths:number;
   demography?:Demography;codex?:WorldCodex;
-  households?:Household[];nextHouseholdId?:number;divine?:DivineState};
+  households?:Household[];nextHouseholdId?:number;divine?:DivineState;
+  ruins?:RuinSite[];trails?:Trail[]};
 export const SPECIES:Species[]=['human','elf','dwarf','demon'];
 export const BIOMES:Biome[]=['plains','forest','mountain','cave','wasteland','volcanic','water'];
 export const SPECIES_INFO:Record<Species,{name:string;symbol:string;color:string;
@@ -210,7 +214,8 @@ export function createWorld(input:Partial<WorldSettings>={}):World{
     nextAgentId:1,nextSettlementId:1,nextEventId:1,nextBondId:1,
     tiles,agents:[],settlements:[],bonds:[],lineage:[],
     events:[],history:[],totalBirths:0,totalDeaths:0,demography:emptyDemography(0),
-    codex:{favoritePeople:[],favoriteSettlements:[],settlements:[]},divine:divineState()};
+    codex:{favoritePeople:[],favoriteSettlements:[],settlements:[]},divine:divineState(),
+    ruins:[],trails:[]};
   const occupied=new Set<number>();
   for(const s of SPECIES){
     const info=SPECIES_INFO[s];
@@ -277,7 +282,8 @@ export function stepWorld(previous:World):World{
       lastScarcity:a.mind.lastScarcity?{...a.mind.lastScarcity}:undefined,
       lastGoodFood:a.mind.lastGoodFood?{...a.mind.lastGoodFood}:undefined,
     }:undefined})),
-    settlements:previous.settlements.map(s=>({...s})),
+    settlements:previous.settlements.map(s=>({...s,infrastructure:s.infrastructure?
+      cloneInfrastructure(s.infrastructure):undefined})),
     bonds:previous.bonds.map(b=>({...b,children:[...b.children]})),
     lineage:previous.lineage.map(r=>({...r,children:[...r.children],
       partnerIds:[...r.partnerIds],divineOrigins:r.divineOrigins?[...r.divineOrigins]:undefined})),
@@ -294,9 +300,13 @@ export function stepWorld(previous:World):World{
           causes:{...previous.demography!.bySpecies[s].causes}}])) as Record<Species,SpeciesVital>,
     }:emptyDemography(previous.year),
     households:previous.households?.map(h=>({...h,home:{...h.home},
+      residence:h.residence?{...h.residence}:undefined,
       members:[...h.members],caregivers:[...h.caregivers]}))??[],
     nextHouseholdId:previous.nextHouseholdId??1,
-    divine:cloneDivine(previous.divine??divineState())};
+    divine:cloneDivine(previous.divine??divineState()),
+    ruins:previous.ruins?.map(s=>({...s,roads:[...s.roads],
+      buildings:s.buildings.map(b=>({...b,spent:{...b.spent}}))}))??[],
+    trails:previous.trails?.map(t=>({...t}))??[]};
   prepareDevelopment(world);
   for(const s of world.settlements){
     if(!world.codex!.settlements.some(r=>r.id===s.id)){
@@ -307,6 +317,7 @@ export function stepWorld(previous:World):World{
   const state={n:prngState(previous.rngState)};
   const yearVitals=emptyVitalYear();
   const occupied=new Map<number,number>();
+  const movementSteps:number[]=[];
   for(const a of world.agents)occupied.set(offset(world.width,a.x,a.y),a.id);
   // Biome-dependent regrowth and resource limits.
   for(const tile of world.tiles){
@@ -315,6 +326,10 @@ export function stepWorld(previous:World):World{
       cfg.growth*world.settings.resourceLevel*(.48+.52*random(state)),0,limit));
   }
   const partnerPositions=new Map(world.agents.map(a=>[a.id,a]));
+  const permanentHomes=new Map((world.households??[]).filter(h=>h.residence)
+    .map(h=>[h.id,h.home]));
+  const finishedWells=world.settlements.flatMap(s=>s.infrastructure?.buildings
+    .filter(b=>b.type==='well'&&b.stage==='complete')??[]);
   const closeContacts=new Map<number,number>();
   for(const b of world.bonds){
     if(b.stage==='ended')continue;
@@ -335,7 +350,7 @@ export function stepWorld(previous:World):World{
     const tile=world.tiles[offset(world.width,a.x,a.y)];
     a.age++;
     a.mind=planMind(world,a,occupied,partnerPositions,closeContacts,
-      biomeSuitability,traitProfile);
+      biomeSuitability,traitProfile,permanentHomes);
     const travel=clamp(info.wander*a.genes.curiosity*world.settings.wandering*
       divineFactor(a,'courage',world.year),0,.94);
     const destination=a.mind.target;
@@ -370,6 +385,7 @@ export function stepWorld(previous:World):World{
         occupied.delete(offset(world.width,a.x,a.y));
         a.x=chosen.x;a.y=chosen.y;
         occupied.set(offset(world.width,a.x,a.y),a.id);
+        movementSteps.push(offset(world.width,a.x,a.y));
         a.energy-=1.5;
       }
     }
@@ -400,9 +416,11 @@ export function stepWorld(previous:World):World{
       if(gathered>=targetMeal-.001)break;
     }
     if(targetMeal>0)rememberForage(a,world.year,gathered,targetMeal);
+    const home=permanentHomes.get(a.development?.householdId??-1);
+    const atHome=home&&distance(a,home)<=2;
     const dailyCost=info.metabolism*(stage==='infant'?.50:
       stage==='child'?.62:stage==='adolescent'?.82:1)*
-      (comfortable?.86:1.12);
+      (comfortable?.86:1.12)*(atHome?.94:1);
     const nourishment=gathered*(comfortable?13.4:10.5)*
       (1+(divineFactor(a,'luck',world.year)-1)*.18);
     a.energy=round(clamp(a.energy+nourishment-dailyCost-
@@ -410,8 +428,11 @@ export function stepWorld(previous:World):World{
     const care=helpDependent(world,a,occupied,partnerPositions);
     if(juvenile)careOutcomes.set(a.id,care);
     if(a.energy<32)a.health-=2.5+(32-a.energy)*.21;
-    else a.health=Math.min(100,a.health+1.45*a.genes.vigor*
-      divineFactor(a,'health',world.year));
+    else{
+      const well=finishedWells.some(b=>distance(a,b)<=5);
+      a.health=Math.min(100,a.health+(1.45+(well?.27:0))*a.genes.vigor*
+        divineFactor(a,'health',world.year));
+    }
     if(stage==='infant'&&!care.providerId)a.health-=1.65;
     if(juvenile&&!care.shelter)a.health-=stage==='infant'?.45:.09;
     if(!comfortable)a.health-=.45*(1-suitability)*(care.protected?.45:1);
@@ -495,11 +516,14 @@ export function stepWorld(previous:World):World{
     s.emptyYears=residents===0?s.emptyYears+1:0;
     if(s.emptyYears>=5){
       log(world,'collapse',s.name+' was abandoned after its population disappeared.');
+      archiveRuins(world,s);
       registerSettlementCollapse(world,s);
       return false;
     }
     return true;
   });
+  // Construction is a world-tick system. Map zoom and open UI tabs never enter it.
+  advanceConstruction(world,movementSteps);
   const births=newborns.length;
   world.totalBirths+=births;world.totalDeaths+=deaths;
   if(births)log(world,'birth',births+' newborn'+(births===1?'':'s')+' entered the world.');
@@ -766,7 +790,8 @@ export function isWorld(value:unknown):value is World{
     if(!w.agents.every(a=>a.development?.householdId===undefined||
       householdIds.has(a.development.householdId)))return false;
   }
-  if(!w.agents.every(a=>records.has(a.id))||!validDivinity(w as World))return false;
+  if(!w.agents.every(a=>records.has(a.id))||!validDivinity(w as World)||
+    !validConstruction(w as World))return false;
   if(!w.history.every(p=>{
     const valid=Number.isInteger(p.year)&&p.year>=0&&
       Number.isInteger(p.total)&&p.total>=0&&

@@ -1,6 +1,7 @@
 import {useEffect,useRef} from 'react';
 import type {KeyboardEvent,MouseEvent} from 'react';
 import {BIOME_INFO,SPECIES_INFO,type Brush,type World} from './engine';
+import {ARCHITECTURE,settlementStage} from './construction';
 
 export const WORLD_CELL_SIZE=6;
 const CELL=WORLD_CELL_SIZE;
@@ -46,13 +47,45 @@ export function WorldCanvas({
         ctx.fillRect(px,py,CELL,CELL);
       }
     }
+    if(zoom>=2){
+      for(const s of world.settlements){
+        for(const id of s.infrastructure?.roads??[]){
+          const x=id%W,y=Math.floor(id/W);
+          ctx.fillStyle='rgba(239,207,151,.65)';
+          ctx.fillRect(x*CELL+1,y*CELL+2,CELL-2,2);
+        }
+      }
+    }
+    for(const ruin of world.ruins??[]){
+      ctx.fillStyle='#b5a4ae';ctx.fillRect(ruin.x*CELL-1,ruin.y*CELL-2,8,6);
+      ctx.fillStyle='#272b3e';ctx.fillRect(ruin.x*CELL+2,ruin.y*CELL-1,4,4);
+    }
     for(const s of world.settlements){
       const px=s.x*CELL,py=s.y*CELL;
-      ctx.fillStyle='#f7dea1';ctx.fillRect(px-2,py-3,10,10);
-      ctx.fillStyle='#17253a';ctx.fillRect(px-1,py-2,8,8);
+      const stage=settlementStage(s),size={encampment:8,hamlet:10,
+        village:12,town:14,city:16}[stage];
+      ctx.fillStyle='#f6d7a5';ctx.fillRect(px-2,py-3,size,size);
+      ctx.fillStyle=ARCHITECTURE[s.species].roof;
+      ctx.fillRect(px-1,py-2,size-2,size-2);
       ctx.fillStyle=SPECIES_INFO[s.species].color;
-      ctx.fillRect(px+1,py,4,4);
-      ctx.fillStyle='#f7dea1';ctx.fillRect(px,py-4,6,2);
+      ctx.fillRect(px+2,py+1,Math.max(2,size-7),Math.max(2,size-7));
+      ctx.fillStyle='#f7dea1';ctx.fillRect(px,py-4,size-3,2);
+      if(stage==='town'||stage==='city'){
+        ctx.fillStyle='#f5e5bb';ctx.fillRect(px+size-5,py-7,3,5);
+      }
+    }
+    if(zoom>=2.5){
+      for(const s of world.settlements)for(const b of s.infrastructure?.buildings??[]){
+        const x=b.x*CELL,y=b.y*CELL,style=ARCHITECTURE[b.culture];
+        ctx.fillStyle=b.stage==='ruin'?'#676577':
+          b.stage==='abandoned'?'#6f5965':style.wall;
+        ctx.fillRect(x+1,y+1,5,5);
+        ctx.fillStyle=b.stage==='complete'?style.roof:'#e5c48a';
+        ctx.fillRect(x,y,5,2);
+        if(['foundation','frame','finishing'].includes(b.stage)){
+          ctx.fillStyle='#e2c78e';ctx.fillRect(x,y+5,Math.max(1,b.progress/20),1);
+        }
+      }
     }
     for(const a of world.agents){
       const px=a.x*CELL,py=a.y*CELL;
@@ -70,7 +103,7 @@ export function WorldCanvas({
       ctx.strokeStyle='#fff3b4';ctx.lineWidth=2;ctx.strokeRect(px+.5,py+.5,CELL-1,CELL-1);
       ctx.strokeStyle='#15192e';ctx.lineWidth=1;ctx.strokeRect(px-.5,py-.5,CELL+1,CELL+1);
     }
-  },[world,overlay,selected]);
+  },[world,overlay,selected,zoom]);
   const select=(event:MouseEvent<HTMLCanvasElement>)=>{
     const rect=event.currentTarget.getBoundingClientRect();
     const x=Math.floor((event.clientX-rect.left)/rect.width*world.width);

@@ -1,4 +1,67 @@
-# CircuitBuilder v0.18.0 — Evolution Lab v0.6: Divine Powers & Mortal Agency
+# CircuitBuilder v0.19.0 — Evolution Lab v0.7: Living Settlements & Construction
+
+**Civilizations build themselves.** Lab 04's inhabitants now collect construction
+materials, discuss real settlement needs through their individual circumstances,
+choose actual land locations, contribute construction labor and eventually
+move their households into completed residences. Gods can influence their lives
+without manually placing every building.
+
+## Try Evolution Lab v0.7
+
+1. Open **04 Evolution Lab → SETTLEMENTS** after communities form. Select a
+   settlement to inspect its full local map, culturally distinctive buildings,
+   owned land, material stocks, paths, residents and households with homes.
+2. Use **PLAY WORLD** or **+10 YEARS** while viewing the city. Watch a shelter,
+   house, farm, storehouse, well, workshop or communal hall progress through
+   foundation, framing, finishing and completion; unfinished projects show their
+   real material deliveries and labor hours. Completed buildings may later be
+   abandoned or decay into ruins.
+3. Switch to **WORLD**. Zoomed-out settlement icons reflect actual completed
+   structures and population; zoom in far enough to see little local building
+   sprites and worn paths. Select the town center or a building tile and click
+   **VIEW LOCAL CONSTRUCTION** to inspect the whole built environment.
+4. Export a world JSON file and re-import it. Households, buildings, histories,
+   construction stages, land claims, path wear, and ruins all survive unchanged.
+   Older saves remain valid and start tracking real construction after advancing
+   time. No buildings are retroactively invented for the past.
+
+## How it works
+
+- Each settlement owns bounded habitable terrain. Residents score project
+  priorities from actual housing needs, food security, population and career or
+  value preferences. Location selection values site safety, terrain suitability,
+  existing roads, nearby resources and distance from the center.
+- Construction uses separately tracked wood, stone, clay and available labor.
+  Materials are gathered by residents from the settlement's actual biome mix.
+  Artisans and healthy motivated citizens provide different labor amounts;
+  workshops improve productivity. Progress reflects **delivered resources plus
+  labor**, rather than a decorative animation timer.
+- Finished shelters/houses receive specific household occupants. Farms improve
+  nearby food; storage buildings increase material capacity. Buildings have
+  condition, abandonment dates and ruin states; collapsing communities leave
+  physical ruin sites for later generations to inspect.
+- Trails are derived from **actual agent movement events**, with travel wear
+  accumulated and faded over time. Roads do not appear from manual drawing.
+- Architectural palettes differ across humans (timber), elves (living wood),
+  dwarves (masonry) and demons (basalt). Settlement stages—encampment, hamlet,
+  village, town, city—are calculated from real buildings and resident counts.
+- Simulation time, economy and construction happen **only in the world tick**.
+  Visual zoom, opening an inspection panel, or viewing another settlement cannot
+  advance, delay or change any economic or demographic result. Playback may
+  continue while the Settlements screen is open.
+
+### Current limitations
+
+These are rule-driven decisions, not an external generative AI planning every
+building. Material production abstracts extraction into annual harvests rather
+than simulating individual trees and quarry blocks. Only one world tile is used
+per building; detailed interiors, markets, taxation, roads between cities,
+animal agriculture and multi-story construction are future expansions. The
+existing 850-person cap still applies.
+
+---
+
+## Previous: Evolution Lab v0.6 — Divine Powers & Mortal Agency
 
 **The creator can intervene; mortals still make choices.** Evolution Lab 04 now
 has a **DIVINE POWERS** tab with unrestricted sandbox abilities in three groups:
