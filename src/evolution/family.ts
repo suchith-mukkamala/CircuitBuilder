@@ -126,7 +126,7 @@ export function growBonds(world:World,rand:()=>number):number{
     if(!a||!b){bond.stage='ended';bond.ended=world.year;continue;}
     const together=cheby(a,b)<=4;
     bond.strength=round(clamp(bond.strength+
-      (together?.075:-.02)*(a.genes.social+b.genes.social)/2,0,1));
+      (together?.12:-.018)*(a.genes.social+b.genes.social)/2,0,1));
     if(bond.stage==='courting'&&bond.strength>=.68){
       bond.stage='partner';a.partnerId=b.id;b.partnerId=a.id;partnerships++;
     }else if(bond.strength<=.20){
@@ -147,7 +147,7 @@ export function growBonds(world:World,rand:()=>number):number{
   for(const a of available)pos.set(a.y*world.width+a.x,a);
   for(const a of available){
     if(bonded.has(a.id))continue;
-    if(rand()>.30*a.genes.social)continue;
+    if(rand()>.42*a.genes.social)continue;
     const candidates:Agent[]=[];
     for(let y=a.y-2;y<=a.y+2;y++)for(let x=a.x-2;x<=a.x+2;x++){
       if(x<0||y<0||x>=world.width||y>=world.height)continue;
@@ -191,8 +191,14 @@ export function offspringFromBonds(
       a.age>=p.lifespan*.76||b.age>=q.lifespan*.76||
       a.health<52||b.health<52||a.energy<57||b.energy<57)continue;
     const comp=compatibility(a,b,world.settings.interbreeding);
+    // Healthy families have recovery time between births. This is shorter
+    // for humans and longer for slower-maturing peoples and mixed families.
+    const spacing=Math.max(3,Math.min(10,
+      Math.round((p.maturity+q.maturity)*.075)));
+    if(bond.lastBirthYear!==undefined&&
+      world.year-bond.lastBirthYear<spacing)continue;
     const fertility=(p.fertility+q.fertility)/2;
-    const chance=clamp(fertility*2*comp*
+    const chance=clamp(fertility*1.65*comp*
       Math.min(a.genes.fertility,b.genes.fertility)*
       Math.min(a.energy,b.energy)/100*world.settings.resourceLevel,0,.65);
     if(rand()>=chance)continue;
@@ -204,6 +210,7 @@ export function offspringFromBonds(
       energy:77,health:94,genes:inheritedGenes(a.genes,b.genes,rand),
       generation:Math.max(a.generation,b.generation)+1,parents:[a.id,b.id]};
     newborns.push(baby);bond.children.push(baby.id);
+    bond.lastBirthYear=world.year;
     a.energy=Math.max(1,Math.round((a.energy-9)*100)/100);
     b.energy=Math.max(1,Math.round((b.energy-9)*100)/100);
     const record=livingRecord(baby);

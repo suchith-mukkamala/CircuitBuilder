@@ -35,7 +35,7 @@ function decodeTiles(raw:string,count:number):Tile[]|null{
     const biome=packedBiome(raw[i]),value=raw.slice(i+1,i+4);
     if(!biome||!/^[0-9a-z]{3}$/.test(value))return null;
     const food=parseInt(value,36)/100;
-    if(food<0||food>16||!Number.isFinite(food))return null;
+    if(food<0||food>20||!Number.isFinite(food))return null;
     tiles.push({biome,food});
   }
   return tiles;

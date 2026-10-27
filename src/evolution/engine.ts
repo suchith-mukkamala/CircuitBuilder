@@ -18,7 +18,8 @@ export type Agent={id:number;species:Species;ancestry:Ancestry;generation:number
   x:number;y:number;age:number;energy:number;health:number;genes:Genes;
   born:number;parents?:[number,number];partnerId?:number};
 export type Bond={id:number;a:number;b:number;since:number;
-  stage:'courting'|'partner'|'ended';strength:number;ended?:number;children:number[]};
+  stage:'courting'|'partner'|'ended';strength:number;ended?:number;
+  lastBirthYear?:number;children:number[]};
 export type LineageRecord={id:number;species:Species;ancestry:Ancestry;
   genes:Genes;born:number;died?:number;generation:number;
   parents?:[number,number];children:number[];partnerIds:number[]};
@@ -27,13 +28,26 @@ export type Settlement={id:number;species:Species;name:string;x:number;y:number;
   founded:number;population:number;stores:number;emptyYears:number};
 export type WorldEvent={id:number;year:number;
   type:'world'|'birth'|'death'|'settlement'|'collapse'|'milestone'|'bond'|'hybrid';message:string};
+export type DeathCause='old_age'|'starvation'|'exposure'|'ill_health';
+export const DEATH_CAUSES:DeathCause[]=['old_age','starvation','exposure','ill_health'];
+export const DEATH_LABELS:Record<DeathCause,string>={
+  old_age:'Old age',starvation:'Starvation',exposure:'Harsh terrain',
+  ill_health:'Declining health',
+};
+export type SpeciesVital={births:number;deaths:number;juvenileDeaths:number;
+  ageAtDeathSum:number;causes:Record<DeathCause,number>};
+export type Demography={sinceYear:number;bySpecies:Record<Species,SpeciesVital>};
+export type YearVital={births:Record<Species,number>;
+  deaths:Record<Species,number>;juvenileDeaths:Record<Species,number>;
+  causes:Record<DeathCause,number>};
 export type Sample={year:number;total:number;human:number;elf:number;dwarf:number;
-  demon:number;births:number;deaths:number;settlements:number};
+  demon:number;births:number;deaths:number;settlements:number;vitals?:YearVital};
 export type World={version:2;settings:WorldSettings;width:number;height:number;
   year:number;nextAgentId:number;nextSettlementId:number;nextEventId:number;
   nextBondId:number;rngState:number;tiles:Tile[];agents:Agent[];
   settlements:Settlement[];bonds:Bond[];lineage:LineageRecord[];
-  events:WorldEvent[];history:Sample[];totalBirths:number;totalDeaths:number};
+  events:WorldEvent[];history:Sample[];totalBirths:number;totalDeaths:number;
+  demography?:Demography};
 export const SPECIES:Species[]=['human','elf','dwarf','demon'];
 export const BIOMES:Biome[]=['plains','forest','mountain','cave','wasteland','volcanic','water'];
 export const SPECIES_INFO:Record<Species,{name:string;symbol:string;color:string;
@@ -53,12 +67,12 @@ export const SPECIES_INFO:Record<Species,{name:string;symbol:string;color:string
     intro:'Borderland survivors · harsh terrain'},
 };
 export const BIOME_INFO:Record<Biome,{name:string;color:string;food:number;growth:number}>={
-  plains:{name:'Plains',color:'#536c55',food:6.5,growth:1.1},
-  forest:{name:'Forest',color:'#275c53',food:8,growth:1.4},
-  mountain:{name:'Mountains',color:'#61657b',food:3.8,growth:.6},
-  cave:{name:'Caverns',color:'#35394f',food:3.2,growth:.42},
-  wasteland:{name:'Wasteland',color:'#74546a',food:2.8,growth:.4},
-  volcanic:{name:'Volcanic',color:'#87475f',food:2.1,growth:.25},
+  plains:{name:'Plains',color:'#536c55',food:7.5,growth:1.8},
+  forest:{name:'Forest',color:'#275c53',food:9.5,growth:2.2},
+  mountain:{name:'Mountains',color:'#61657b',food:5,growth:1.15},
+  cave:{name:'Caverns',color:'#35394f',food:4.5,growth:.95},
+  wasteland:{name:'Wasteland',color:'#74546a',food:4.2,growth:.85},
+  volcanic:{name:'Volcanic',color:'#87475f',food:3.7,growth:.73},
   water:{name:'Water',color:'#1f4866',food:0,growth:0},
 };
 export const DEFAULT_SETTINGS:WorldSettings={
@@ -100,9 +114,21 @@ export function population(world:Pick<World,'agents'>):Record<Species,number>{
   for(const a of world.agents)counts[a.species]++;
   return counts;
 }
-function sample(world:World,births:number,deaths:number):Sample{
+export function emptyDemography(sinceYear:number):Demography{
+  return {sinceYear,bySpecies:Object.fromEntries(SPECIES.map(species=>
+    [species,{births:0,deaths:0,juvenileDeaths:0,ageAtDeathSum:0,
+      causes:Object.fromEntries(DEATH_CAUSES.map(c=>[c,0]))}])) as Record<Species,SpeciesVital>};
+}
+function emptyVitalYear():YearVital{
+  return {births:Object.fromEntries(SPECIES.map(s=>[s,0])) as Record<Species,number>,
+    deaths:Object.fromEntries(SPECIES.map(s=>[s,0])) as Record<Species,number>,
+    juvenileDeaths:Object.fromEntries(SPECIES.map(s=>[s,0])) as Record<Species,number>,
+    causes:Object.fromEntries(DEATH_CAUSES.map(c=>[c,0])) as Record<DeathCause,number>};
+}
+function sample(world:World,births:number,deaths:number,vitals?:YearVital):Sample{
   return {year:world.year,total:world.agents.length,...population(world),
-    births,deaths,settlements:world.settlements.length};
+    births,deaths,settlements:world.settlements.length,
+    ...(vitals?{vitals}: {})};
 }
 function log(world:World,type:WorldEvent['type'],message:string){
   world.events.push({id:world.nextEventId++,year:world.year,type,message});
@@ -163,7 +189,7 @@ export function createWorld(input:Partial<WorldSettings>={}):World{
   const world:World={version:2,settings,width,height,year:0,rngState:state.n,
     nextAgentId:1,nextSettlementId:1,nextEventId:1,nextBondId:1,
     tiles,agents:[],settlements:[],bonds:[],lineage:[],
-    events:[],history:[],totalBirths:0,totalDeaths:0};
+    events:[],history:[],totalBirths:0,totalDeaths:0,demography:emptyDemography(0)};
   const occupied=new Set<number>();
   for(const s of SPECIES){
     const info=SPECIES_INFO[s];
@@ -224,8 +250,15 @@ export function stepWorld(previous:World):World{
     bonds:previous.bonds.map(b=>({...b,children:[...b.children]})),
     lineage:previous.lineage.map(r=>({...r,children:[...r.children],
       partnerIds:[...r.partnerIds]})),
-    events:[...previous.events],history:[...previous.history]};
+    events:[...previous.events],history:[...previous.history],
+    demography:previous.demography?{
+      sinceYear:previous.demography.sinceYear,
+      bySpecies:Object.fromEntries(SPECIES.map(s=>[s,
+        {...previous.demography!.bySpecies[s],
+          causes:{...previous.demography!.bySpecies[s].causes}}])) as Record<Species,SpeciesVital>,
+    }:emptyDemography(previous.year)};
   const state={n:prngState(previous.rngState)};
+  const yearVitals=emptyVitalYear();
   const occupied=new Map<number,number>();
   for(const a of world.agents)occupied.set(offset(world.width,a.x,a.y),a.id);
   // Biome-dependent regrowth and resource limits.
@@ -235,6 +268,12 @@ export function stepWorld(previous:World):World{
       cfg.growth*world.settings.resourceLevel*(.48+.52*random(state)),0,limit));
   }
   const partnerPositions=new Map(world.agents.map(a=>[a.id,a]));
+  const closeContacts=new Map<number,number>();
+  for(const b of world.bonds){
+    if(b.stage==='ended')continue;
+    closeContacts.set(b.a,b.b);
+    closeContacts.set(b.b,b.a);
+  }
   const shuffled=[...world.agents];
   for(let i=shuffled.length-1;i>0;i--){
     const j=Math.floor(random(state)*(i+1));
@@ -259,9 +298,13 @@ export function stepWorld(previous:World):World{
         const preference=suitability*13;
         const suit=suitability*14+(1-suitability)*-17;
         const movement=dx||dy?Math.min(4,a.genes.curiosity*4):2;
-        const mate=partnerPositions.get(a.partnerId??-1);
-        const toward=mate?Math.max(-3,Math.min(3,
-          (distance(a,mate)-distance({x,y},mate))*3)):0;
+        const mate=partnerPositions.get(closeContacts.get(a.id)??-1);
+        const mateRange=mate?distance({x,y},mate):Infinity;
+        // Courtship and partners intentionally remain near one another.
+        // Nearby forage can still win when an individual is hungry.
+        const toward=mate?
+          Math.max(-20,Math.min(20,(distance(a,mate)-mateRange)*16))+
+          (mateRange<=2?6:0):0;
         choices.push({x,y,score:candidate.food*3+preference+suit+toward+
           random(state)*(3+info.wander*14*world.settings.wandering)+movement});
       }
@@ -275,20 +318,73 @@ export function stepWorld(previous:World):World{
       }
     }
     const current=world.tiles[offset(world.width,a.x,a.y)];
-    const comfortable=biomeSuitability(a.ancestry,current.biome)>.45;
-    const meal=Math.min(current.food,info.metabolism*.065);
-    current.food=round(Math.max(0,current.food-meal));
-    a.energy=round(clamp(a.energy+
-      meal*(comfortable?19:12)*world.settings.resourceLevel-
-      info.metabolism*(comfortable?.92:1.25)-a.age/info.lifespan*2,0,100));
-    if(a.energy<35)a.health-=2.8+(35-a.energy)*.14;
-    else a.health=Math.min(100,a.health+1.5*a.genes.vigor);
-    if(!comfortable)a.health-=.35;
-    const senescence=a.age>info.lifespan*.82?
-      Math.pow((a.age/info.lifespan-.82)/.2,2)*.15:0;
-    if(a.energy<=0||a.health<=0||a.age>info.lifespan*1.25||
-      random(state)<senescence){
-      occupied.delete(offset(world.width,a.x,a.y));deaths++;
+    const suitability=biomeSuitability(a.ancestry,current.biome);
+    const comfortable=suitability>.45;
+    const juvenile=a.age<info.maturity;
+    // An individual forages the immediate neighborhood, rather than relying
+    // entirely on the resources of one tile. Each gathered unit is actually
+    // withdrawn from terrain; dense populations deplete their local supply.
+    const targetMeal=info.metabolism*(juvenile?.074:.11);
+    let gathered=0;
+    const sites:{tile:Tile;score:number}[]=[];
+    for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
+      const x=a.x+dx,y=a.y+dy;
+      if(!within(world.width,world.height,x,y))continue;
+      const source=world.tiles[offset(world.width,x,y)];
+      if(source.biome==='water'||source.food<=0)continue;
+      sites.push({tile:source,score:source.food+(dx===0&&dy===0?2:0)});
+    }
+    sites.sort((x,y)=>y.score-x.score);
+    for(const site of sites){
+      const take=Math.min(site.tile.food,targetMeal-gathered);
+      site.tile.food=round(Math.max(0,site.tile.food-take));
+      gathered+=take;
+      if(gathered>=targetMeal-.001)break;
+    }
+    const dailyCost=info.metabolism*(juvenile?.62:1)*
+      (comfortable?.86:1.12);
+    const nourishment=gathered*(comfortable?13.4:10.5);
+    a.energy=round(clamp(a.energy+nourishment-dailyCost-
+      Math.max(0,a.age/info.lifespan-.7)*1.3,0,100));
+    // Basic community support: nearby mature peers can help a hungry child.
+    // This is deliberately modest; full households/caregivers come in v0.5.
+    if(juvenile&&a.energy<58){
+      careSearch: for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){
+        const x=a.x+dx,y=a.y+dy;
+        if(!within(world.width,world.height,x,y))continue;
+        const helper=partnerPositions.get(occupied.get(offset(world.width,x,y))??-1);
+        if(helper&&helper.id!==a.id&&helper.species===a.species&&
+          helper.age>=traitProfile(helper.ancestry).maturity&&helper.energy>63){
+          const aid=Math.min(5,helper.energy-63,65-a.energy);
+          if(aid>0){a.energy=round(clamp(a.energy+aid,0,100));
+            helper.energy=round(Math.max(1,helper.energy-aid));}
+          break careSearch;
+        }
+      }
+    }
+    if(a.energy<32)a.health-=2.5+(32-a.energy)*.21;
+    else a.health=Math.min(100,a.health+1.45*a.genes.vigor);
+    if(!comfortable)a.health-=.45*(1-suitability);
+    // Very low senescence until old age, then sharply increasing mortality.
+    const ageRatio=a.age/info.lifespan;
+    const senescence=ageRatio>.84?
+      Math.min(.9,Math.pow((ageRatio-.84)/.30,2)*.20):0;
+    let cause:DeathCause|null=null;
+    if(a.energy<=0||a.health<=0){
+      cause=a.energy<30?'starvation':suitability<.45?'exposure':'ill_health';
+    }else if(ageRatio>1.22||random(state)<senescence){
+      cause='old_age';
+    }
+    if(cause){
+      occupied.delete(offset(world.width,a.x,a.y));
+      deaths++;
+      yearVitals.deaths[a.species]++;
+      yearVitals.causes[cause]++;
+      if(juvenile)yearVitals.juvenileDeaths[a.species]++;
+      const record=world.demography!.bySpecies[a.species];
+      record.deaths++;record.causes[cause]++;
+      record.ageAtDeathSum+=a.age;
+      if(juvenile)record.juvenileDeaths++;
     }else{
       a.health=round(clamp(a.health,0,100));survivors.push(a);
     }
@@ -305,6 +401,10 @@ export function stepWorld(previous:World):World{
     return point;
   });
   world.agents=[...survivors,...newborns].sort((a,b)=>a.id-b.id);
+  for(const baby of newborns){
+    world.demography!.bySpecies[baby.species].births++;
+    yearVitals.births[baby.species]++;
+  }
   const hybrids=newborns.filter(a=>hybridFraction(a.ancestry)>.01).length;
   if(hybrids)log(world,'hybrid',hybrids+' mixed-ancestry child'+
     (hybrids===1?'':'ren')+' born this year.');
@@ -341,12 +441,16 @@ export function stepWorld(previous:World):World{
   const births=newborns.length;
   world.totalBirths+=births;world.totalDeaths+=deaths;
   if(births)log(world,'birth',births+' newborn'+(births===1?'':'s')+' entered the world.');
-  if(deaths)log(world,'death',deaths+' individual'+(deaths===1?'':'s')+
-    ' died from old age, exhaustion or harsh conditions.');
+  if(deaths){
+    const breakdown=DEATH_CAUSES.filter(c=>yearVitals.causes[c]>0)
+      .map(c=>DEATH_LABELS[c].toLowerCase()+': '+yearVitals.causes[c]).join(', ');
+    log(world,'death',deaths+' individual'+(deaths===1?'':'s')+
+      ' died ('+breakdown+').');
+  }
   if(world.year%25===0)log(world,'milestone','Year '+world.year+': '+
     world.agents.length+' people, '+world.settlements.length+' settlements.');
   world.rngState=state.n;
-  world.history.push(sample(world,births,deaths));
+  world.history.push(sample(world,births,deaths,yearVitals));
   if(world.history.length>400)world.history=world.history.slice(-400);
   return world;
 }
@@ -384,7 +488,10 @@ export function editWorld(previous:World,x:number,y:number,brush:Brush):World{
     world.tiles[index]={biome:brush.biome,food:round(
       BIOME_INFO[brush.biome].food*world.settings.resourceLevel)};
   }
-  world.history=[...previous.history.slice(0,-1),sample(world,0,0)];
+  const last=previous.history.at(-1);
+  world.history=[...previous.history.slice(0,-1),
+    {...(last??sample(previous,0,0)),total:world.agents.length,
+      ...population(world)}];
   return world;
 }
 export function isWorld(value:unknown):value is World{
@@ -423,7 +530,7 @@ export function isWorld(value:unknown):value is World{
     !Array.isArray(w.history)||w.history.length>400||w.history.length===0)return false;
   const width=w.width,height=w.height;
   if(!w.tiles.every(t=>t&&BIOMES.includes(t.biome)&&Number.isFinite(t.food)&&
-    t.food>=0&&t.food<=16))return false;
+    t.food>=0&&t.food<=20))return false;
   const ids=new Set<number>(),positions=new Set<number>();
   const checkGenes=(g:Genes)=>!!g&&
     (['vigor','curiosity','fertility','social'] as const).every(k=>
@@ -464,6 +571,8 @@ export function isWorld(value:unknown):value is World{
       !Number.isInteger(b.since)||b.since>w.year||
       !['courting','partner','ended'].includes(b.stage)||
       !Number.isFinite(b.strength)||b.strength<0||b.strength>1||
+      (b.lastBirthYear!==undefined&&
+        (!Number.isInteger(b.lastBirthYear)||b.lastBirthYear>w.year||b.lastBirthYear<b.since))||
       !Array.isArray(b.children)||b.children.length>1000||
       !b.children.every(id=>Number.isSafeInteger(id)&&id>0)||
       (b.ended!==undefined&&!Number.isInteger(b.ended)))return false;
@@ -488,12 +597,43 @@ export function isWorld(value:unknown):value is World{
         !r.parents.every(id=>Number.isSafeInteger(id)&&id>0))))return false;
     records.add(r.id);
   }
+  // Optional because v0.2 JSON saves had no diagnostics. New saves are
+  // populated with statistics from the year they begin tracking.
+  if(w.demography!==undefined){
+    const d=w.demography;
+    if(!d||!Number.isInteger(d.sinceYear)||d.sinceYear<0||
+      d.sinceYear>w.year||!d.bySpecies||
+      !SPECIES.every(species=>{
+        const r=d.bySpecies[species];
+        return !!r&&Number.isInteger(r.births)&&r.births>=0&&
+          Number.isInteger(r.deaths)&&r.deaths>=0&&
+          Number.isInteger(r.juvenileDeaths)&&r.juvenileDeaths>=0&&
+          r.juvenileDeaths<=r.deaths&&Number.isFinite(r.ageAtDeathSum)&&
+          r.ageAtDeathSum>=0&&r.causes&&
+          DEATH_CAUSES.every(c=>Number.isInteger(r.causes[c])&&r.causes[c]>=0)&&
+          DEATH_CAUSES.reduce((n,c)=>n+r.causes[c],0)===r.deaths;
+      }))return false;
+  }
   if(!w.agents.every(a=>records.has(a.id)))return false;
-  if(!w.history.every(p=>Number.isInteger(p.year)&&p.year>=0&&
-    Number.isInteger(p.total)&&p.total>=0&&
-    Number.isInteger(p.births)&&Number.isInteger(p.deaths)&&
-    Number.isInteger(p.settlements)&&
-    SPECIES.every(s=>Number.isInteger(p[s])&&p[s]>=0)))return false;
+  if(!w.history.every(p=>{
+    const valid=Number.isInteger(p.year)&&p.year>=0&&
+      Number.isInteger(p.total)&&p.total>=0&&
+      Number.isInteger(p.births)&&p.births>=0&&
+      Number.isInteger(p.deaths)&&p.deaths>=0&&
+      Number.isInteger(p.settlements)&&
+      SPECIES.every(s=>Number.isInteger(p[s])&&p[s]>=0);
+    if(!valid)return false;
+    if(!p.vitals)return true; // Prior snapshots need no fabricated history.
+    return SPECIES.every(s=>Number.isInteger(p.vitals!.births[s])&&
+      p.vitals!.births[s]>=0&&Number.isInteger(p.vitals!.deaths[s])&&
+      p.vitals!.deaths[s]>=0&&Number.isInteger(p.vitals!.juvenileDeaths[s])&&
+      p.vitals!.juvenileDeaths[s]>=0)&&
+      DEATH_CAUSES.every(c=>Number.isInteger(p.vitals!.causes[c])&&
+        p.vitals!.causes[c]>=0)&&
+      SPECIES.reduce((n,s)=>n+p.vitals!.births[s],0)===p.births&&
+      SPECIES.reduce((n,s)=>n+p.vitals!.deaths[s],0)===p.deaths&&
+      DEATH_CAUSES.reduce((n,c)=>n+p.vitals!.causes[c],0)===p.deaths;
+  }))return false;
   if(w.history.at(-1)!.year!==w.year||
     w.history.at(-1)!.total!==w.agents.length)return false;
   if(!w.events.every(e=>Number.isSafeInteger(e.id)&&
