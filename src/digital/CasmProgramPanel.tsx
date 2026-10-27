@@ -1,224 +1,410 @@
-import {useEffect,useMemo,useState} from 'react';
+import {useEffect,useMemo,useRef,useState} from 'react';
+import type {ChangeEvent,KeyboardEvent} from 'react';
 import {useDigitalStore} from './useDigitalStore';
-import {assembleCasm,CASM_INSTRUCTIONS,CASM_EXAMPLES,DEFAULT_CASM_SOURCE,
-  disassembleCasm,EMPTY_PROGRAM} from './casm';
+import {
+  assembleCasm,CASM_INSTRUCTIONS,CASM_EXAMPLES,DEFAULT_CASM_SOURCE,
+  disassembleCasm,EMPTY_PROGRAM,
+} from './casm';
 import {readCpuState} from './cpuCore';
 import {simulateLogic} from './engine';
 import type {DigitalComponent,LogicValue} from './types';
 
 const hex=(n:number)=>n.toString(16).toUpperCase().padStart(2,'0');
 const bits=(n:number,width=4)=>n.toString(2).padStart(width,'0');
-const currentByteFromWires=(values:Record<string,LogicValue>,id:string):number|null=>{
+const scratchKey='__casm_scratch__';
+const readByte=(values:Record<string,LogicValue>,id:string):number|null=>{
   let byte=0;
   for(let i=0;i<8;i++){
-    const bit=values[id+':instr'+i];
-    if(bit!==0&&bit!==1)return null;
-    byte|=bit<<i;
+    const value=values[id+':instr'+i];
+    if(value!==0&&value!==1)return null;
+    byte|=value<<i;
   }
   return byte;
 };
-const freshSource=(rom:DigitalComponent):string=>
-  rom.source??disassembleCasm(rom.program??EMPTY_PROGRAM())
-    .map(i=>i.source).join('\n');
+const romSource=(rom:DigitalComponent)=>rom.source??
+  disassembleCasm(rom.program??EMPTY_PROGRAM()).map(row=>row.source).join('\n');
 
-export function CasmProgramPanel({active=true}:{active?:boolean}={}){
+const sanitize=(name:string)=>name.replace(/[^a-zA-Z0-9_-]+/g,'-').replace(/^-+|-+$/g,'')
+  .toLowerCase().slice(0,56)||'program';
+
+const cpuRam=(id:string,memories:Record<string,number[]>)=>
+  memories['top/'+id]??Array(16).fill(0);
+
+/** The standalone Code Studio page of Lab 03, not a squeezed canvas sidebar. */
+export function CasmProgramPanel({
+  active=true,onViewHardware,
+}:{
+  active?:boolean;
+  onViewHardware?:(romId?:string)=>void;
+}={}){
   const doc=useDigitalStore(s=>s.document);
+  const drafts=useDigitalStore(s=>s.casmDrafts);
+  const setDraft=useDigitalStore(s=>s.setCasmDraft);
+  const discardDraft=useDigitalStore(s=>s.discardCasmDraft);
   const runtime=useDigitalStore(s=>s.runtime);
   const clock=useDigitalStore(s=>s.clockStep);
   const reset=useDigitalStore(s=>s.resetClock);
-  const save=useDigitalStore(s=>s.setCasmProgram);
+  const inject=useDigitalStore(s=>s.setCasmProgram);
   const roms=doc.components.filter(c=>c.kind==='rom16x8');
   const cpus=doc.components.filter(c=>c.kind==='cpu4');
   const [romId,setRomId]=useState(roms[0]?.id??'');
   const [cpuId,setCpuId]=useState(cpus[0]?.id??'');
   const rom=roms.find(c=>c.id===romId)??roms[0];
   const cpu=cpus.find(c=>c.id===cpuId)??cpus[0];
-  const [source,setSource]=useState(rom?freshSource(rom):DEFAULT_CASM_SOURCE);
+  const selectedKey=rom?.id??scratchKey;
+  const source=drafts?.[selectedKey]??(rom?romSource(rom):drafts?.[scratchKey]??DEFAULT_CASM_SOURCE);
+  const stored=rom?romSource(rom):'';
+  const dirty=rom?source!==stored:true;
+  const compiled=useMemo(()=>assembleCasm(source),[source]);
+  const [showListing,setShowListing]=useState<'preview'|'rom'>('preview');
+  const [feedback,setFeedback]=useState('');
   const [running,setRunning]=useState(false);
   const [speed,setSpeed]=useState(2);
   const [breakpoints,setBreakpoints]=useState<number[]>([]);
-  const [feedback,setFeedback]=useState('');
-  // A new document or reloaded program resets the editing baseline.
-  useEffect(()=>{
-    setSource(rom?freshSource(rom):DEFAULT_CASM_SOURCE);
-    setFeedback('');
-    setRunning(false);
-  },[rom?.id,rom?.source,rom?.program]);
-  useEffect(()=>{if(!active)setRunning(false);},[active]);
-  useEffect(()=>{setRunning(false);},[cpu?.id]);
-  const assembled=useMemo(()=>assembleCasm(source),[source]);
-  const dirty=rom?source!==freshSource(rom):false;
-  const pc=cpu?readCpuState(runtime,'top/'+cpu.id):null;
+  const inputRef=useRef<HTMLInputElement>(null);
+  const codeRef=useRef<HTMLTextAreaElement>(null);
+  const gutterRef=useRef<HTMLDivElement>(null);
+  const cpuState=cpu?readCpuState(runtime,'top/'+cpu.id):null;
   const result=useMemo(()=>simulateLogic(doc,runtime),[doc,runtime]);
-  const fetched=cpu?currentByteFromWires(result.terminalValues,cpu.id):null;
-  const ram=cpu?runtime.memories['top/'+cpu.id]??Array(16).fill(0):Array(16).fill(0);
-  const current=pc?.pc??0;
+  const fetched=cpu?readByte(result.terminalValues,cpu.id):null;
+  const ram=cpu?cpuRam(cpu.id,runtime.memories):Array(16).fill(0);
+  const romListing=useMemo(()=>{
+    if(!rom)return [];
+    const bytes=rom.program??EMPTY_PROGRAM();
+    const assembled=assembleCasm(stored);
+    // Only attribute source lines to bytes when source really matches the ROM.
+    return assembled.ok&&assembled.bytes.every((b,i)=>b===bytes[i])
+      ?assembled.listing:disassembleCasm(bytes);
+  },[rom?.program,stored]);
+  const listing=showListing==='rom'?romListing:compiled.ok?compiled.listing:[];
+  const instructionCount=compiled.listing.length;
+  const editedLines=source.split('\n');
+
+  useEffect(()=>{setRunning(false);setFeedback('');setBreakpoints([]);},
+    [rom?.id,cpu?.id]);
+  useEffect(()=>{if(!active)setRunning(false);},[active]);
   useEffect(()=>{
-    if(!running)return;
-    const handle=window.setInterval(()=>{
+    if(!active||!running||!cpu)return;
+    const timer=window.setInterval(()=>{
       const state=useDigitalStore.getState();
-      const active=cpu?readCpuState(state.runtime,'top/'+cpu.id):null;
-      if(!active||active.halt||active.fault||breakpoints.includes(active.pc)){
+      const current=readCpuState(state.runtime,'top/'+cpu.id);
+      if(current.halt||current.fault||breakpoints.includes(current.pc)){
         setRunning(false);return;
       }
       state.clockStep();
     },1000/speed);
-    return ()=>window.clearInterval(handle);
-  },[running,speed,cpu?.id,breakpoints]);
-  const assembleAndLoad=()=>{
-    if(!rom)return;
-    if(!assembled.ok){setFeedback('Correct the assembler errors first. ROM was not changed.');return;}
-    if(save(rom.id,source)){
-      setRunning(false);
-      setFeedback('✓ Loaded '+assembled.listing.length+' instructions into '+rom.name+'. Registers reset.');
+    return ()=>window.clearInterval(timer);
+  },[running,active,speed,cpu?.id,breakpoints]);
+
+  const change=(next:string)=>{
+    setDraft(selectedKey,next);
+    setFeedback('');
+    setShowListing('preview');
+  };
+  const injectToCircuit=()=>{
+    setRunning(false);
+    if(!rom){setFeedback('No 16×8 ROM found. Add one in Hardware before injecting.');return;}
+    if(!compiled.ok){
+      setFeedback('Fix the assembler errors below. Existing ROM contents were not changed.');return;
+    }
+    if(inject(rom.id,source)){
+      setShowListing('rom');
+      setFeedback('✓ INJECTED '+instructionCount+' instruction'+(instructionCount===1?'':'s')+
+        ' into '+(rom.name??rom.id)+'. CPU state reset; hardware connections were preserved.');
     }
   };
-  const toggleBreakpoint=(address:number)=>{
-    setBreakpoints(items=>items.includes(address)?
-      items.filter(a=>a!==address):[...items,address]);
+  const focusLine=(line:number)=>{
+    const textarea=codeRef.current;
+    if(!textarea)return;
+    const lines=source.split('\n');
+    const start=lines.slice(0,line-1).reduce((n,s)=>n+s.length+1,0);
+    textarea.focus();textarea.setSelectionRange(start,start+(lines[line-1]?.length??0));
+    // Scroll to the target line without changing its contents.
+    textarea.scrollTop=Math.max(0,(line-4)*24);
+    if(gutterRef.current)gutterRef.current.scrollTop=textarea.scrollTop;
   };
-  const doStep=()=>{
-    setRunning(false);
-    if(!cpu){setFeedback('Add a CPU4 component first.');return;}
-    clock();
+  const keyDown=(event:KeyboardEvent<HTMLTextAreaElement>)=>{
+    if((event.metaKey||event.ctrlKey)&&event.key==='Enter'){
+      event.preventDefault();injectToCircuit();return;
+    }
+    if(event.key==='Tab'){
+      event.preventDefault();
+      const target=event.currentTarget,start=target.selectionStart,end=target.selectionEnd;
+      change(source.slice(0,start)+'    '+source.slice(end));
+      requestAnimationFrame(()=>{target.focus();target.setSelectionRange(start+4,start+4);});
+    }
   };
-  const noComputer=roms.length===0||cpus.length===0;
-  return <section className="casm-workspace" aria-label="Circuit Assembly program editor">
-    <div className="signal-panel-heading">⌘ CIRCUIT ASSEMBLY <span>/ CASM v1</span></div>
-    <div className="casm-intro">
-      Write assembly, assemble to ROM, then execute it through the actual
-      instruction bus and clocked CPU circuit.
-    </div>
-    {noComputer&&<div className="casm-notice" role="status">
-      Add a <b>16×8 Program ROM</b> and a <b>4-Bit CASM CPU</b>,
-      or open the <b>Programmable CPU</b> sample in Project / Examples.
-    </div>}
-    <div className="casm-selectors">
-      <label>PROGRAM ROM
-        <select aria-label="Instruction ROM" disabled={!roms.length}
-          value={rom?.id??''} onChange={e=>setRomId(e.target.value)}>
-          {!roms.length&&<option value="">No instruction ROM</option>}
-          {roms.map(c=><option key={c.id} value={c.id}>{c.name??c.id}</option>)}
-        </select>
-      </label>
-      <label>CPU CORE
-        <select aria-label="CPU core" disabled={!cpus.length}
-          value={cpu?.id??''} onChange={e=>setCpuId(e.target.value)}>
-          {!cpus.length&&<option value="">No programmable CPU</option>}
-          {cpus.map(c=><option key={c.id} value={c.id}>{c.name??c.id}</option>)}
-        </select>
-      </label>
-    </div>
-    <div className="casm-editor-heading">
-      <span>main.casm</span><span>{dirty?'● UNSAVED SOURCE':'✓ ROM SYNCED'}</span>
-    </div>
-    <div className="casm-example-picker">
-      <label htmlFor="casm-example">EXAMPLE PROGRAM</label>
-      <select id="casm-example" value="" onChange={e=>{
-        const chosen=CASM_EXAMPLES.find(x=>x.id===e.target.value);
-        if(chosen){setSource(chosen.source);
-          setFeedback('Example loaded into editor. Press ASSEMBLE & LOAD to program your ROM.');}
-      }}>
-        <option value="">Choose a sample…</option>
-        {CASM_EXAMPLES.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}
-      </select>
-    </div>
-    <textarea className="casm-code" aria-label="CASM assembly source" rows={10}
-      spellCheck={false} autoCapitalize="off" autoComplete="off"
-      value={source} onChange={e=>{setSource(e.target.value);setFeedback('');}}
-      placeholder={'LDI 3\nADD 5\nOUT\nHLT'}/>
-    {dirty&&<p className="casm-draft-hint">Draft not loaded: RUN and STEP still execute
-      the previous machine code in ROM until you press ASSEMBLE & LOAD.</p>}
-    <div className="casm-compile-actions">
-      <button disabled={!rom||!assembled.ok} className="casm-primary"
-        onClick={assembleAndLoad}>▣ ASSEMBLE & LOAD</button>
-      <span className={assembled.ok?'casm-compiled':'casm-invalid'}>
-        {assembled.ok?'✓ '+assembled.listing.length+' / 16 INSTRUCTIONS':
-          '✖ '+assembled.issues.length+' ERROR(S)'}
-      </span>
-    </div>
-    {!!feedback&&<div className="casm-feedback" role="status">{feedback}</div>}
-    {assembled.issues.length>0&&<div className="casm-errors" role="alert">
-      {assembled.issues.slice(0,8).map((issue,i)=>
-        <p key={i}><b>LINE {issue.line}</b> · {issue.message}</p>)}
-    </div>}
-    <div className="casm-section-title">▦ INSTRUCTION MEMORY / BYTECODE</div>
-    <div className="casm-listing" role="table" aria-label="Compiled instructions">
-      <div className="casm-listing-header" role="row">
-        <span>●</span><span>PC</span><span>HEX</span><span>ASSEMBLY</span>
+  const useExample=(key:string)=>{
+    const example=CASM_EXAMPLES.find(item=>item.id===key);
+    if(!example)return;
+    if(dirty&&source!==example.source&&!window.confirm(
+      'Replace the current CASM draft with this example? The injected ROM will not change.'))return;
+    change(example.source);
+    setFeedback('Example copied into your draft. Inject to update the hardware ROM.');
+  };
+  const restore=()=>{
+    if(!rom)return;
+    if(dirty&&!window.confirm('Discard the un-injected draft and restore source from ROM?'))return;
+    discardDraft(rom.id);setFeedback('Restored the source currently stored in ROM.');
+    setShowListing('rom');
+  };
+  const download=()=>{
+    const blob=new Blob([source],{type:'text/plain;charset=utf-8'});
+    const url=URL.createObjectURL(blob);
+    const anchor=document.createElement('a');
+    anchor.href=url;anchor.download=sanitize(doc.name)+'.casm';
+    document.body.appendChild(anchor);anchor.click();anchor.remove();
+    URL.revokeObjectURL(url);
+    setFeedback('CASM source exported as a separate .casm file.');
+  };
+  const importFile=async(event:ChangeEvent<HTMLInputElement>)=>{
+    const file=event.currentTarget.files?.[0];
+    event.currentTarget.value='';
+    if(!file)return;
+    if(file.size>8192){
+      setFeedback('Source file is too large (maximum 8192 bytes).');return;
+    }
+    if(dirty&&!window.confirm('Replace your current CASM draft with '+file.name+'?'))return;
+    try{
+      const text=await file.text();
+      if(text.length>8192)throw Error('Source exceeds 8192 characters.');
+      change(text);setFeedback('Imported '+file.name+' into the draft. ROM is unchanged.');
+    }catch(error){
+      setFeedback(error instanceof Error?error.message:'Could not open CASM source.');
+    }
+  };
+
+  return <main className="casm-studio" aria-label="Circuit Assembly Code Studio">
+    <div className="casm-studio-intro">
+      <div>
+        <span className="casm-studio-eyebrow">LAB 03 / COMPUTER BUILDER / SOURCE</span>
+        <h1>Code Studio <small>CASM v1</small></h1>
+        <p>Write and test your assembly separately. Inject it into a ROM when you're ready.</p>
       </div>
-      {(assembled.ok?assembled.listing:[]).map(row=>
-        <button type="button" role="row" key={row.address}
-          className={'casm-listing-row'+(pc?.pc===row.address?' is-current':'')+
-            (breakpoints.includes(row.address)?' has-breakpoint':'')}
-          aria-label={'Toggle breakpoint at address '+row.address}
-          title="Toggle breakpoint · stops before executing this address"
-          onClick={()=>toggleBreakpoint(row.address)}>
-          <span>{breakpoints.includes(row.address)?'●':'○'}</span>
-          <span>{row.address.toString(16).toUpperCase()}</span>
-          <span>{hex(row.byte)}</span>
-          <span>{row.source}</span>
-        </button>)}
-      {!assembled.ok&&<p className="casm-hint">Fix errors to preview and load new machine code.</p>}
-      {assembled.ok&&!assembled.listing.length&&<p className="casm-hint">Write an instruction to see its machine code.</p>}
+      <div className="casm-studio-intro-actions">
+        {onViewHardware&&<button onClick={()=>onViewHardware(rom?.id)}>
+          ◈ VIEW TARGET IN HARDWARE
+        </button>}
+        <span className={'casm-injection-state'+(dirty?' needs-injection':'')}>
+          {dirty?'● DRAFT NOT INJECTED':'✓ SOURCE IN ROM'}
+        </span>
+      </div>
     </div>
-    <div className="casm-section-title">↯ CPU EXECUTION</div>
-    <div className="casm-cpu-readouts">
-      {[
-        ['PC',pc?hex(pc.pc):'—'],
-        ['ACC',pc?hex(pc.acc):'—'],
-        ['OUT',pc?hex(pc.out):'—'],
-        ['CYCLE',String(runtime.cycle)],
-      ].map(([name,value])=><div key={name}><small>{name}</small><strong>{value}</strong></div>)}
+    <div className="casm-studio-columns">
+      <div className="casm-studio-left">
+        <section className="casm-studio-card casm-editor-card">
+          <div className="casm-studio-card-title">
+            <div><strong>01 / SOURCE EDITOR</strong><span>main.casm · drafts saved locally</span></div>
+            <span className="casm-editor-counter">{source.length} / 8192</span>
+          </div>
+          <div className="casm-studio-selectors">
+            <label htmlFor="casm-target-rom">INJECT INTO ROM
+              <select id="casm-target-rom" value={rom?.id??''}
+                disabled={!roms.length} onChange={event=>{
+                  setRomId(event.target.value);setShowListing('rom');
+                }}>
+                {!roms.length&&<option value="">No instruction ROM in circuit</option>}
+                {roms.map(item=><option key={item.id} value={item.id}>
+                  {item.name??item.id} ({item.id})
+                </option>)}
+              </select>
+            </label>
+            <label htmlFor="casm-example">EXAMPLE
+              <select id="casm-example" value="" onChange={event=>useExample(event.target.value)}>
+                <option value="">Choose an example...</option>
+                {CASM_EXAMPLES.map(example=><option value={example.id} key={example.id}>
+                  {example.name}
+                </option>)}
+              </select>
+            </label>
+          </div>
+          <div className="casm-file-bar">
+            <span>⌘ CASM SOURCE</span>
+            <div>
+              <button onClick={()=>inputRef.current?.click()} title="Open an existing .casm text file">
+                ⇧ IMPORT .CASM
+              </button>
+              <button onClick={download} title="Download the current draft as a .casm text file">
+                ⇩ EXPORT .CASM
+              </button>
+              <button disabled={!rom||!dirty} onClick={restore}>↺ RESTORE FROM ROM</button>
+            </div>
+          </div>
+          <input hidden type="file" ref={inputRef} accept=".casm,.asm,.txt,text/plain"
+            onChange={importFile}/>
+          <div className="casm-editor-surface">
+            <div className="casm-line-gutter" ref={gutterRef} aria-hidden="true">
+              {editedLines.map((_,i)=><div key={i} className={compiled.issues.some(e=>e.line===i+1)?
+                'has-error':''}>{String(i+1).padStart(2,'0')}</div>)}
+            </div>
+            <textarea ref={codeRef} className="casm-studio-code" aria-label="CASM assembly source"
+              value={source} onChange={event=>change(event.target.value)}
+              onKeyDown={keyDown}
+              onScroll={event=>{if(gutterRef.current)gutterRef.current.scrollTop=
+                event.currentTarget.scrollTop;}}
+              rows={17} spellCheck={false} autoCapitalize="off" autoComplete="off"
+              placeholder={'START:\n    LDI 3\n    ADD 5\n    OUT\n    HLT'}/>
+          </div>
+          <div className="casm-build-bar">
+            <div className="casm-build-status">
+              <span className={compiled.ok?'build-ok':'build-fail'}>
+                {compiled.ok?'✓ READY TO INJECT':'✖ ASSEMBLER ERRORS'}
+              </span>
+              <small>{instructionCount} / 16 instructions</small>
+            </div>
+            <button className="casm-inject-button" disabled={!rom||!compiled.ok}
+              onClick={injectToCircuit}>
+              ↯ ASSEMBLE &amp; INJECT INTO CIRCUIT
+            </button>
+          </div>
+          {dirty&&<p className="casm-draft-warning">
+            Draft saved locally. Your CPU still executes the <b>previous ROM program</b>
+            until you inject this code.
+          </p>}
+          <div className="casm-build-help">Shortcut: <kbd>Ctrl</kbd>/<kbd>⌘</kbd> +
+            <kbd> Enter</kbd> to inject · <kbd>Tab</kbd> to indent.</div>
+          {feedback&&<p role="status" className="casm-feedback">{feedback}</p>}
+          {!!compiled.issues.length&&<div className="casm-errors" role="alert">
+            {compiled.issues.slice(0,12).map((issue,i)=><button type="button"
+              onClick={()=>focusLine(issue.line)} key={i}>
+              <b>LINE {issue.line}</b> · {issue.message} <span>⌖</span>
+            </button>)}
+          </div>}
+        </section>
+        <section className="casm-studio-card casm-bytecode-card">
+          <div className="casm-studio-card-title">
+            <div><strong>02 / MACHINE CODE</strong><span>Inspect compiled bytes or live ROM</span></div>
+          </div>
+          <div className="casm-bytecode-tabs" role="tablist" aria-label="Bytecode view">
+            <button role="tab" aria-selected={showListing==='preview'}
+              className={showListing==='preview'?'is-active':''}
+              onClick={()=>setShowListing('preview')}>DRAFT PREVIEW</button>
+            <button role="tab" aria-selected={showListing==='rom'}
+              className={showListing==='rom'?'is-active':''}
+              onClick={()=>setShowListing('rom')}>INJECTED ROM</button>
+          </div>
+          <div className="casm-listing casm-studio-listing" role="table" aria-label={
+            showListing==='rom'?'Machine code currently in ROM':'Draft machine code preview'}>
+            <div className="casm-listing-header" role="row">
+              <span>●</span><span>PC</span><span>HEX</span><span>ASSEMBLY</span>
+            </div>
+            {listing.map(row=><button type="button" role="row" key={row.address}
+              className={'casm-listing-row'+
+                ((showListing==='rom'||!dirty)&&cpuState?.pc===row.address?
+                  ' is-current':'')+
+                (breakpoints.includes(row.address)?' has-breakpoint':'')}
+              title="Toggle a breakpoint before this ROM address executes"
+              aria-label={'Toggle breakpoint at address '+row.address}
+              onClick={()=>setBreakpoints(items=>items.includes(row.address)?
+                items.filter(i=>i!==row.address):[...items,row.address])}>
+              <span>{breakpoints.includes(row.address)?'●':'○'}</span>
+              <span>{row.address.toString(16).toUpperCase()}</span>
+              <span>{hex(row.byte)}</span><span>{row.source}</span>
+            </button>)}
+            {!listing.length&&<p className="casm-hint">{!compiled.ok&&showListing==='preview'?
+              'Fix the assembly errors above to preview compiled bytes.':
+              'No instructions in this view yet.'}</p>}
+          </div>
+          <p className="casm-bytecode-note">{showListing==='rom'?
+            'These bytes are physically stored in the selected ROM. Clicking a dot toggles a breakpoint.':
+            'Preview only: editing this source does not change the circuit. Use INJECT to program ROM.'}</p>
+        </section>
+      </div>
+      <div className="casm-studio-right">
+        <section className="casm-studio-card casm-debug-card">
+          <div className="casm-studio-card-title">
+            <div><strong>03 / LIVE DEBUGGER</strong><span>Driven by simulated CPU wires</span></div>
+            <span className={'casm-debug-indicator'+(running?' is-running':'')}>
+              {running?'● RUNNING':'● PAUSED'}
+            </span>
+          </div>
+          <div className="casm-debug-target">
+            <label htmlFor="casm-core">CPU CORE</label>
+            <select id="casm-core" value={cpu?.id??''} disabled={!cpus.length}
+              onChange={event=>setCpuId(event.target.value)}>
+              {!cpus.length&&<option value="">No CPU core</option>}
+              {cpus.map(item=><option key={item.id} value={item.id}>
+                {item.name??item.id} ({item.id})
+              </option>)}
+            </select>
+          </div>
+          {!rom||!cpu?<div className="casm-studio-empty">
+            <strong>HARDWARE REQUIRED</strong>
+            <p>Add a 16×8 Program ROM and a 4-bit CASM CPU in Hardware.
+              Then connect PC[3:0] and INSTR[7:0] using buses.</p>
+            {onViewHardware&&<button onClick={()=>onViewHardware()}>
+              ◈ OPEN HARDWARE
+            </button>}
+          </div>:null}
+          <div className="casm-cpu-readouts casm-studio-readouts">
+            {[
+              ['PC',cpuState?hex(cpuState.pc):'—'],
+              ['ACC',cpuState?hex(cpuState.acc):'—'],
+              ['OUT',cpuState?hex(cpuState.out):'—'],
+              ['CYCLE',String(runtime.cycle)],
+            ].map(([name,value])=><div key={name}>
+              <small>{name}</small><strong>{value}</strong>
+            </div>)}
+          </div>
+          <div className="casm-flags">
+            <span>ZERO <b>{cpuState?.zero??'—'}</b></span>
+            <span>CARRY <b>{cpuState?.carry??'—'}</b></span>
+            <span className={cpuState?.halt?'is-lit':''}>HALT <b>{cpuState?.halt??'—'}</b></span>
+            <span className={cpuState?.fault?'is-fault':''}>FAULT <b>{cpuState?.fault??'—'}</b></span>
+          </div>
+          <div className="casm-current">
+            <span>FETCHED FROM WIRES <strong>{fetched===null?'X / FLOATING':hex(fetched)}</strong></span>
+            <span>LAST EXECUTED <strong>{cpuState?hex(cpuState.ir):'—'}</strong></span>
+            <span>OUTPUT BITS <strong>{cpuState?bits(cpuState.out):'----'}</strong></span>
+          </div>
+          <div className="casm-run-row casm-studio-run">
+            <button className="casm-primary" disabled={!cpu}
+              onClick={()=>{setRunning(false);if(cpu)clock();}}>↯ STEP INSTRUCTION</button>
+            <button disabled={!cpu||!!cpuState?.halt||!!cpuState?.fault}
+              className={running?'casm-running':''}
+              onClick={()=>setRunning(v=>!v)}>{running?'■ PAUSE':'▶ RUN'}</button>
+            <button onClick={()=>{setRunning(false);reset();}}>↺ RESET</button>
+          </div>
+          <div className="casm-run-row casm-speed">
+            <label htmlFor="casm-speed">RUN SPEED</label>
+            <select id="casm-speed" value={speed}
+              onChange={event=>setSpeed(Number(event.target.value))}>
+              {[1,2,4,8].map(v=><option key={v} value={v}>{v} instr/s</option>)}
+            </select>
+          </div>
+          {cpuState?.halt&&<div className={'casm-notice'+(cpuState.fault?' casm-fault':'')}>
+            {cpuState.fault?'CPU FAULT: check the instruction bus and opcode, then reset.':
+              'CPU HALTED. Reset to run the program again.'}
+          </div>}
+          <p className="casm-bytecode-note">Breakpoints stop <b>before</b> the selected ROM
+            address executes. Single-step ignores breakpoints. When you inject, the CPU resets.</p>
+        </section>
+        <section className="casm-studio-card casm-memory-card">
+          <div className="casm-studio-card-title">
+            <div><strong>04 / RAM INSPECTOR</strong><span>16 words × 4 bits</span></div>
+          </div>
+          <div className="casm-ram-grid">
+            {ram.map((word,address)=><div key={address}
+              title={'RAM address '+address+' · '+(word&15)+' decimal'}>
+              <span>{hex(address)}</span>
+              <strong>{(word&15).toString(16).toUpperCase()}</strong>
+            </div>)}
+          </div>
+        </section>
+        <details className="casm-reference casm-studio-reference">
+          <summary>⌘ ISA REFERENCE / ALL INSTRUCTIONS</summary>
+          <p>One-byte instruction: 4-bit opcode + 4-bit immediate/address.
+            Arithmetic wraps at 4 bits. SUB CARRY indicates a borrow.</p>
+          {CASM_INSTRUCTIONS.map(op=><div key={op.opcode} className="casm-ref-line">
+            <strong>{op.opcode.toString(16).toUpperCase()}</strong>
+            <span>{op.name}{op.operand?' n':''}</span>
+            <small>{op.description}</small>
+          </div>)}
+        </details>
+      </div>
     </div>
-    <div className="casm-flags">
-      <span>ZERO <b>{pc?.zero??'—'}</b></span>
-      <span>CARRY <b>{pc?.carry??'—'}</b></span>
-      <span className={pc?.halt?'is-lit':''}>HALT <b>{pc?.halt??'—'}</b></span>
-      <span className={pc?.fault?'is-fault':''}>FAULT <b>{pc?.fault??'—'}</b></span>
-    </div>
-    <div className="casm-current">
-      <span>FETCHED VIA WIRES <strong>{fetched===null?'X / FLOATING':hex(fetched)}</strong></span>
-      <span>LAST EXECUTED <strong>{pc?hex(pc.ir):'—'}</strong></span>
-      <span>OUTPUT BITS <strong>{pc?bits(pc.out):'----'}</strong></span>
-    </div>
-    <div className="casm-run-row">
-      <button onClick={doStep} disabled={!cpu} className="casm-primary">↯ STEP INSTRUCTION</button>
-      <button disabled={!cpu||!!pc?.halt||!!pc?.fault}
-        className={running?'casm-running':''} onClick={()=>setRunning(v=>!v)}>
-        {running?'■ PAUSE':'▶ RUN'}
-      </button>
-      <button onClick={()=>{setRunning(false);reset();}}>↺ RESET</button>
-    </div>
-    <div className="casm-run-row casm-speed">
-      <label htmlFor="casm-speed">EXECUTION SPEED</label>
-      <select id="casm-speed" value={speed} onChange={e=>setSpeed(Number(e.target.value))}>
-        {[1,2,4,8].map(hz=><option key={hz} value={hz}>{hz} instr/s</option>)}
-      </select>
-    </div>
-    {!!pc?.halt&&<p className={'casm-notice'+(pc.fault?' casm-fault':'')}>
-      {pc.fault?'CPU FAULT — an instruction wire is undriven or the opcode is invalid. '+
-        'Inspect the instruction bus, then RESET.':'CPU HALTED — press RESET to execute again.'}
-    </p>}
-    <div className="casm-section-title">▦ CPU RAM / 16 × 4</div>
-    <div className="casm-ram-grid" aria-label="Current RAM values">
-      {ram.map((n,address)=><div key={address} title={'Address '+address}>
-        <span>{hex(address)}</span><strong>{(n&15).toString(16).toUpperCase()}</strong>
-      </div>)}
-    </div>
-    <details className="casm-reference">
-      <summary>⌘ CASM INSTRUCTION REFERENCE</summary>
-      <p>One-byte format: high nibble = opcode, low nibble = number or address.
-        Accumulator arithmetic wraps at 4 bits. SUB CARRY indicates a borrow.
-        Branches read the previous ZERO flag.</p>
-      {CASM_INSTRUCTIONS.map(i=><div key={i.opcode} className="casm-ref-line">
-        <strong>{i.opcode.toString(16).toUpperCase()}</strong>
-        <span>{i.name}{i.operand?' n':''}</span><small>{i.description}</small>
-      </div>)}
-    </details>
-    <p className="casm-hint">An instruction executes on one rising clock pulse.
-      This first CPU uses a fixed internal decoder; constructing a control
-      unit gate-by-gate is the next hardware milestone. The circuit's ROM,
-      buses and CPU pins are editable. Breakpoints are local to this panel.</p>
-  </section>;
+    <footer className="casm-studio-footer">CASM v1 / 16 INSTRUCTIONS MAX ·
+      The ROM and CPU are editable circuit components. CPU4 uses a fixed internal
+      decoder; custom ISA support is a future milestone.</footer>
+  </main>;
 }

@@ -76,6 +76,10 @@ export type DigitalStore = {
   resetClock: () => void;
   setRomWords: (id:string,words:number[]) => void;
   setCasmProgram: (id:string,source:string) => boolean;
+  /** Browser-saved assembly drafts separate from executable ROM bytes. */
+  casmDrafts:Record<string,string>;
+  setCasmDraft:(romId:string,source:string)=>void;
+  discardCasmDraft:(romId:string)=>void;
   blockLibrary: DigitalBlock[];
   favoriteKinds: DigitalKind[];
   recentKinds: DigitalKind[];
@@ -177,6 +181,7 @@ export function persistedDigitalState(state: DigitalStore) {
     blockLibrary: state.blockLibrary,
     favoriteKinds: state.favoriteKinds,
     recentKinds: state.recentKinds,
+    casmDrafts:state.casmDrafts??{},
   };
 }
 
@@ -198,6 +203,17 @@ export const useDigitalStore = create<DigitalStore>()(persist((set, get) => ({
   past: [], future: [], dragOrigin: null,
   clipboard: null, pasteCount: 0,
   blockLibrary: [], favoriteKinds:[], recentKinds:[], editStack: [],
+  casmDrafts:{},
+  setCasmDraft:(romId,source)=>set(state=>{
+    if(romId!=='__casm_scratch__'&&
+      !state.document.components.some(c=>c.id===romId&&c.kind==='rom16x8'))return {};
+    if(source.length>8192)return {message:'CASM source is limited to 8192 characters.'};
+    return {casmDrafts:{...(state.casmDrafts??{}),[romId]:source}};
+  }),
+  discardCasmDraft:romId=>set(state=>{
+    const next={...(state.casmDrafts??{})};delete next[romId];
+    return {casmDrafts:next};
+  }),
   probes: [], trace: [sample(initialDigitalCircuit(), 0)],runtime:emptyDigitalRuntime(),
   clockStep: () => set(state=>{
     const next=stepCircuit(state.document,state.runtime);
@@ -242,7 +258,9 @@ export const useDigitalStore = create<DigitalStore>()(persist((set, get) => ({
     set(current=>patch(current,{...current.document,
       components:current.document.components.map(c=>c.id===id?
         {...c,source,program:compiled.bytes}:c)},
-      {message:'Assembled '+compiled.listing.length+' CASM instruction(s) to 16×8 ROM. CPU reset.'}));
+      {casmDrafts:Object.fromEntries(Object.entries(current.casmDrafts??{})
+        .filter(([key])=>key!==id)),
+       message:'Injected '+compiled.listing.length+' CASM instruction(s) into 16×8 ROM. CPU reset.'}));
     return true;
   },
   toggleFavorite: kind => set(state => ({ favoriteKinds:
@@ -688,7 +706,7 @@ export const useDigitalStore = create<DigitalStore>()(persist((set, get) => ({
     };
     return patch(state, {
       version: 1, lab: 'signal', name: 'Untitled signal circuit', components: [], wires: [],
-    }, { selection: null, selectedIds: [], pending: null,
+    }, { selection: null, selectedIds: [], pending: null,casmDrafts:{},
       message: 'Empty Signal Lab schematic created.' });
   }),
   load: input => {
@@ -702,7 +720,7 @@ export const useDigitalStore = create<DigitalStore>()(persist((set, get) => ({
     // This also detects recursive module definitions on imported files.
     simulateLogic(input);
     set(state => patch(state, input, {
-      selection: null, selectedIds: [], pending: null, probes:[],
+      selection: null, selectedIds: [], pending: null, probes:[],casmDrafts:{},
       blockLibrary: [...new Map([...state.blockLibrary, ...(input.blocks ?? [])]
         .map(d => [d.id, d])).values()],
       message: 'Signal schematic loaded.',

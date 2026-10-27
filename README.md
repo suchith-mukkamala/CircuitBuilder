@@ -1,3 +1,51 @@
+# CircuitBuilder v0.12 — Computer Builder: Hardware + Code Studio
+
+Lab 03 is deliberately **split into two full-screen workspaces** rather than squeezing an assembler, debugger, schematic, components, and diagnostics into the same row. The top Lab 03 navigation now has:
+
+**▣ HARDWARE** — a clean circuit canvas with collapsible PARTS and TOOLS; wire 4/8/16-bit buses, edit CPU/ROM circuits, inspect components, step the clock, graph signals, and check the circuit. Both side panels start closed to give the design maximum width. Selecting a chip automatically reveals its inspector. The active project is saved locally; Export Circuit JSON creates a separate backup.
+
+**⌘ CODE STUDIO** — a *separate page within Lab 03*, with a large line-numbered CASM source editor, example program picker, target ROM selector, assembly error list, **draft bytecode vs injected ROM bytecode**, live PC/ACC/OUT/flags debugger, breakpoints, clock stepping, and RAM inspector. On desktop, source/bytecode and debugger appear in separate columns; on narrow screens, they stack.
+
+## Inject CASM into an existing circuit
+
+1. Open Lab 03 → **CODE STUDIO**. Pick a target **16×8 program ROM** by name/ID (the default sample contains one).
+2. Write CASM or pick an example. Code edits are a **draft**, saved locally in your browser—not executed and not silently written to ROM. Drafts survive Hardware ↔ Code Studio navigation and browser reloads.
+3. The assembler continuously validates syntax and builds a **draft preview**. Click a line-specific error to jump to it. Press **↯ ASSEMBLE & INJECT INTO CIRCUIT**, or **Ctrl/Cmd+Enter**, only when you want to program the selected ROM.
+4. Injection updates the **ROM component's source and 16 real 8-bit machine-code bytes** without replacing/rewiring your circuit. CPU/register/RAM runtime resets, and the draft is cleared only after a successful injection.
+5. Choose **INJECTED ROM** to inspect what the CPU actually fetches from the hardware. **DRAFT PREVIEW** displays hypothetical bytes that have *not* been injected.
+6. Run the real CPU or step instructions and inspect the RAM and flags. Breakpoints stop *before* selected PC addresses. **VIEW TARGET IN HARDWARE** returns to the schematic and focuses the ROM you programmed.
+7. Use **⇧ IMPORT .CASM** and **⇩ EXPORT .CASM** to move source files independently of circuit JSON. Import never injects automatically. **RESTORE FROM ROM** discards an un-injected draft (after confirmation).
+8. Existing project examples in the **⋮** menu remain available, with confirmation before replacing the working circuit. Un-injected drafts are also explicitly mentioned in this confirmation.
+
+### Quality-of-life details
+
+- No six-tab inspector with CODE squeezed into it. Hardware and Code Studio have independent, focused layouts.
+- Hardware defaults to **canvas only** (PARTS and TOOLS are one click away).
+- More reliable feedback: a saved-but-not-injected draft is labeled both in Code Studio and on the Hardware view. The simulator always runs ROM bytes, never the un-injected editor buffer.
+- Assemble errors are clickable and take you to the specific line; Tab indents four spaces; Ctrl/Cmd+Enter injects.
+- Code Studio is readable on larger screens and mobile, with a dedicated debugger and a separate machine-code panel. Code editor keyboard input is not hijacked by circuit canvas shortcuts.
+- Drafts are stored **per ROM ID**, so each ROM can have a separate working source. Choosing another ROM never injects or overwrites either of them.
+- The currently running computer is the same electrical simulator as before; no alternate hidden CASM execution system was added.
+- Old project JSON and previously saved browser circuits remain supported. The Analog and Signal labs are unaffected.
+
+### Scope
+
+CASM remains the original fixed 4-bit CPU instruction set. The CPU4 component's decoder is *not yet* a decomposable, gate-level custom ISA. Draft autosave is on the **local browser only** (not cloud sync); exporting a .casm text file or project JSON remains the portable backup. Exporting project JSON includes **injected ROM source and bytes**, not un-injected browser drafts—use Export .CASM to back up those.
+
+## Development
+
+\`\`\`bash
+git pull origin main
+npm install
+npm run dev
+npm test
+npm run build
+\`\`\`
+
+---
+
+## Earlier releases
+
 # CircuitBuilder v0.11 — CASM: Our First Assembly Language
 
 CircuitBuilder now includes **CASM (Circuit Assembly)**, a real assembler and a wired, programmable four-bit teaching CPU.

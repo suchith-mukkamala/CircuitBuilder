@@ -160,10 +160,10 @@ describe('CASM editor and browser project persistence',()=>{
   });
   it('renders the CASM source editor, bytecode, breakpoints and register display',()=>{
     const html=renderToStaticMarkup(createElement(CasmProgramPanel));
-    expect(html).toContain('CIRCUIT ASSEMBLY');
-    expect(html).toContain('ASSEMBLE &amp; LOAD');
+    expect(html).toContain('Code Studio');
+    expect(html).toContain('ASSEMBLE &amp; INJECT INTO CIRCUIT');
     expect(html).toContain('STEP INSTRUCTION');
-    expect(html).toContain('CPU RAM');
+    expect(html).toContain('RAM INSPECTOR');
     expect(html).toContain('main.casm');
   });
 });

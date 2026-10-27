@@ -135,9 +135,10 @@ describe('first-time user viewport and navigation',()=>{
     const html=renderToStaticMarkup(<ComputerBuilder/>);
     expect(html).toContain('COMPUTER BUILDER');
     expect(html).toContain('CIRCUIT CANVAS');
-    expect(html).toContain('STEP CLOCK');
-    expect(html).toContain('RUN');
-    expect(html).toContain('GRAPH');
-    expect(html).toContain('CPU DATAPATH');
+    expect(html).toContain('HARDWARE');
+    expect(html).toContain('CODE STUDIO');
+    expect(html).toContain('Emit one clock edge');
+    expect(html).toContain('CIRCUIT CANVAS');
+    expect(html).not.toContain('CASM assembly source');
   });
 });
