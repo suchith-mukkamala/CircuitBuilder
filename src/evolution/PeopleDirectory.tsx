@@ -4,10 +4,11 @@ import {ancestryLabel} from './family';
 import {GOAL_LABELS} from './mind';
 import {CAREER_LABELS,SKILLS,VALUES,lifeStage,guidingBelief} from './development';
 import {cleanIdentityName,isPersonFavorite,personName} from './identity';
+import {activeEffects} from './divine';
 
 type Props={world:World;selectedId:number|null;onOpen:(id:number)=>void;
   onFavorite:(id:number)=>void;onRename:(id:number,name:string)=>void;
-  onFindOnMap:(id:number)=>void};
+  onFindOnMap:(id:number)=>void;onInvoke?:(id:number)=>void};
 type Filter='all'|'living'|'deceased'|'favorites';
 
 function LifeChip({world,record,focused,onPick,onFavorite}:{
@@ -33,7 +34,7 @@ function LifeChip({world,record,focused,onPick,onFavorite}:{
   </div>;
 }
 export function PeopleDirectory({world,selectedId,onOpen,onFavorite,
-  onRename,onFindOnMap}:Props){
+  onRename,onFindOnMap,onInvoke}:Props){
   const [query,setQuery]=useState('');
   const [filter,setFilter]=useState<Filter>('all');
   const [species,setSpecies]=useState<'all'|Species>('all');
@@ -65,6 +66,9 @@ export function PeopleDirectory({world,selectedId,onOpen,onFavorite,
   },[world,query,filter,species,living,favoriteIds]);
   const alive=focused&&living.get(focused.id);
   const development=alive?.development;
+  const blessings=alive?activeEffects(alive,world.year):[];
+  const divineRecords=(world.divine?.history??[]).filter(r=>r.targetId===focused?.id||
+    focused?.divineOrigins?.includes(r.id)).slice(-12).reverse();
   const household=world.households?.find(h=>h.id===development?.householdId);
   const nameFor=(id:number)=>recordMap.has(id)?
     personName(world,recordMap.get(id)!):'Person #'+id;
@@ -154,6 +158,8 @@ export function PeopleDirectory({world,selectedId,onOpen,onFavorite,
               <button disabled={!alive} onClick={()=>onFindOnMap(focused.id)}>
                 ⌖ {alive?'FIND ON MAP':'DECEASED'}
               </button>
+              {onInvoke&&<button onClick={()=>onInvoke(focused.id)}>
+                ⚡ {alive?'DIVINE POWERS':'RESURRECT / INTERVENE'}</button>}
             </div>
             <div className="evo-directory-rename">
               <label htmlFor="evo-rename-person">RENAME THIS INDIVIDUAL</label>
@@ -183,6 +189,35 @@ export function PeopleDirectory({world,selectedId,onOpen,onFavorite,
                 These are simulated rules, not generated dialogue.</small>
             </div>
           </section>}
+          {(blessings.length>0||(alive?.whispers?.length??0)>0||
+            (focused.divineOrigins?.length??0)>0||divineRecords.length>0)&&
+            <section className="evo-section-card">
+              <div className="evo-card-heading"><strong>✦ DIVINE INFLUENCE & LINEAGE</strong>
+                <span>V0.6 · TRACEABLE POWERS</span></div>
+              <div className="evo-divine-profile">
+                {blessings.map(b=><span key={b.id}>
+                  {b.strength<0?'CURSE':'BLESSING'} · {b.stat.replace('_',' ')}
+                  {' '}{b.strength>=0?'+':''}{Math.round(b.strength*100)}%
+                  {b.hereditary?' · HEREDITARY':''}
+                  {b.inheritedFrom?' · from #'+b.inheritedFrom:''}
+                  {b.expires!==undefined?' · until Y'+b.expires:''}
+                  {' · source #'+b.sourceId}
+                </span>)}
+                {alive?.whispers?.map(q=><span key={'w'+q.id}>
+                  {q.voice.toUpperCase()} · {q.theme} · {q.response}
+                  {q.response==='reinterpreted'?' as '+q.interpretedAs:''}
+                  {' · until Y'+q.until}
+                </span>)}
+                {focused.divineOrigins?.map(id=><span key={'o'+id}>
+                  INHERITED DIVINE SOURCE #{id}</span>)}
+              </div>
+              <div className="evo-divine-profile-history">
+                {divineRecords.map(r=><p key={r.id}>Y{r.year} · #{r.id} ·
+                  {r.description}</p>)}
+                <small>Inherited source IDs connect descendants to the original
+                  blessing or curse. Memories record family consequences.</small>
+              </div>
+            </section>}
           {alive&&development&&<section className="evo-section-card evo-development-profile">
             <div className="evo-card-heading"><strong>◈ UPBRINGING & SOCIAL WORLD</strong>
               <span>EVOLUTION LAB V0.5</span></div>
