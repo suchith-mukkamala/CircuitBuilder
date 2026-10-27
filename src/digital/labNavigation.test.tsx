@@ -138,6 +138,6 @@ describe('first-time user viewport and navigation',()=>{
     expect(html).toContain('STEP CLOCK');
     expect(html).toContain('RUN');
     expect(html).toContain('GRAPH');
-    expect(html).toContain('CPU Datapath');
+    expect(html).toContain('CPU DATAPATH');
   });
 });
