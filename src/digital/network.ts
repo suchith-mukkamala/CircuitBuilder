@@ -122,9 +122,8 @@ export function digitalBusPath(doc:DigitalDocument,bus:DigitalBus):DigitalPoint[
   return routeDigitalPoints(doc,from,to,[bus.from.componentId,bus.to.componentId],bus.waypoints);
 }
 
-export function onDigitalWire(doc: DigitalDocument, wire: DigitalWire, p: DigitalPoint): boolean {
-  const path = digitalWirePath(doc, wire);
-  return path.some((a, i) => {
+function onDigitalPath(path:DigitalPoint[],p:DigitalPoint):boolean {
+  return path.some((a,i)=>{
     if (!i) return false;
     const b = path[i - 1];
     return a.x === b.x
@@ -132,7 +131,11 @@ export function onDigitalWire(doc: DigitalDocument, wire: DigitalWire, p: Digita
       : p.y === a.y && p.x >= Math.min(a.x, b.x) && p.x <= Math.max(a.x, b.x);
   });
 }
+export function onDigitalWire(doc:DigitalDocument,wire:DigitalWire,p:DigitalPoint):boolean {
+  return onDigitalPath(digitalWirePath(doc,wire),p);
+}
 export function intentionalJunctions(doc: DigitalDocument): DigitalPoint[] {
+  const paths=new Map(doc.wires.map(w=>[w.id,digitalWirePath(doc,w)]));
   const tips = new Map<string, DigitalPoint>();
   for (const wire of doc.wires) {
     for (const end of [wire.from, wire.to]) {
@@ -140,7 +143,7 @@ export function intentionalJunctions(doc: DigitalDocument): DigitalPoint[] {
     }
   }
   return [...tips.values()].filter(point =>
-    doc.wires.filter(wire => onDigitalWire(doc, wire, point)).length >= 2);
+    doc.wires.filter(wire => onDigitalPath(paths.get(wire.id)??[],point)).length >= 2);
 }
 export interface SignalNetwork {
   terminals: Record<string, string>;
@@ -170,6 +173,7 @@ export function buildSignalNetwork(doc: DigitalDocument): SignalNetwork {
     const count=busGroups(c).find(g=>g.direction==='in')?.width??0;
     for(let i=0;i<count;i++)union.union(c.id+':bus'+i,c.id+':bit'+i);
   }
+  const paths=new Map(doc.wires.map(w=>[w.id,digitalWirePath(doc,w)]));
   const tips: DigitalPoint[] = [];
   for (const wire of doc.wires) {
     const key = 'wire:' + wire.id;
@@ -208,7 +212,7 @@ export function buildSignalNetwork(doc: DigitalDocument): SignalNetwork {
   }
   for (const wire of doc.wires) {
     for (const point of tips) {
-      if (onDigitalWire(doc, wire, point)) {
+      if (onDigitalPath(paths.get(wire.id)??[],point)) {
         union.union('wire:' + wire.id, coordKey(point));
       }
     }
@@ -216,7 +220,7 @@ export function buildSignalNetwork(doc: DigitalDocument): SignalNetwork {
   for (const { terminal, point } of terms) {
     if (explicit.has(pinId(terminal))) continue;
     for (const wire of doc.wires) {
-      if (onDigitalWire(doc, wire, point)) union.union(pinId(terminal), 'wire:' + wire.id);
+      if (onDigitalPath(paths.get(wire.id)??[],point)) union.union(pinId(terminal), 'wire:' + wire.id);
     }
   }
   const terminals: Record<string, string> = {}, wires: Record<string, string> = {};
