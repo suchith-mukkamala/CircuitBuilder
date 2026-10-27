@@ -27,7 +27,8 @@ export type Development={householdId?:number;caregiverIds:number[];
   languages:Record<Species,number>;knownBiomes:Biome[];memories:SocialMemory[];
   yearsCared:number;yearsWithoutCare:number;yearsTaught:number};
 export type Household={id:number;formed:number;home:{x:number;y:number};
-  members:number[];caregivers:number[];culture:Species};
+  members:number[];caregivers:number[];culture:Species;
+  residence?:{settlementId:number;buildingId:number}};
 export type CareOutcome={providerId?:number;shelter:boolean;protected:boolean};
 
 const clamp=(n:number,min=0,max=100)=>Math.max(min,Math.min(max,n));
@@ -131,9 +132,14 @@ function rebuildHouseholds(w:World):void{
     if(adult(a))h.caregivers.push(a.id);
   }
   w.households=w.households?.filter(h=>h.members.length>0)??[];
-  // A moved household's home follows its resident caregivers slowly rather
-  // than creating permanent phantom shelter in an abandoned location.
+  // Completed residences are permanent homes. Households without a house
+  // still travel with living caregivers as they did before v0.7.
   for(const h of w.households){
+    const owned=h.residence&&w.settlements.find(s=>s.id===h.residence?.settlementId)
+      ?.infrastructure?.buildings.find(b=>b.id===h.residence?.buildingId&&
+        b.stage==='complete');
+    if(owned){h.home={x:owned.x,y:owned.y};continue;}
+    if(h.residence)h.residence=undefined;
     const leader=byId.get(h.caregivers[0]??h.members[0]);
     if(leader&&dist(h.home,leader)>5)h.home={x:leader.x,y:leader.y};
   }
@@ -207,6 +213,8 @@ function addSkill(d:Development,k:Skill,amount:number){
 export function developSociety(w:World,care:Map<number,CareOutcome>,
   rand:()=>number):void{
   prepareDevelopment(w);
+  const meetingPlaces=w.settlements.flatMap(s=>s.infrastructure?.buildings.filter(b=>
+    b.type==='communal'&&b.stage==='complete')??[]);
   const byId=new Map(w.agents.map(a=>[a.id,a]));
   const houses=new Map(w.households!.map(h=>[h.id,h]));
   const occupied=new Map(w.agents.map(a=>[a.y*w.width+a.x,a]));
@@ -278,12 +286,13 @@ export function developSociety(w:World,care:Map<number,CareOutcome>,
       let mentor=byId.get(d.mentorId??-1);
       if(!mentor||!adult(mentor)||dist(a,mentor)>3){
         mentor=undefined;
+        const community=meetingPlaces.some(place=>dist(place,a)<=5);
         for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){
           const x=a.x+dx,y=a.y+dy;
           if(x<0||y<0||x>=w.width||y>=w.height)continue;
           const b=occupied.get(y*w.width+x);
           if(!b||b.id===a.id||!adult(b)||
-            b.genes.social*divineFactor(b,'social',w.year)<.87)continue;
+            b.genes.social*divineFactor(b,'social',w.year)<(community?.77:.87))continue;
           if(!mentor||dist(a,b)<dist(a,mentor))mentor=b;
         }
         if(mentor&&d.mentorId!==mentor.id){

@@ -229,6 +229,11 @@ export function PeopleDirectory({world,selectedId,onOpen,onFavorite,
                 <span><small>HOUSEHOLD</small><strong>{household?
                   '#'+household.id+' · '+household.members.length+' residents':'Unassigned'}</strong></span>
               </div>
+              {household?.residence&&<p className="evo-family-help">
+                Permanent residence: settlement #{household.residence.settlementId},
+                building #{household.residence.buildingId} · X {household.home.x},
+                Y {household.home.y}. Family members can return here for shelter.
+              </p>}
               <div className="evo-development-relationships">
                 <p><b>Care</b> {development.yearsCared} supported years ·
                   {development.yearsWithoutCare} years without nearby care ·

@@ -7,6 +7,8 @@ import {WorldFamily} from './WorldFamily';
 import {PeopleDirectory} from './PeopleDirectory';
 import {DivineCodex} from './DivineCodex';
 import {DivinePowers} from './DivinePowers';
+import {SettlementView} from './SettlementView';
+import {settlementStage} from './construction';
 import {intervene,type DivineAction} from './divine';
 import {personName,isPersonFavorite,renamePerson,togglePersonFavorite,
   toggleSettlementFavorite,renameSettlement,knownSettlements} from './identity';
@@ -31,7 +33,8 @@ function initialWorld():World{
   }
   return createWorld(DEFAULT_SETTINGS);
 }
-type Tab='world'|'creator'|'history'|'family'|'people'|'codex'|'powers';
+type Tab='world'|'creator'|'history'|'family'|'people'|'codex'|'powers'|
+  'settlements';
 const format=(n:number)=>n.toLocaleString('en-US');
 const brushValue=(b:Brush)=>b.kind==='inspect'?'inspect':
   b.kind==='food'?'food':b.kind==='spawn'?'spawn-'+b.species:'terrain-'+b.biome;
@@ -62,6 +65,7 @@ export function EvolutionLab(){
   const [zoom,setZoom]=useState(1);
   const [selected,setSelected]=useState<{x:number;y:number}|null>(null);
   const [selectedAgentId,setSelectedAgentId]=useState<number|null>(null);
+  const [selectedSettlementId,setSelectedSettlementId]=useState<number|null>(null);
   const [mapFocus,setMapFocus]=useState<number|null>(null);
   const mapScrollRef=useRef<HTMLDivElement>(null);
   const [notice,setNotice]=useState('');
@@ -79,9 +83,9 @@ export function EvolutionLab(){
   // before the debounced autosave fires.
   useEffect(()=>()=>{try{window.localStorage.setItem(WORLD_STORAGE_KEY,
     compactWorld(currentWorld.current));}catch{/* Storage may be unavailable. */}},[]);
-  useEffect(()=>{if(tab!=='world')setPlaying(false);},[tab]);
+  useEffect(()=>{if(tab!=='world'&&tab!=='settlements')setPlaying(false);},[tab]);
   useEffect(()=>{
-    if(!playing||tab!=='world')return;
+    if(!playing||(tab!=='world'&&tab!=='settlements'))return;
     const timer=window.setInterval(()=>{
       setWorld(w=>{
         if(!w.agents.length||w.year>=9999)return w;
@@ -98,8 +102,9 @@ export function EvolutionLab(){
     world.agents.find(a=>a.id===selectedAgentId)??null;
   const displayed=agent?{x:agent.x,y:agent.y}:selected;
   const tile=displayed?world.tiles[displayed.y*world.width+displayed.x]:null;
-  const settlement=displayed?world.settlements.find(s=>s.x===displayed.x&&
-    s.y===displayed.y)??null:null;
+  const settlement=displayed?world.settlements.find(s=>(s.x===displayed.x&&
+    s.y===displayed.y)||s.infrastructure?.buildings.some(b=>b.x===displayed.x&&
+    b.y===displayed.y))??null:null;
   const latest=world.history.at(-1);
   const hybrids=useMemo(()=>world.agents.filter(a=>hybridFraction(a.ancestry)>.01).length,
     [world.agents]);
@@ -123,6 +128,9 @@ export function EvolutionLab(){
     setPlaying(false);
     setSelected({x:place.x,y:place.y});setSelectedAgentId(null);
     setZoom(3);setTab('world');setMapFocus(-1);
+  };
+  const openSettlement=(id:number)=>{
+    setSelectedSettlementId(id);setTab('settlements');
   };
   const findOnMap=(id:number)=>{
     const target=world.agents.find(a=>a.id===id);
@@ -197,7 +205,8 @@ export function EvolutionLab(){
     setPlaying(false);setWorld(w=>advanceWorld(w,years));
   };
   const navigate=(next:Tab)=>{
-    setPlaying(false);setTab(next);setNotice('');
+    if(next!=='settlements')setPlaying(false);
+    setTab(next);setNotice('');
   };
   const applyDivine=(action:DivineAction)=>{
     setPlaying(false);
@@ -224,6 +233,9 @@ export function EvolutionLab(){
         <button role="tab" aria-selected={tab==='history'}
           className={tab==='history'?'active':''} onClick={()=>navigate('history')}>
           ≋ HISTORY</button>
+        <button role="tab" aria-selected={tab==='settlements'}
+          className={tab==='settlements'?'active':''}
+          onClick={()=>navigate('settlements')}>⌂ SETTLEMENTS</button>
         <button role="tab" aria-selected={tab==='people'}
           className={tab==='people'?'active':''} onClick={()=>navigate('people')}>
           ◉ PEOPLE</button>
@@ -242,6 +254,10 @@ export function EvolutionLab(){
     {tab==='creator'?<WorldCreator key={world.settings.seed+'-'+world.year}
       current={world.settings} onCreate={startWorld} onReturn={()=>navigate('world')}/>:
     tab==='history'?<EvolutionHistory world={world}/>:
+    tab==='settlements'?<SettlementView world={world}
+      selectedId={selectedSettlementId} onFindOnMap={findSettlement}
+      playing={playing} onTogglePlay={()=>setPlaying(v=>!v)}
+      onAdvance={step}/>:
     tab==='family'?<WorldFamily world={world} focusId={selectedAgentId}
       onChoose={focusPerson} onShowOnMap={findOnMap}
       onFavorite={favoritePerson} onRename={giveName}/>:
@@ -428,8 +444,12 @@ export function EvolutionLab(){
               </div>}
               {settlement&&<div className="evo-selected-settlement">
                 <strong>⌂ {settlement.name}</strong>
-                <span>{SPECIES_INFO[settlement.species].name} founded Y{settlement.founded}</span>
+                <span>{SPECIES_INFO[settlement.species].name} ·
+                  {settlementStage(settlement)} · Founded Y{settlement.founded}</span>
                 <span>{settlement.population} nearby people · {settlement.stores.toFixed(0)} stores</span>
+                <span>{settlement.infrastructure?.buildings.filter(b=>b.stage==='complete').length??0}
+                  {' completed buildings · '+(settlement.infrastructure?.roads.length??0)+' road tiles'}</span>
+                <button onClick={()=>openSettlement(settlement.id)}>⌂ VIEW LOCAL CONSTRUCTION ↗</button>
               </div>}
             </>}
           </section>
@@ -457,10 +477,10 @@ export function EvolutionLab(){
         </aside>
       </div>
       <div className="evo-future-note">
-        <strong>V0.6: THE HAND OF THE CREATOR</strong>
-        <span>Inspire or challenge mortal minds, bestow hereditary blessings and
-          family curses, or intervene directly. Track every divine act and the
-          decisions and descendants shaped by it.</span>
+        <strong>V0.7: BUILT BY THE PEOPLE</strong>
+        <span>Households settle into real homes; neighbors gather materials,
+          raise farms and workshops, wear roads into the terrain, and leave
+          ruins behind. The simulation runs even when no city is being viewed.</span>
       </div>
     </main>}
   </div>;

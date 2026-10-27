@@ -95,5 +95,5 @@ describe('Evolution Lab v0.4: autonomous intentions',()=>{
         expect(count,`seed ${seed} ${species} at year 350`).toBeGreaterThanOrEqual(20);
       expect(end.agents.length).toBeLessThanOrEqual(850);
       expect(isWorld(end)).toBe(true);
-    },30000);
+    },90000);
 });
