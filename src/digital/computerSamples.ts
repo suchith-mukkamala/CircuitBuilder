@@ -111,7 +111,10 @@ export function programmableCpuDemo():DigitalDocument {
     version:1,lab:'signal',name:'CASM Programmable CPU · First Program',
     components:parts,
     wires:[
-      {id:'clockWire',from:t('clk','out'),to:t('cpu','clk')},
+      {id:'clockWire',from:t('clk','out'),to:t('cpu','clk'),
+        // Approach CLK horizontally from below the INSTR pin bank. Without
+        // this detour a vertical route would touch adjacent INSTR terminals.
+        waypoints:[{x:252,y:404}]},
       {id:'resetWire',from:t('rst','out'),to:t('cpu','reset')},
       {id:'haltWire',from:t('cpu','halt'),to:t('haltLED','in')},
       {id:'faultWire',from:t('cpu','fault'),to:t('faultLED','in')},
