@@ -53,7 +53,17 @@ export function routeDigitalPoints(
   if(waypoints?.length)return orthogonal([from,...waypoints,to]);
   const hv=compact([from,{x:to.x,y:from.y},to]);
   const vh=compact([from,{x:from.x,y:to.y},to]);
-  const occupied=doc.components.filter(c=>!excluded.includes(c.id)).map(c=>{
+  // A pin already touching the original X-then-Y route is an intentional
+  // electrical tap, not a collision to dodge. Rerouting around that component
+  // would silently break the existing on-wire connection.
+  const onSegment=(p:DigitalPoint,a:DigitalPoint,b:DigitalPoint)=>
+    a.y===b.y ? p.y===a.y&&p.x>=Math.min(a.x,b.x)&&p.x<=Math.max(a.x,b.x) :
+      p.x===a.x&&p.y>=Math.min(a.y,b.y)&&p.y<=Math.max(a.y,b.y);
+  const occupied=doc.components.filter(c=>!excluded.includes(c.id)&&
+    !pinsOf(c).some(pin=>{
+      const p=pinAt(c,pin);
+      return hv.slice(1).some((end,i)=>onSegment(p,hv[i],end));
+    })).map(c=>{
     const size=Math.max(50,partHeight(c)/2+5);
     return {left:c.x-size,right:c.x+size,top:c.y-size,bottom:c.y+size};
   });
