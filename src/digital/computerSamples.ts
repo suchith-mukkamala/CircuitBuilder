@@ -50,7 +50,8 @@ export function cpuCoreDemo():DigitalDocument {
   const parts:DigitalComponent[]=[
     component('clk','clock',96,132,'SYSTEM CLK'),
     component('on','high',96,255,'ENABLE'),
-    component('off','low',96,380,'RESET / ADD'),
+    component('reset','input',96,380,'PC RESET',0),
+    component('off','low',96,485,'ADD MODE'),
     component('pc','counter4',360,240,'PROGRAM CTR'),
     {...component('rom','rom16x4',592,240,'PROGRAM ROM'),words:defaultRomWords()},
     component('alu','alu4',828,320,'4-BIT ALU'),
@@ -65,7 +66,7 @@ export function cpuCoreDemo():DigitalDocument {
   connect('acc_clk','clk','out','acc','clk');
   connect('pc_en','on','out','pc','en');
   connect('acc_en','on','out','acc','en');
-  connect('pc_reset','off','out','pc','reset');
+  connect('pc_reset','reset','out','pc','reset');
   connect('alu_op0','off','out','alu','op0');
   connect('alu_op1','off','out','alu','op1');
   for(let i=0;i<4;i++){
