@@ -4,6 +4,10 @@ import {WorldCanvas} from './WorldCanvas';
 import {WorldCreator} from './WorldCreator';
 import {EvolutionHistory} from './EvolutionHistory';
 import {WorldFamily} from './WorldFamily';
+import {PeopleDirectory} from './PeopleDirectory';
+import {DivineCodex} from './DivineCodex';
+import {personName,isPersonFavorite,renamePerson,togglePersonFavorite,
+  toggleSettlementFavorite,renameSettlement,knownSettlements} from './identity';
 import {hybridFraction,traitProfile,ancestryLabel} from './family';
 import {compactWorld,loadBrowserWorld,readSavedWorld,WORLD_STORAGE_KEY,
   MAX_WORLD_FILE_BYTES} from './storage';
@@ -23,7 +27,7 @@ function initialWorld():World{
   }
   return createWorld(DEFAULT_SETTINGS);
 }
-type Tab='world'|'creator'|'history'|'family';
+type Tab='world'|'creator'|'history'|'family'|'people'|'codex';
 const format=(n:number)=>n.toLocaleString('en-US');
 const brushValue=(b:Brush)=>b.kind==='inspect'?'inspect':
   b.kind==='food'?'food':b.kind==='spawn'?'spawn-'+b.species:'terrain-'+b.biome;
@@ -100,6 +104,20 @@ export function EvolutionLab(){
   const focusPerson=(id:number)=>{
     setPlaying(false);setSelectedAgentId(id);setTab('family');
   };
+  const openPerson=(id:number)=>{
+    setPlaying(false);setSelectedAgentId(id);setTab('people');
+  };
+  const favoritePerson=(id:number)=>setWorld(w=>togglePersonFavorite(w,id));
+  const favoriteSettlement=(id:number)=>setWorld(w=>toggleSettlementFavorite(w,id));
+  const giveName=(id:number,name:string)=>setWorld(w=>renamePerson(w,id,name));
+  const renamePlace=(id:number,name:string)=>setWorld(w=>renameSettlement(w,id,name));
+  const findSettlement=(id:number)=>{
+    const place=knownSettlements(world).find(s=>s.id===id);
+    if(!place)return;
+    setPlaying(false);
+    setSelected({x:place.x,y:place.y});setSelectedAgentId(null);
+    setZoom(3);setTab('world');setMapFocus(-1);
+  };
   const findOnMap=(id:number)=>{
     const target=world.agents.find(a=>a.id===id);
     if(!target)return;
@@ -108,7 +126,8 @@ export function EvolutionLab(){
   };
   useEffect(()=>{
     if(tab!=='world'||mapFocus===null)return;
-    const target=world.agents.find(a=>a.id===mapFocus);
+    const target=mapFocus===-1?selected:
+      world.agents.find(a=>a.id===mapFocus);
     const viewport=mapScrollRef.current;
     if(target&&viewport){
       const scaledTile=viewport.scrollWidth/world.width;
@@ -190,9 +209,15 @@ export function EvolutionLab(){
         <button role="tab" aria-selected={tab==='history'}
           className={tab==='history'?'active':''} onClick={()=>navigate('history')}>
           ≋ HISTORY</button>
+        <button role="tab" aria-selected={tab==='people'}
+          className={tab==='people'?'active':''} onClick={()=>navigate('people')}>
+          ◉ PEOPLE</button>
         <button role="tab" aria-selected={tab==='family'}
           className={tab==='family'?'active':''} onClick={()=>navigate('family')}>
           ♡ FAMILIES</button>
+        <button role="tab" aria-selected={tab==='codex'}
+          className={tab==='codex'?'active':''} onClick={()=>navigate('codex')}>
+          ✦ DIVINE CODEX</button>
       </nav>
       <div className="evo-nav-status"><span/> YEAR {world.year}</div>
     </header>
@@ -200,7 +225,15 @@ export function EvolutionLab(){
       current={world.settings} onCreate={startWorld} onReturn={()=>navigate('world')}/>:
     tab==='history'?<EvolutionHistory world={world}/>:
     tab==='family'?<WorldFamily world={world} focusId={selectedAgentId}
-      onChoose={focusPerson} onShowOnMap={findOnMap}/>:
+      onChoose={focusPerson} onShowOnMap={findOnMap}
+      onFavorite={favoritePerson} onRename={giveName}/>:
+    tab==='people'?<PeopleDirectory world={world} selectedId={selectedAgentId}
+      onOpen={focusPerson} onFavorite={favoritePerson}
+      onRename={giveName} onFindOnMap={findOnMap}/>:
+    tab==='codex'?<DivineCodex world={world}
+      onOpenPerson={focusPerson} onFavoritePerson={favoritePerson}
+      onFavoriteSettlement={favoriteSettlement}
+      onRenameSettlement={renamePlace} onFindSettlement={findSettlement}/>:
     <main className="evo-playground">
       <header className="evo-playground-heading">
         <div>
@@ -317,8 +350,8 @@ export function EvolutionLab(){
                     style={{color:SPECIES_INFO[agent.species].color}}>
                     {SPECIES_INFO[agent.species].symbol}
                   </span>
-                  <div><strong>{SPECIES_INFO[agent.species].name.slice(0,-1)} #{agent.id}</strong>
-                    <small>{agent.age} years old · Born year {agent.born}
+                  <div><strong>{personName(world,world.lineage.find(r=>r.id===agent.id)??agent)}</strong>
+                    <small>#{agent.id} · {agent.age} years old · Born year {agent.born}
                       · Generation {agent.generation}</small></div>
                 </div>
                 <div className="evo-inspector-heritage">
@@ -330,8 +363,16 @@ export function EvolutionLab(){
                   </div>
                   {hybridFraction(agent.ancestry)>.01&&<small>✧ MIXED ANCESTRY</small>}
                 </div>
-                <button className="evo-ancestry-open"
-                  onClick={()=>focusPerson(agent.id)}>♡ VIEW FAMILY TREE ↗</button>
+                <div className="evo-world-person-buttons">
+                  <button onClick={()=>favoritePerson(agent.id)}
+                    aria-label="Favorite individual"
+                    aria-pressed={isPersonFavorite(world,agent.id)}>
+                    {isPersonFavorite(world,agent.id)?'★ FOLLOWING':'☆ FAVORITE'}
+                  </button>
+                  <button onClick={()=>openPerson(agent.id)}>◉ PROFILE ↗</button>
+                  <button className="evo-ancestry-open"
+                    onClick={()=>focusPerson(agent.id)}>♡ FAMILY TREE ↗</button>
+                </div>
                 <div className="evo-vitals">
                   <label>ENERGY <b>{Math.round(agent.energy)}%</b>
                     <progress max="100" value={agent.energy}/></label>
@@ -380,9 +421,9 @@ export function EvolutionLab(){
         </aside>
       </div>
       <div className="evo-future-note">
-        <strong>V0.2: LIVING LINEAGES</strong>
-        <span>Partnerships, interbreeding, inherited ancestry and family trees are here.
-          War, natural disasters, separate realms and neural learning come later.</span>
+        <strong>V0.3: LIVES & LEGACIES</strong>
+        <span>People now have names, family houses, personal chronicles and lasting favorites.
+          Browse lives in People and discover settlements in the Divine Codex.</span>
       </div>
     </main>}
   </div>;

@@ -1,3 +1,39 @@
+# CircuitBuilder v0.15.0 — Evolution Lab v0.3: People, Favorites & Divine Codex
+
+**This is the identity-and-discovery release.** Every individual now has a fantasy name and family house, favorite people can be followed across death and generations, and important life events are recorded as part of the deterministic world simulation.
+
+## Try v0.3
+
+1. Open **04 Evolution Lab**, select **PEOPLE**, and search by name, house, species/ancestry, or numeric ID. Filter by living, deceased or favorites, with a species filter. Select someone to open their profile.
+2. **Rename** a person (up to 64 safe characters), add/remove their **favorite star**, **Find on Map** (living individuals), or **View Family Tree**. Renames and favorites are stored in the world file, not a separate UI-only list.
+3. Open **FAMILIES** from the navigation or an individual's profile to see parents, grandparents, children, siblings, partners, and a chronological **personal history**. People now appear by name in every family card, with their immutable IDs available for unambiguous tracking. Clicking a relative navigates to their record.
+4. Open **✦ DIVINE CODEX** for bookmarked people, family houses, known settlements, historical ruins, and recent world events. Search settlements, follow places and rename active settlements. The **Find Location on Map** action works for historical locations, too.
+5. Let the world advance. Individuals acquire recorded milestones through **courtship, partnerships, children, death and settlement founding**. A death does not erase a person's record; you can still favorite and rename deceased people.
+6. Export a world JSON file or rely on the existing compact browser autosave. The schema remains v2, so v0.2 and v0.2.1 world files are accepted. Their unnamed people receive stable display names derived from existing seed+ID, while we **do not fabricate unrecorded childhood events**.
+
+## Design constraints
+
+- **Reproducible names, not RNG side effects.** Given names and family houses come from separate deterministic hashing using the immutable world seed and individual ID, so merely enabling identities never changes simulation outcomes. Children inherit their parent's house even when their mixed ancestry gives them a different dominant species.
+- **Persistent individual biographies.** New inhabitants have an arrival/birth milestone; interactions append traceable, event-driven records. The current model tracks up to 40 personal moments per retained individual, with the earliest preserved. Related-individual links open real ancestry records rather than fictitious prose.
+- **Durable favorites.** Bookmarking a person also protects them and their immediate parents from the long-term lineage-pruning pass. Favorites are capped at 100 people and 100 places per world.
+- **Settlement archives.** Newly founded places have a lasting name, location and founding record. Their archives remain after abandonment, including a collapse year. Pre-v0.3 places still active when you upgrade will be registered on the next annual tick, but pre-upgrade collapsed towns cannot be reconstructed from missing data.
+- **Bounded histories.** Up to 1,000 settlements can be retained in the settlement archive, 14,000 normal lineage records plus saved favorites, and the latest 90 major world events. Earlier unrecorded experiences are not invented.
+- **No fake AI.** Generated names and narratives describe *real state transitions in the rule-based simulation*. Personalities, autonomous goal-oriented minds, real jobs, governments, religions, and divine blessings are still future milestones.
+
+## Development
+
+\`\`\`bash
+git pull origin main
+npm install
+npm run dev
+npm test
+npm run build
+\`\`\`
+
+---
+
+## Previous releases
+
 # CircuitBuilder v0.14.1 — Evolution Lab v0.2.1: Population Stability
 
 **This is a balancing and diagnostics release**, not a new civilization system. It targets the problem of humans, dwarves and demons dying before multi-generational societies can form. Four separate species still differ in maturity, fertility, lifespan, territory and habits; harsh worlds may still face extinction.
