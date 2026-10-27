@@ -13,6 +13,7 @@ import {
 } from './network';
 import { useDigitalStore } from './useDigitalStore';
 import { paletteCategories,partByKind } from './catalog';
+import { fitDigitalCircuit } from './canvasViewport';
 
 type Camera = { x: number; y: number; zoom: number };
 type Drag = {
@@ -327,6 +328,7 @@ export function SignalCanvas({ result, onProbe }: { result: LogicResult; onProbe
   const canvas = useRef<HTMLCanvasElement>(null);
   const wrapper = useRef<HTMLDivElement>(null);
   const dragging = useRef<Drag | null>(null);
+  const didFit = useRef(false);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [view, setView] = useState<Camera>({ x: 80, y: 70, zoom: 1 });
   const [hover, setHover] = useState<DigitalPoint | null>(null);
@@ -369,6 +371,13 @@ export function SignalCanvas({ result, onProbe }: { result: LogicResult; onProbe
     observer.observe(element); resize();
     return () => observer.disconnect();
   }, []);
+
+  useEffect(() => {
+    if(size.width>0&&size.height>0&&!didFit.current){
+      didFit.current=true;
+      setView(fitDigitalCircuit(doc,size));
+    }
+  },[size.width,size.height,doc]);
 
   useEffect(() => {
     const media = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -506,7 +515,7 @@ export function SignalCanvas({ result, onProbe }: { result: LogicResult; onProbe
   const wheel = (e: WheelEvent<HTMLCanvasElement>) => {
     e.preventDefault();
     const screen = localPoint(e);
-    const zoom = Math.max(.35, Math.min(2.5, view.zoom * (e.deltaY < 0 ? 1.1 : 1/1.1)));
+    const zoom = Math.max(.3, Math.min(2.5, view.zoom * (e.deltaY < 0 ? 1.1 : 1/1.1)));
     setView({ zoom, x: screen.x-(screen.x-view.x)*zoom/view.zoom,
       y: screen.y-(screen.y-view.y)*zoom/view.zoom });
   };
@@ -569,10 +578,11 @@ export function SignalCanvas({ result, onProbe }: { result: LogicResult; onProbe
           disabled={reducedMotion} onClick={() => setAnimate(v=>!v)}>
           {animate && !reducedMotion ? '◉ PULSE' : '○ PULSE'}
         </button>
-        <button title="Zoom out" onClick={() => setView(v=>({...v,zoom:Math.max(.35,v.zoom/1.2)}))}>−</button>
+        <button title="Zoom out" onClick={() => setView(v=>({...v,zoom:Math.max(.3,v.zoom/1.2)}))}>−</button>
         <span>{Math.round(view.zoom*100)}%</span>
         <button title="Zoom in" onClick={() => setView(v=>({...v,zoom:Math.min(2.5,v.zoom*1.2)}))}>+</button>
-        <button title="Reset view" onClick={() => setView({x:80,y:70,zoom:1})}>⌖</button>
+        <button title="Fit all circuit components into view" onClick={() =>
+          setView(fitDigitalCircuit(doc,size))}>⊡ FIT</button>
       </div>
       {pending && <div className="signal-wire-tip">WIRE IN PROGRESS · CLICK DESTINATION · ESC ENDS</div>}
       {menu && <>

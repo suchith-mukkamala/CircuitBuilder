@@ -1,0 +1,90 @@
+/* v0.9 · dedicated Computer Builder workbench */
+.landing-nav{justify-content:center;min-height:60px;padding:12px}
+.landing-nav .lab-switcher-home{margin:0 auto}
+.computer-builder-shell{background:linear-gradient(180deg,#0b1123,#080e20 50%,#0b1327)}
+.computer-builder-header{border-bottom-color:#426b71;background:linear-gradient(90deg,#132a39,#121a36)}
+.computer-builder-header .signal-lab-glyph{border-color:#8affdc;color:#9df5dc;
+  background:#133d41;box-shadow:3px 3px 0 #081024,0 0 15px #8cffe264}
+.computer-builder-header .signal-lab-brand strong{color:#b9ffe9;text-shadow:0 0 10px #5cfac85c;
+  font-size:clamp(8px,.85vw,11px)}
+.computer-builder-header .signal-lab-brand small{color:#9fb2d5}
+.computer-builder-header .signal-circuit-title{width:195px;max-width:18vw;
+  border-bottom:1px solid #37465d;border-radius:0}
+.computer-main-tools{display:flex;align-items:center;justify-content:flex-end;gap:5px;
+  margin-left:auto;flex-wrap:wrap}
+.computer-main-tools button{cursor:pointer;white-space:nowrap;min-height:37px;
+  background:#1c243e;color:#bfcae2;border:1px solid #465775;padding:8px 12px;
+  font:9px 'Space Mono',monospace}
+.computer-main-tools button:disabled{opacity:.35;cursor:not-allowed}
+.computer-main-tools button:hover:not(:disabled){border-color:#8cffde;background:#233d51;color:#e4fef7}
+.computer-main-tools button.is-selected{border-color:#64a7a0;color:#a4f6de;background:#1a353d}
+.computer-main-tools button.computer-top-step{border:1px solid #8affa9;
+  background:#164638;color:#c4ffe0;font-weight:700;box-shadow:0 0 14px #67ffb831}
+.computer-main-tools button.computer-top-step:hover{background:#226248;box-shadow:0 0 17px #74ffc961}
+.computer-project-menu>div strong{padding:7px;color:#90eed3;
+  font:8px/1.6 var(--pixel);border-bottom:1px solid #3a6d77}
+.computer-project-menu button:disabled{opacity:.3;cursor:not-allowed}
+.computer-journey{display:flex;align-items:center;flex-wrap:wrap;gap:9px;
+  padding:9px 17px;background:#0d1d2d;border-bottom:1px solid #294556;
+  color:#91afc3;font:10px/1.5 'Space Mono',monospace}
+.computer-journey>span:not(:last-child){padding:5px 13px 5px 0;
+  border-right:1px solid #3d5570}
+.computer-journey b{color:#a5ffe1;margin-right:5px}
+.computer-local-save{margin-left:auto;color:#80b6ae;font-size:9px}
+.computer-workspace{min-height:calc(100vh - 220px);grid-template-columns:225px minmax(0,1fr) 322px;
+  gap:9px}
+.computer-workspace.signal-no-palette{grid-template-columns:minmax(0,1fr) 322px}
+.computer-workspace.signal-no-panel{grid-template-columns:225px minmax(0,1fr)}
+.computer-workspace.signal-no-panel.signal-no-palette{grid-template-columns:minmax(0,1fr)}
+.computer-editor{border-color:#345975;background:#0d1530;min-height:520px}
+.computer-editor .signal-editor-heading{background:#15233e}
+.computer-editor .signal-editor-heading i{background:#8effdf}
+.computer-tools-panel{border-color:#395d79}
+.computer-tools-panel .computer-tool-tabs{grid-template-columns:repeat(4,minmax(0,1fr))}
+.computer-tools-panel .computer-tool-tabs button{padding:11px 2px;font-size:7px}
+.computer-tools-panel .computer-tool-tabs button.active{background:#16463d;border-color:#5af6c3;color:#c8ffec}
+.computer-workbench-help{margin-top:12px;padding:13px;border:1px solid #3f566d;
+  background:#121b32;color:#95aec9}
+.computer-workbench-help strong{display:block;color:#a5eddd;
+  font:8px/1.6 var(--pixel);padding-bottom:9px}
+.computer-workbench-help p{margin:0;font:10px/1.9 'Space Mono',monospace}
+.computer-workbench-help p b{color:#b2ffe7}
+.computer-workspace .signal-palette{border-color:#365a70}
+.computer-workspace .signal-palette .signal-panel-heading{background:#172f40;
+  border-color:#3b647a;color:#c5fce9}
+.computer-workspace .signal-palette .signal-catalog-category summary{background:#15243d}
+@media(max-width:1520px){
+  .computer-workspace{grid-template-columns:190px minmax(0,1fr) 286px}
+  .computer-workspace.signal-no-palette{grid-template-columns:minmax(0,1fr) 286px}
+  .computer-workspace.signal-no-panel{grid-template-columns:190px minmax(0,1fr)}
+  .computer-builder-header{gap:9px}
+  .computer-main-tools button{padding:8px 9px}
+}
+@media(max-width:1180px){
+  .computer-builder-header{flex-wrap:wrap}
+  .computer-builder-header .signal-circuit-title{max-width:30vw}
+  .computer-main-tools{order:3;flex:1 0 100%;justify-content:flex-start;margin:0}
+  .computer-project-menu{margin-left:auto}
+  .computer-workspace,.computer-workspace.signal-no-panel{
+    grid-template-columns:190px minmax(0,1fr)}
+  .computer-workspace.signal-no-palette{grid-template-columns:minmax(0,1fr)}
+  .computer-workspace.signal-no-palette.signal-no-panel{grid-template-columns:minmax(0,1fr)}
+}
+@media(max-width:740px){
+  .landing-nav{padding:9px}
+  .computer-main-tools{flex-wrap:nowrap;overflow-x:auto}
+  .computer-main-tools button{font-size:12px;min-width:35px}
+  .computer-main-tools button span{display:none}
+  .computer-builder-header .signal-lab-brand strong{font-size:9px}
+  .computer-builder-header .signal-circuit-title{max-width:none;width:100%;order:3}
+  .computer-main-tools{order:4}
+  .computer-journey{font-size:9px;padding:8px 9px;gap:5px}
+  .computer-journey>span:not(:last-child){padding-right:6px}
+  .computer-local-save{flex-basis:100%;margin-left:0;font-size:8px}
+  .computer-workspace,.computer-workspace.signal-no-palette,
+  .computer-workspace.signal-no-panel,.computer-workspace.signal-no-panel.signal-no-palette{
+    display:flex;flex-direction:column}
+  .computer-workspace .signal-editor{order:0;min-height:475px}
+  .computer-workspace .signal-right-panel{order:1}
+  .computer-workspace .signal-palette{order:2}
+}
