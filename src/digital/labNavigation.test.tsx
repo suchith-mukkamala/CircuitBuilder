@@ -119,13 +119,14 @@ describe('first-time user viewport and navigation',()=>{
     expect(fitDigitalCircuit({version:1,lab:'signal',name:'New',components:[],wires:[]},
       {width:0,height:0})).toEqual({x:80,y:70,zoom:1});
   });
-  it('home screen has exactly three primary destination buttons and the CPU schematic',()=>{
+  it('home screen has exactly four lab destinations and the original CPU schematic',()=>{
     const html=renderToStaticMarkup(<HomeScreen onAnalog={()=>{}}
-      onSignal={()=>{}} onComputer={()=>{}}/>);
-    expect((html.match(/<button\b/g)||[])).toHaveLength(3);
+      onSignal={()=>{}} onComputer={()=>{}} onEvolution={()=>{}}/>);
+    expect((html.match(/<button\b/g)||[])).toHaveLength(4);
     expect(html).toContain('ANALOG LAB');
     expect(html).toContain('SIGNAL LAB');
     expect(html).toContain('COMPUTER BUILDER');
+    expect(html).toContain('EVOLUTION LAB');
     expect(html).toContain('PROGRAM');
     expect(html).toContain('ALU');
     expect(html).not.toContain('CLOCK STEP');
