@@ -4,6 +4,7 @@ import {EvolutionLab,readSavedWorld} from './EvolutionLab';
 import {EvolutionHistory} from './EvolutionHistory';
 import {WorldCreator} from './WorldCreator';
 import {WorldCanvas} from './WorldCanvas';
+import {WorldFamily} from './WorldFamily';
 import {advanceWorld,createWorld,DEFAULT_SETTINGS} from './engine';
 
 describe('Evolution Lab integration and first-time user experience',()=>{
@@ -63,5 +64,19 @@ describe('Evolution Lab integration and first-time user experience',()=>{
     expect(readSavedWorld(null)).toBeNull();
     expect(readSavedWorld(JSON.stringify({version:1}))).toBeNull();
     expect(readSavedWorld('x'.repeat(2500001))).toBeNull();
+  });
+
+  it('renders the separate family archives and ancestry navigation',()=>{
+    const world=advanceWorld(createWorld({seed:270}),12);
+    const person=world.lineage.find(r=>r.children.length>0)??world.lineage[0];
+    const html=renderToStaticMarkup(<WorldFamily world={world} focusId={person.id}
+      onChoose={()=>{}} onShowOnMap={()=>{}}/>);
+    expect(html).toContain('Family Archives');
+    expect(html).toContain('ANCESTRY');
+    expect(html).toContain('PARTNERS');
+    expect(html).toContain('evo-family-tree-level children');
+    expect(html).toContain('FIND ON MAP');
+    expect(html).toContain('GENERATION');
+    expect(html).toContain('grandparents');
   });
 });

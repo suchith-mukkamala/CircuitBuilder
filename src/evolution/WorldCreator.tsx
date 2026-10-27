@@ -1,5 +1,5 @@
 import {useState} from 'react';
-import {DEFAULT_SETTINGS,SPECIES,SPECIES_INFO,
+import {SPECIES,SPECIES_INFO,WORLD_SIZES,
   normalizeSettings,type WorldSettings} from './engine';
 
 const PRESETS=[
@@ -71,9 +71,10 @@ export function WorldCreator({
             <label htmlFor="evo-map-size">MAP SIZE
               <select id="evo-map-size" value={draft.size}
                 onChange={e=>update('size',e.target.value as WorldSettings['size'])}>
-                <option value="small">Small · 44 × 30</option>
-                <option value="medium">Medium · 64 × 42</option>
-                <option value="large">Large · 82 × 54</option>
+                <option value="small">Small · 96 × 64</option>
+                <option value="medium">Medium · 160 × 104</option>
+                <option value="large">Large · 256 × 160</option>
+                <option value="vast">Vast · 320 × 208 (slower)</option>
               </select>
             </label>
             <label htmlFor="evo-seed">RANDOM SEED
@@ -97,13 +98,24 @@ export function WorldCreator({
                 value={draft.wandering}
                 onChange={e=>update('wandering',Number(e.target.value))}/>
             </label>
+            <label className="evo-hybrid-toggle" htmlFor="evo-interbreeding">
+              <input id="evo-interbreeding" type="checkbox"
+                checked={draft.interbreeding}
+                onChange={e=>update('interbreeding',e.target.checked)}/>
+              <span><b>ALLOW CROSS-SPECIES FAMILIES</b>
+                <small>Adults from different peoples can bond. Children inherit
+                  blended ancestry, genetic traits and lifespan.</small>
+              </span>
+            </label>
           </div>
         </section>
         <section className="evo-section-card evo-genesis-summary">
           <div className="evo-card-heading"><strong>WORLD PREVIEW</strong></div>
           <div className="evo-genesis-count">{total}<span>founding individuals</span></div>
           <p>Seed <strong>{draft.seed}</strong> · {draft.size} map ·
+            {WORLD_SIZES[draft.size].join(' × ')} tiles ·
             {draft.resourceLevel.toFixed(1)}× resources</p>
+          <p>Mixed-species families: <strong>{draft.interbreeding?'ON':'OFF'}</strong></p>
           <p>Elves seek forests, dwarves cluster near caves, humans spread
             around rivers and plains, and demons begin in remote scorched lands.</p>
           <button className="evo-primary-button" onClick={()=>onCreate(normalizeSettings(draft))}>
@@ -116,8 +128,8 @@ export function WorldCreator({
     </div>
     <div className="evo-future-note">
       <strong>COMING LATER</strong>
-      <span>Love and partnerships · Cross-species hybrids · Family trees ·
-        Settlements at war · Natural disasters · Separate demon realm · Learning agents</span>
+      <span>Partnerships, hybrids and family archives are here. Coming later:
+        settlements at war, natural disasters, separate realms, and learning agents.</span>
     </div>
   </main>;
 }

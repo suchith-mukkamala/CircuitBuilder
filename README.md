@@ -1,3 +1,47 @@
+# CircuitBuilder v0.14.0 — Evolution Lab v0.2: Relationships & Family
+
+**Lab 04 now simulates lasting bonds, interbreeding, heritable ancestry and persistent family history.** Its world is significantly larger and the people are deliberately smaller.
+
+## Try it
+
+1. Update and open **04 EVOLUTION LAB** from the homepage.
+2. In **World Creator**, choose a new map size: **Small 96×64, Medium 160×104, Large 256×160, or Vast 320×208**. The old maximum was 82×54. Vast is ~15× as many tiles as the old maximum; large-world simulation may run slower on older machines. Use the **Allow Cross-Species Families** checkbox to control whether mixed-species partnerships can form.
+3. Open **WORLD** and advance time. People forage, move, age, and may form a courtship bond with compatible nearby adults. Bonds gain strength with proximity and can mature into partnerships, or weaken and end. Surviving partners can re-pair after separation/death.
+4. Partnerships that remain close, healthy and resourced may produce children. Parents both contribute **50% of their ancestry** and a mixture of heritable genes (vigor, curiosity, fertility, sociability), subject to a small mutation. An elf+human child is 50% elf/50% human; a child of that person and a human is 25% elf/75% human. A child has a dominant display species for map coloring and weighted life parameters, not a new fixed "half-elf" hardcoded species.
+5. Click a person on the map and choose **VIEW FAMILY TREE**, or open **♡ FAMILIES** directly. Inspect that individual's ancestry bar, historical parents/grandparents, partners/bonds, siblings and children. Clicking a family member navigates to their record; **FIND ON MAP** returns to a living person.
+6. Use the zoom controls (up to 8×) to find tiny 2-pixel inhabitants on the much larger map. Settlements remain marked separately.
+7. Experiment with placing an adult of one species near another species' settlement, with mixed-species families enabled. Track new bonds and mixed births in **HISTORY**.
+8. Export JSON as a portable backup, or allow the browser to autosave. The app **migrates your existing v0.1 saved world** and preserves its original terrain dimensions, populations and timeline; new world creation is required to use the larger map sizes. v0.2 browser autosaves use compact terrain encoding to conserve local storage. Exported JSON remains human-readable.
+
+## Mechanics
+
+- Four peoples: humans (fast generational turnover, frequent wandering), elves (long-lived forest specialists), dwarves (caves/mountains), demons (remote volcanic or wasteland regions). For hybrid children, baseline lifespan, maturity age, fertility, roaming and metabolism are blended from ancestry rather than taken exclusively from the label.
+- Adults require suitable maturity, health and energy to enter a bond. Compatibility accounts for inherited ancestry and heritable social/curiosity tendencies. Same-species pairs have a higher typical compatibility, but cross-species pairings are possible. **Close relatives (including siblings and shared grandparents) cannot become partners.**
+- Courtships become reciprocal partnerships after repeated nearby interactions. They may dissolve with prolonged separation. Reproduction uses the actual paired adults' identities and requires enough food/health, a compatible free tile, and mature ages. Both parents' unique IDs are stored on the child's lineage record.
+- Ancestry records include historical individuals, even deceased relatives, their parental IDs, descendants, and partners. To keep long-running worlds manageable, history retains up to 14,000 lineage entries; older unknown ancestors display as missing rather than being invented.
+- The world uses the existing **seeded deterministic simulation**: the same seed, configuration and sequence of interventions reproduce the same outcomes. Parents do not have fixed sexes or gender roles in this initial abstract social model.
+- Map rendering now uses **6-pixel biome tiles** and **2-pixel individual centers**, versus 12-pixel tiles and large 7-pixel inhabitants before. Regions are rendered onto a pixel-art Canvas. Full-map fit and zoom help navigate the larger geography.
+
+## Honest boundaries
+
+This is still a **rule-based, stochastic agent simulation**, not a trained neural cellular automaton or conscious beings. "Bond" and "love" represent an abstract compatibility/proximity partnership model, not deep emotional psychology. The species and genetics are fantasy mechanics, not claims about biological populations. Major wars, disaster systems, independent demon realms, and reinforcement learning are future work.
+
+Your earlier Analog Lab, Signal Lab and Computer Builder work is left untouched.
+
+## Development
+
+\`\`\`bash
+git pull origin main
+npm install
+npm run dev
+npm test
+npm run build
+\`\`\`
+
+---
+
+## Previous releases
+
 # CircuitBuilder v0.13.0 — Lab 04 / Evolution Lab v0.1
 
 **Evolution Lab is a real fourth laboratory.** Its initial release is an autonomous, seeded fantasy-world ecosystem where humans, elves, dwarves, and demons can age, forage, roam, reproduce within their species, die, and form or lose settlements. The interface uses handcrafted pixel-art canvas rendering, shared retro-neon typography, and three purpose-built pages: **World**, **World Creator**, and **History**.
