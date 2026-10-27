@@ -1,4 +1,46 @@
-# CircuitBuilder v0.15.0 — Evolution Lab v0.3: People, Favorites & Divine Codex
+# CircuitBuilder v0.16.0 — Evolution Lab v0.4: Mind Engine I
+
+**Autonomous intentions and a population-cap fairness fix.** In Lab 04,
+individuals now select goals from their actual conditions: search for food,
+move away from unsafe terrain, seek family or potential partners, stay with
+their partner, or explore. An individual profile and the World Inspector show
+their current goal and reason. Minds remember recent locations where food was
+scarce or plentiful, and use this information when seeking safer foraging.
+
+## Try v0.4
+
+1. Open **04 Evolution Lab** and click an individual on the map. Watch **CURRENT
+   INTENTION** change as you advance years. You can inspect the same goal and
+   remembered scarcity in **PEOPLE**.
+2. Explore a harsh world using World Creator with **Resource Level** near 0.5.
+   Individuals with insufficient food should pursue better foraging areas;
+   survival is not guaranteed.
+3. Run several worlds for 300+ years and inspect **History → Population Health**.
+   In v0.3, the global 850-person browser performance limit let the *oldest*
+   partnerships attempt births first. Long-lived peoples could hold this
+   priority for centuries, causing shorter-lived species to disappear even
+   with abundant food. v0.4 uses a seeded randomized queue for **all partner
+   couples** instead. This removes the age-of-partnership monopoly while
+   retaining real mortality, reproduction checks, and the overall cap.
+4. Continue an existing v0.3 saved world without resetting it. New minds are
+   initialized when the world advances. The version-2 world-file schema and
+   deterministic replay remain intact; a changed simulation algorithm will
+   naturally produce a different future timeline after upgrading.
+
+### Scope
+
+- This is an explainable, deterministic **utility-based simulation**, not an
+  LLM controlling every character or learned neural network. Goals influence
+  movement and relationships; actual births, deaths and memories are observed
+  events, never invented narrative text.
+- Agent minds contain only a current intention, target and a couple of bounded
+  place memories; they are validated on import and saved with the existing world.
+- There is no species immunity, forced survival quota, or automatic rescue.
+  Extinction can still occur in unsuitable or resource-poor worlds.
+- Jobs, governance, beliefs, persistent social memories and richer childhood
+  development are future milestones.
+
+## Previous: Evolution Lab v0.3 — People, Favorites & Divine Codex
 
 **This is the identity-and-discovery release.** Every individual now has a fantasy name and family house, favorite people can be followed across death and generations, and important life events are recorded as part of the deterministic world simulation.
 

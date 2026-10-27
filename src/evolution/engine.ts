@@ -7,6 +7,8 @@ import {
 } from './family';
 import {makeLifeRecord,appendLifeMoment,registerSettlement,
   registerSettlementCollapse} from './identity';
+import {initialMind,planMind,movementIntent,rememberForage,foodAround,MIND_GOALS,
+  type AgentMind} from './mind';
 export type Species='human'|'elf'|'dwarf'|'demon';
 export type Biome='plains'|'forest'|'mountain'|'cave'|'wasteland'|'volcanic'|'water';
 export type WorldSize='small'|'medium'|'large'|'vast';
@@ -18,7 +20,7 @@ export type Genes={vigor:number;curiosity:number;fertility:number;social:number}
 export type Ancestry=Record<Species,number>;
 export type Agent={id:number;species:Species;ancestry:Ancestry;generation:number;
   x:number;y:number;age:number;energy:number;health:number;genes:Genes;
-  born:number;parents?:[number,number];partnerId?:number};
+  born:number;parents?:[number,number];partnerId?:number;mind?:AgentMind};
 export type Bond={id:number;a:number;b:number;since:number;
   stage:'courting'|'partner'|'ended';strength:number;ended?:number;
   lastBirthYear?:number;children:number[]};
@@ -224,7 +226,8 @@ export function createWorld(input:Partial<WorldSettings>={}):World{
       const founder:Agent={id:world.nextAgentId++,species:s,
         ancestry:pureAncestry(s),generation:0,
         x:point.x,y:point.y,age,energy:round(78+random(state)*19),
-        health:round(84+random(state)*16),genes:genes(state),born:age===0?0:-age};
+        health:round(84+random(state)*16),genes:genes(state),born:age===0?0:-age,
+        mind:initialMind(0)};
       world.agents.push(founder);
       world.lineage.push(makeLifeRecord(world,founder));
     }
@@ -255,7 +258,11 @@ const settlementNames:Record<Species,string[]>={
 export function stepWorld(previous:World):World{
   const world:World={...previous,year:previous.year+1,
     tiles:previous.tiles.map(t=>({...t})),
-    agents:previous.agents.map(a=>({...a})),
+    agents:previous.agents.map(a=>({...a,mind:a.mind?{
+      ...a.mind,target:a.mind.target?{...a.mind.target}:undefined,
+      lastScarcity:a.mind.lastScarcity?{...a.mind.lastScarcity}:undefined,
+      lastGoodFood:a.mind.lastGoodFood?{...a.mind.lastGoodFood}:undefined,
+    }:undefined})),
     settlements:previous.settlements.map(s=>({...s})),
     bonds:previous.bonds.map(b=>({...b,children:[...b.children]})),
     lineage:previous.lineage.map(r=>({...r,children:[...r.children],
@@ -306,8 +313,12 @@ export function stepWorld(previous:World):World{
     const info=traitProfile(a.ancestry);
     const tile=world.tiles[offset(world.width,a.x,a.y)];
     a.age++;
+    a.mind=planMind(world,a,occupied,partnerPositions,closeContacts,
+      biomeSuitability,traitProfile);
     const travel=clamp(info.wander*a.genes.curiosity*world.settings.wandering,0,.94);
-    if(random(state)<travel||a.energy<48||tile.food<.75){
+    const destination=a.mind.target;
+    const motivated=!!destination&&distance(a,destination)>1;
+    if(random(state)<travel||motivated||a.energy<48||tile.food<.75){
       const choices:{x:number;y:number;score:number}[]=[];
       for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
         const x=a.x+dx,y=a.y+dy;
@@ -327,6 +338,8 @@ export function stepWorld(previous:World):World{
           Math.max(-20,Math.min(20,(distance(a,mate)-mateRange)*16))+
           (mateRange<=2?6:0):0;
         choices.push({x,y,score:candidate.food*3+preference+suit+toward+
+          movementIntent(a,x,y,world.year)+
+          (a.mind.goal==='forage'?foodAround(world,x,y)*.12:0)+
           random(state)*(3+info.wander*14*world.settings.wandering)+movement});
       }
       choices.sort((a,b)=>b.score-a.score);
@@ -362,6 +375,7 @@ export function stepWorld(previous:World):World{
       gathered+=take;
       if(gathered>=targetMeal-.001)break;
     }
+    rememberForage(a,world.year,gathered,targetMeal);
     const dailyCost=info.metabolism*(juvenile?.62:1)*
       (comfortable?.86:1.12);
     const nourishment=gathered*(comfortable?13.4:10.5);
@@ -374,7 +388,8 @@ export function stepWorld(previous:World):World{
         const x=a.x+dx,y=a.y+dy;
         if(!within(world.width,world.height,x,y))continue;
         const helper=partnerPositions.get(occupied.get(offset(world.width,x,y))??-1);
-        if(helper&&helper.id!==a.id&&helper.species===a.species&&
+        if(helper&&helper.id!==a.id&&
+          (helper.species===a.species||a.parents?.includes(helper.id))&&
           helper.age>=traitProfile(helper.ancestry).maturity&&helper.energy>63){
           const aid=Math.min(5,helper.energy-63,65-a.energy);
           if(aid>0){a.energy=round(clamp(a.energy+aid,0,100));
@@ -502,7 +517,8 @@ export function editWorld(previous:World,x:number,y:number,brush:Brush):World{
     const age=info.maturity+Math.floor(random(state)*info.lifespan*.16);
     const newcomer:Agent={id:world.nextAgentId++,species:brush.species,
       ancestry:pureAncestry(brush.species),generation:0,x,y,
-      age,energy:88,health:95,genes:genes(state),born:world.year-age};
+      age,energy:88,health:95,genes:genes(state),born:world.year-age,
+      mind:initialMind(world.year)};
     world.agents.push(newcomer);
     world.lineage.push(makeLifeRecord(world,newcomer));
     world.rngState=state.n;
@@ -564,6 +580,10 @@ export function isWorld(value:unknown):value is World{
   const checkAncestry=(a:Ancestry)=>!!a&&SPECIES.every(s=>
     Number.isFinite(a[s])&&a[s]>=0&&a[s]<=1)&&
     Math.abs(SPECIES.reduce((sum,s)=>sum+a[s],0)-1)<.0001;
+  const checkPlace=(p:{x:number;y:number})=>!!p&&
+    Number.isInteger(p.x)&&Number.isInteger(p.y)&&within(width,height,p.x,p.y);
+  const checkMemory=(m:{x:number;y:number;year:number})=>
+    checkPlace(m)&&Number.isInteger(m.year)&&m.year>=0&&m.year<=year;
   for(const a of w.agents){
     if(!a||!SPECIES.includes(a.species)||!Number.isSafeInteger(a.id)||a.id<=0||
       ids.has(a.id)||!Number.isInteger(a.x)||!Number.isInteger(a.y)||
@@ -574,7 +594,16 @@ export function isWorld(value:unknown):value is World{
       !Number.isFinite(a.health)||a.health<=0||a.health>100||
       (a.partnerId!==undefined&&(!Number.isSafeInteger(a.partnerId)||a.partnerId<=0))||
       (a.parents!==undefined&&(!Array.isArray(a.parents)||a.parents.length!==2||
-        !a.parents.every(p=>Number.isSafeInteger(p)&&p>0))))return false;
+        !a.parents.every(p=>Number.isSafeInteger(p)&&p>0)))||
+      (a.mind!==undefined&&(!a.mind||!MIND_GOALS.includes(a.mind.goal)||
+        typeof a.mind.reason!=='string'||a.mind.reason.length>140||
+        !Number.isInteger(a.mind.since)||a.mind.since<0||a.mind.since>year||
+        (a.mind.targetPersonId!==undefined&&
+          (!Number.isSafeInteger(a.mind.targetPersonId)||
+            a.mind.targetPersonId<=0||a.mind.targetPersonId>=w.nextAgentId!))||
+        (a.mind.target!==undefined&&!checkPlace(a.mind.target))||
+        (a.mind.lastScarcity!==undefined&&!checkMemory(a.mind.lastScarcity))||
+        (a.mind.lastGoodFood!==undefined&&!checkMemory(a.mind.lastGoodFood)))))return false;
     const index=offset(width,a.x,a.y);
     if(positions.has(index)||w.tiles[index].biome==='water')return false;
     ids.add(a.id);positions.add(index);

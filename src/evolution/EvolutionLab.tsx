@@ -9,6 +9,7 @@ import {DivineCodex} from './DivineCodex';
 import {personName,isPersonFavorite,renamePerson,togglePersonFavorite,
   toggleSettlementFavorite,renameSettlement,knownSettlements} from './identity';
 import {hybridFraction,traitProfile,ancestryLabel} from './family';
+import {GOAL_LABELS} from './mind';
 import {compactWorld,loadBrowserWorld,readSavedWorld,WORLD_STORAGE_KEY,
   MAX_WORLD_FILE_BYTES} from './storage';
 export {readSavedWorld} from './storage';
@@ -379,6 +380,11 @@ export function EvolutionLab(){
                   <label>HEALTH <b>{Math.round(agent.health)}%</b>
                     <progress max="100" value={agent.health}/></label>
                 </div>
+                <div className="evo-mind-status" aria-label="Autonomous mind">
+                  <small>◈ CURRENT INTENTION</small>
+                  <strong>{agent.mind?GOAL_LABELS[agent.mind.goal]:'Awakening'}</strong>
+                  <p>{agent.mind?.reason??'This person will choose a goal next year.'}</p>
+                </div>
                 <div className="evo-individual-facts">
                   <span>Maturity <b>{Math.round(traitProfile(agent.ancestry).maturity)} years</b></span>
                   <span>Typical lifespan <b>{Math.round(traitProfile(agent.ancestry).lifespan)} years</b></span>
@@ -421,9 +427,9 @@ export function EvolutionLab(){
         </aside>
       </div>
       <div className="evo-future-note">
-        <strong>V0.3: LIVES & LEGACIES</strong>
-        <span>People now have names, family houses, personal chronicles and lasting favorites.
-          Browse lives in People and discover settlements in the Divine Codex.</span>
+        <strong>V0.4: MIND ENGINE I</strong>
+        <span>People choose goals, remember food scarcity, seek loved ones, and act on survival
+          needs. Follow an individual to see what motivates their next move.</span>
       </div>
     </main>}
   </div>;

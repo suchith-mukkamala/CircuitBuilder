@@ -1,6 +1,7 @@
 import {useEffect,useMemo,useState} from 'react';
 import {SPECIES,SPECIES_INFO,type LineageRecord,type Species,type World} from './engine';
 import {ancestryLabel} from './family';
+import {GOAL_LABELS} from './mind';
 import {cleanIdentityName,isPersonFavorite,personName} from './identity';
 
 type Props={world:World;selectedId:number|null;onOpen:(id:number)=>void;
@@ -159,6 +160,23 @@ export function PeopleDirectory({world,selectedId,onOpen,onFavorite,
                 and in their historical record after death.</small>
             </div>
           </section>
+          {alive&&<section className="evo-section-card evo-mind-profile">
+            <div className="evo-card-heading"><strong>◈ MIND ENGINE I</strong>
+              <span>AUTONOMOUS INTENTION</span></div>
+            <div className="evo-mind-profile-body">
+              <span className="evo-overline">CURRENT GOAL</span>
+              <h3>{alive.mind?GOAL_LABELS[alive.mind.goal]:'Awakening'}</h3>
+              <p>{alive.mind?.reason??'This person will choose their first goal next year.'}</p>
+              {alive.mind?.target&&<small>Travel target: X {alive.mind.target.x},
+                Y {alive.mind.target.y}</small>}
+              {alive.mind?.lastScarcity&&<small>
+                Remembers poor forage near X {alive.mind.lastScarcity.x},
+                Y {alive.mind.lastScarcity.y} (Y{alive.mind.lastScarcity.year})
+              </small>}
+              <small>Decisions follow needs, relationships, terrain and experience.
+                These are simulated rules, not generated dialogue.</small>
+            </div>
+          </section>}
           <section className="evo-section-card">
             <div className="evo-card-heading"><strong>◈ PERSONAL CHRONICLE</strong>
               <span>{focused.moments?.length??0} remembered milestones</span></div>
