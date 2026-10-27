@@ -706,7 +706,7 @@ export function SignalCanvas({ result, onProbe }: { result: LogicResult; onProbe
       {pending&&<div className="signal-wire-tip">WIRE · CLICK DESTINATION · ESC CANCELS</div>}
       {pendingBus&&<div className="signal-wire-tip signal-bus-tip">
         {pendingBus.width}-BIT BUS FROM {pendingBus.title} · CLICK TARGET OR RIGHT-CLICK A SPECIFIC GROUP · ESC CANCELS
-      </div>
+      </div>}
       {menu && <>
         <div className="signal-menu-backdrop" onPointerDown={() => setMenu(null)} />
         <div className="signal-context-menu" role="menu" aria-label="Digital schematic actions"
