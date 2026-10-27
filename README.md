@@ -1,3 +1,57 @@
+# CircuitBuilder v0.13.0 — Lab 04 / Evolution Lab v0.1
+
+**Evolution Lab is a real fourth laboratory.** Its initial release is an autonomous, seeded fantasy-world ecosystem where humans, elves, dwarves, and demons can age, forage, roam, reproduce within their species, die, and form or lose settlements. The interface uses handcrafted pixel-art canvas rendering, shared retro-neon typography, and three purpose-built pages: **World**, **World Creator**, and **History**.
+
+## Getting started
+
+1. Select **04 Evolution Lab** from the minimal homepage or top laboratory navigation.
+2. Press **▶ PLAY** (or **+1 YEAR / +10**) to advance the simulation. A tick represents **one simulated year**, not one day. Change the speed from 1 to 16 years/second.
+3. Open **World Creator** to choose a preset or customize the populations, 44×30 / 64×42 / 82×54 world size, random seed, available resources, and wandering tendency. Confirm **GENERATE THIS WORLD** to begin again.
+4. Inspect the world by clicking a tile or individual. See biome and resources, individual age, energy, health, species maturity/lifespan, inherited vigor/curiosity genes, and available parent IDs.
+5. Use the **MAP TOOL** selector to spawn any of the four peoples, replenish food or repaint terrain. Reproduction and settlement decisions then respond to the updated environment. Individuals cannot be stacked and water cannot be painted beneath living people.
+6. Use the **MAP LAYER** selector to highlight food abundance; zoom into the map or fit it again. A keyboard user can focus the map, navigate with arrow keys, and apply a selected brush with Enter.
+7. Open **History** for a per-species population graph (toggle each series), a reverse-chronological event log, active settlements, and cumulative births/deaths.
+8. **Export World JSON** to download a portable backup, **Import World JSON** to restore it, or **Replay This Seed** to restart the same experimental conditions. The current world autosaves in this browser even when you move to another lab; a separate world key prevents collision with your circuit and CASM work.
+
+## Species and world rules
+
+| Species | Typical lifespan | Adult from | Yearly fertility tendency | Wander tendency | Preferred biomes |
+|---|---:|---:|---:|---:|---|
+| Humans | 74 years | 16 | High | High | Plains, forests |
+| Elves | 245 years | 36 | Low | Low | Forests |
+| Dwarves | 166 years | 27 | Medium-low | Very low | Mountains, caves |
+| Demons | 137 years | 23 | Medium-low | Moderate | Wastelands, volcanic corners |
+
+These are **gameplay parameters**, not literal real-world biology. Individuals have randomly varied inheritable vigor, curiosity and fertility modifiers; offspring are born from two nearby same-species mature adults with enough energy and a free compatible tile. They inherit modified gene values from the two parents. There is no partner/love system or interbreeding yet; those belong to v0.2.
+
+Terrain contains renewable food based on biome, and wandering/foraging is weighted by biome preference and nutrient availability. Bad conditions can cause exhaustion and health loss; senescence becomes more likely later in the typical lifespan. Populations are bounded to 850 individuals for this first, browser-friendly version.
+
+Four or more nearby compatible adults in favored terrain can found named settlements. Settlements count nearby residents, accumulate a simplified stores resource and collapse if abandoned for five years. This first release has no actual buildings, war, diplomacy or disasters. The demon realm is **represented only by remote scorched starting biomes**; multi-layer portals are not implemented yet.
+
+## Technical architecture and limitations
+
+- **Pure deterministic engine:** \`src/evolution/engine.ts\` contains world generation, agent updates, reproduction, settlement development, interventions, a seeded pseudo-random number generator, and saved-world validation. The same seed, configuration, and sequence of interventions produce the same result.
+- **Pixel-world renderer:** \`src/evolution/WorldCanvas.tsx\` paints biomes, resource overlay, individual sprites, and settlements onto Canvas 2D. CPU/RAM simulation from the electronics labs remains completely isolated.
+- **React pages:** \`EvolutionLab.tsx\`, \`WorldCreator.tsx\`, and \`EvolutionHistory.tsx\` provide focused play, creation and analysis experiences. No new dependencies are required.
+- **State snapshots:** Autosave uses local browser storage; JSON export/import supports world backups with validation. History retains the latest 400 annual samples and a bounded event log.
+- **Future releases:** love/relationships, interbreeding and hybrids, family trees, dynamic culture and settlements, environmental disasters and conflicts, multiple fantasy realms, more sophisticated genetics, individual learning, neural cellular automata, and actual evolutionary neural training.
+
+**Important distinction:** This is **an agent-based simulation on a cellular landscape**, not a trained neural cellular automaton. We should not claim that the agents learn or that war/love/hybrids are currently simulated. v0.1 is designed as a comprehensible and reproducible foundation for those additions.
+
+## Run
+
+\`\`\`bash
+git pull origin main
+npm install
+npm run dev
+npm test
+npm run build
+\`\`\`
+
+---
+
+## Previous releases
+
 # CircuitBuilder v0.12 — Computer Builder: Hardware + Code Studio
 
 Lab 03 is deliberately **split into two full-screen workspaces** rather than squeezing an assembler, debugger, schematic, components, and diagnostics into the same row. The top Lab 03 navigation now has:

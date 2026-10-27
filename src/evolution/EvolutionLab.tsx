@@ -1,0 +1,336 @@
+import {useEffect,useMemo,useRef,useState} from 'react';
+import type {ChangeEvent} from 'react';
+import {WorldCanvas} from './WorldCanvas';
+import {WorldCreator} from './WorldCreator';
+import {EvolutionHistory} from './EvolutionHistory';
+import {
+  BIOME_INFO,BIOMES,DEFAULT_SETTINGS,SPECIES,SPECIES_INFO,
+  advanceWorld,createWorld,editWorld,isWorld,population,
+  type Brush,type World,type WorldSettings,type Biome,
+} from './engine';
+
+const STORAGE_KEY='circuitbuilder:evolution:v1';
+const maxBytes=2_500_000;
+export function readSavedWorld(raw:string|null):World|null{
+  if(!raw||raw.length>maxBytes)return null;
+  try{const obj:unknown=JSON.parse(raw);return isWorld(obj)?obj:null;}
+  catch{return null;}
+}
+function initialWorld():World{
+  if(typeof window!=='undefined'){
+    try{
+      const saved=readSavedWorld(window.localStorage.getItem(STORAGE_KEY));
+      if(saved)return saved;
+    }catch{/* Private browsing or storage disabled: use an in-memory world. */}
+  }
+  return createWorld(DEFAULT_SETTINGS);
+}
+type Tab='world'|'creator'|'history';
+const format=(n:number)=>n.toLocaleString('en-US');
+const brushValue=(b:Brush)=>b.kind==='inspect'?'inspect':
+  b.kind==='food'?'food':b.kind==='spawn'?'spawn-'+b.species:'terrain-'+b.biome;
+const fromBrushValue=(value:string):Brush=>{
+  if(value==='food')return {kind:'food'};
+  if(value.startsWith('spawn-')&&SPECIES.includes(value.slice(6) as typeof SPECIES[number]))
+    return {kind:'spawn',species:value.slice(6) as typeof SPECIES[number]};
+  if(value.startsWith('terrain-')&&BIOMES.includes(value.slice(8) as Biome))
+    return {kind:'terrain',biome:value.slice(8) as Biome};
+  return {kind:'inspect'};
+};
+const downloadJson=(world:World)=>{
+  const blob=new Blob([JSON.stringify(world)],{type:'application/json'});
+  const url=URL.createObjectURL(blob),link=document.createElement('a');
+  link.href=url;
+  link.download='evolution-world-'+world.settings.seed+'-year-'+world.year+'.json';
+  document.body.appendChild(link);link.click();link.remove();
+  URL.revokeObjectURL(url);
+};
+
+export function EvolutionLab(){
+  const [world,setWorld]=useState<World>(initialWorld);
+  const [tab,setTab]=useState<Tab>('world');
+  const [playing,setPlaying]=useState(false);
+  const [speed,setSpeed]=useState(4);
+  const [brush,setBrush]=useState<Brush>({kind:'inspect'});
+  const [overlay,setOverlay]=useState<'terrain'|'resources'>('terrain');
+  const [zoom,setZoom]=useState(1);
+  const [selected,setSelected]=useState<{x:number;y:number}|null>(null);
+  const [selectedAgentId,setSelectedAgentId]=useState<number|null>(null);
+  const [notice,setNotice]=useState('');
+  const fileRef=useRef<HTMLInputElement>(null);
+  const currentWorld=useRef(world);
+  currentWorld.current=world;
+  useEffect(()=>{
+    const timer=window.setTimeout(()=>{
+      try{window.localStorage.setItem(STORAGE_KEY,JSON.stringify(world));}
+      catch{/* World remains usable without storage; JSON export still works. */}
+    },500);
+    return ()=>window.clearTimeout(timer);
+  },[world]);
+  // Ensure the latest tick is retained even if the user switches to another lab
+  // before the debounced autosave fires.
+  useEffect(()=>()=>{try{window.localStorage.setItem(STORAGE_KEY,
+    JSON.stringify(currentWorld.current));}catch{/* Storage may be unavailable. */}},[]);
+  useEffect(()=>{if(tab!=='world')setPlaying(false);},[tab]);
+  useEffect(()=>{
+    if(!playing||tab!=='world')return;
+    const timer=window.setInterval(()=>{
+      setWorld(w=>{
+        if(!w.agents.length||w.year>=9999)return w;
+        return advanceWorld(w,1);
+      });
+    },1000/speed);
+    return ()=>window.clearInterval(timer);
+  },[playing,speed,tab]);
+  useEffect(()=>{
+    if(playing&&(!world.agents.length||world.year>=9999))setPlaying(false);
+  },[world.agents.length,world.year,playing]);
+  const counts=useMemo(()=>population(world),[world]);
+  const agent=selectedAgentId===null?null:
+    world.agents.find(a=>a.id===selectedAgentId)??null;
+  const displayed=agent?{x:agent.x,y:agent.y}:selected;
+  const tile=displayed?world.tiles[displayed.y*world.width+displayed.x]:null;
+  const settlement=displayed?world.settlements.find(s=>s.x===displayed.x&&
+    s.y===displayed.y)??null:null;
+  const latest=world.history.at(-1);
+  const chooseTile=(x:number,y:number)=>{
+    setSelected({x,y});
+    const individual=world.agents.find(a=>a.x===x&&a.y===y);
+    setSelectedAgentId(individual?.id??null);
+  };
+  const brushAt=(x:number,y:number)=>{
+    const before=world;
+    const next=editWorld(before,x,y,brush);
+    if(next===before){
+      setNotice('That tile cannot accept the selected brush. Water and occupied tiles have restrictions.');
+    }else{
+      setWorld(next);setNotice('');
+      setSelected({x,y});setSelectedAgentId(null);
+    }
+  };
+  const startWorld=(settings:WorldSettings)=>{
+    if(!window.confirm('Generate a new world? This replaces your current simulation. '+
+      'Use Export World JSON first to keep this timeline.'))return;
+    setPlaying(false);setWorld(createWorld(settings));setTab('world');
+    setSelected(null);setSelectedAgentId(null);setBrush({kind:'inspect'});
+    setZoom(1);setNotice('New world created with seed '+settings.seed+'.');
+  };
+  const reset=()=>{
+    if(!window.confirm('Restart this world from year 0 using seed '+world.settings.seed+
+      '? The current timeline will be replaced.'))return;
+    setPlaying(false);setWorld(createWorld(world.settings));
+    setSelected(null);setSelectedAgentId(null);
+    setNotice('World replayed from the same starting seed.');
+  };
+  const importWorld=async(event:ChangeEvent<HTMLInputElement>)=>{
+    const file=event.currentTarget.files?.[0];event.currentTarget.value='';
+    if(!file)return;
+    if(file.size>maxBytes){setNotice('World file exceeds the 2.5 MB safety limit.');return;}
+    if(!window.confirm('Load '+file.name+'? This replaces the current world. '+
+      'Export your world first if you want a backup.'))return;
+    try{
+      const obj=readSavedWorld(await file.text());
+      if(!obj)throw Error('Invalid or unsupported Evolution Lab world JSON.');
+      setPlaying(false);setWorld(obj);setTab('world');
+      setSelected(null);setSelectedAgentId(null);setZoom(1);setBrush({kind:'inspect'});
+      setNotice('Loaded saved world, year '+obj.year+'.');
+    }catch(error){setNotice(error instanceof Error?error.message:'Unable to open world file.');}
+  };
+  const step=(years:number)=>{
+    setPlaying(false);setWorld(w=>advanceWorld(w,years));
+  };
+  const navigate=(next:Tab)=>{
+    setPlaying(false);setTab(next);setNotice('');
+  };
+  return <div className="evo-app">
+    <header className="evo-lab-nav">
+      <div className="evo-lab-brand">
+        <span>✦</span>
+        <div><strong>EVOLUTION LAB</strong><small>LAB 04 / FANTASY ECOSYSTEMS</small></div>
+      </div>
+      <nav role="tablist" aria-label="Evolution Lab pages" className="evo-lab-tabs">
+        <button role="tab" aria-selected={tab==='world'}
+          className={tab==='world'?'active':''} onClick={()=>navigate('world')}>
+          ◈ WORLD</button>
+        <button role="tab" aria-selected={tab==='creator'}
+          className={tab==='creator'?'active':''} onClick={()=>navigate('creator')}>
+          ✧ WORLD CREATOR</button>
+        <button role="tab" aria-selected={tab==='history'}
+          className={tab==='history'?'active':''} onClick={()=>navigate('history')}>
+          ≋ HISTORY</button>
+      </nav>
+      <div className="evo-nav-status"><span/> YEAR {world.year}</div>
+    </header>
+    {tab==='creator'?<WorldCreator key={world.settings.seed+'-'+world.year}
+      current={world.settings} onCreate={startWorld} onReturn={()=>navigate('world')}/>:
+    tab==='history'?<EvolutionHistory world={world}/>:
+    <main className="evo-playground">
+      <header className="evo-playground-heading">
+        <div>
+          <span className="evo-overline">THE WORLD IS YOUR EXPERIMENT</span>
+          <h1>Let the world <em>write itself.</em></h1>
+          <p>Watch four fantasy peoples survive, spread and form settlements
+            in a living pixel world.</p>
+        </div>
+        <div className="evo-sim-controls">
+          <button className={playing?'playing evo-play-main':'evo-play-main'}
+            disabled={!world.agents.length||world.year>=9999}
+            onClick={()=>setPlaying(v=>!v)}>{playing?'■ PAUSE':'▶ PLAY'}</button>
+          <button onClick={()=>step(1)} title="Advance one year">+1 YEAR</button>
+          <button onClick={()=>step(10)} title="Advance ten years">+10</button>
+          <label htmlFor="evo-play-speed">SPEED
+            <select id="evo-play-speed" value={speed}
+              onChange={e=>setSpeed(Number(e.target.value))}>
+              {[1,2,4,8,16].map(v=><option value={v} key={v}>{v} yr/s</option>)}
+            </select>
+          </label>
+        </div>
+      </header>
+      <section className="evo-stats" aria-label="Live world statistics">
+        <div className="evo-stat big"><small>WORLD YEAR</small>
+          <strong>{world.year}</strong><span>Seed {world.settings.seed}</span></div>
+        <div className="evo-stat"><small>LIVING PEOPLE</small>
+          <strong>{format(world.agents.length)}</strong>
+          <span>{latest?.births??0} births · {latest?.deaths??0} deaths this year</span>
+        </div>
+        <div className="evo-stat"><small>SETTLEMENTS</small>
+          <strong>{world.settlements.length}</strong><span>Founded by local groups</span></div>
+        <div className="evo-stat"><small>GENERATIONS</small>
+          <strong>{world.totalBirths}</strong><span>New individuals born</span></div>
+      </section>
+      <div className="evo-playground-layout">
+        <section className="evo-map-card">
+          <div className="evo-card-heading evo-map-heading">
+            <div><strong>◈ LIVING WORLD</strong>
+              <small>{world.width} × {world.height} TILES · {world.settings.size.toUpperCase()} WORLD</small>
+            </div>
+            <div className="evo-map-actions">
+              <button onClick={()=>setZoom(v=>Math.max(1,v-.5))}
+                disabled={zoom<=1} title="Zoom out">−</button>
+              <button onClick={()=>setZoom(1)} title="Fit map to view">⌖ FIT</button>
+              <button onClick={()=>setZoom(v=>Math.min(3,v+.5))}
+                disabled={zoom>=3} title="Zoom in">+</button>
+            </div>
+          </div>
+          <div className="evo-map-toolbar">
+            <label htmlFor="evo-brush">MAP TOOL</label>
+            <select id="evo-brush" value={brushValue(brush)}
+              onChange={e=>setBrush(fromBrushValue(e.target.value))}>
+              <option value="inspect">⌖ Inspect tile or individual</option>
+              <optgroup label="Place individuals">
+                {SPECIES.map(s=><option value={'spawn-'+s} key={s}>
+                  + Place {SPECIES_INFO[s].name.slice(0,-1)}
+                </option>)}
+              </optgroup>
+              <optgroup label="World editing">
+                <option value="food">✿ Replenish tile food</option>
+                {BIOMES.map(b=><option value={'terrain-'+b} key={b}>
+                  Paint {BIOME_INFO[b].name}
+                </option>)}
+              </optgroup>
+            </select>
+            <label htmlFor="evo-overlay">MAP LAYER</label>
+            <select id="evo-overlay" value={overlay}
+              onChange={e=>setOverlay(e.target.value as 'terrain'|'resources')}>
+              <option value="terrain">Biomes</option>
+              <option value="resources">Food levels</option>
+            </select>
+          </div>
+          <div className="evo-map-scroll">
+            <WorldCanvas world={world} brush={brush} overlay={overlay} zoom={zoom}
+              selected={displayed} onSelect={chooseTile} onEdit={brushAt}/>
+          </div>
+          <div className="evo-map-footer">
+            <div className="evo-species-legend">
+              {SPECIES.map(s=><span key={s}>
+                <i style={{background:SPECIES_INFO[s].color}}/>{SPECIES_INFO[s].name}
+                <b>{counts[s]}</b>
+              </span>)}
+            </div>
+            <span>⌂ SETTLEMENTS · CLICK TO INSPECT · {brush.kind==='inspect'?
+              'ARROW KEYS TO MOVE SELECTION':'CLICK TO APPLY TOOL'}</span>
+          </div>
+          {notice&&<div className="evo-notice" role="status">{notice}</div>}
+        </section>
+        <aside className="evo-world-sidebar">
+          <section className="evo-section-card evo-inspector-card">
+            <div className="evo-card-heading">
+              <strong>◉ WORLD INSPECTOR</strong>
+              <span>{displayed?'X '+displayed.x+' · Y '+displayed.y:'NO SELECTION'}</span>
+            </div>
+            {!displayed||!tile?<div className="evo-inspector-empty">
+              <div>⌖</div>
+              <strong>CLICK SOMEWHERE IN THE WORLD</strong>
+              <p>Select an individual, a settlement or a terrain tile to view its
+                details. Change the Map Tool to place people or edit resources.</p>
+            </div>:<>
+              <div className="evo-biome-info">
+                <span className="evo-biome-swatch"
+                  style={{background:BIOME_INFO[tile.biome].color}}/>
+                <div><strong>{BIOME_INFO[tile.biome].name}</strong>
+                  <small>Food available: {tile.food.toFixed(1)} units</small></div>
+              </div>
+              {agent?<div className="evo-individual">
+                <div className="evo-individual-title">
+                  <span className="evo-species-avatar"
+                    style={{color:SPECIES_INFO[agent.species].color}}>
+                    {SPECIES_INFO[agent.species].symbol}
+                  </span>
+                  <div><strong>{SPECIES_INFO[agent.species].name.slice(0,-1)} #{agent.id}</strong>
+                    <small>{agent.age} years old · Born year {agent.born}</small></div>
+                </div>
+                <div className="evo-vitals">
+                  <label>ENERGY <b>{Math.round(agent.energy)}%</b>
+                    <progress max="100" value={agent.energy}/></label>
+                  <label>HEALTH <b>{Math.round(agent.health)}%</b>
+                    <progress max="100" value={agent.health}/></label>
+                </div>
+                <div className="evo-individual-facts">
+                  <span>Maturity <b>{SPECIES_INFO[agent.species].maturity} years</b></span>
+                  <span>Typical lifespan <b>{SPECIES_INFO[agent.species].lifespan} years</b></span>
+                  <span>Curiosity <b>{agent.genes.curiosity.toFixed(2)}×</b></span>
+                  <span>Vigor <b>{agent.genes.vigor.toFixed(2)}×</b></span>
+                  {agent.parents&&<span>Parent IDs <b>{agent.parents.join(' + ')}</b></span>}
+                </div>
+              </div>:<div className="evo-inspector-empty small">
+                No individual currently occupies this tile.
+              </div>}
+              {settlement&&<div className="evo-selected-settlement">
+                <strong>⌂ {settlement.name}</strong>
+                <span>{SPECIES_INFO[settlement.species].name} founded Y{settlement.founded}</span>
+                <span>{settlement.population} nearby people · {settlement.stores.toFixed(0)} stores</span>
+              </div>}
+            </>}
+          </section>
+          <section className="evo-section-card evo-world-actions">
+            <div className="evo-card-heading"><strong>WORLD FILE</strong></div>
+            <div className="evo-actions-buttons">
+              <button onClick={()=>{setPlaying(false);downloadJson(world);}}>
+                ⇩ EXPORT WORLD JSON
+              </button>
+              <button onClick={()=>fileRef.current?.click()}>⇧ IMPORT WORLD JSON</button>
+              <input type="file" accept=".json,application/json" hidden ref={fileRef}
+                onChange={importWorld}/>
+              <button onClick={reset}>↺ REPLAY THIS SEED</button>
+            </div>
+            <p>Changes autosave in this browser. Export JSON for portable backups.
+              Replay resets the simulation to its original conditions.</p>
+          </section>
+          <section className="evo-section-card evo-latest-events">
+            <div className="evo-card-heading"><strong>RECENT CHRONICLE</strong>
+              <button onClick={()=>navigate('history')}>VIEW ALL ↗</button></div>
+            {world.events.slice(-4).reverse().map(e=><div key={e.id} className="evo-event-small">
+              <span>Y{e.year}</span><p>{e.message}</p>
+            </div>)}
+          </section>
+        </aside>
+      </div>
+      <div className="evo-future-note">
+        <strong>V0.1: LIVING WORLD</strong>
+        <span>Reproduction is currently within species, without relationships.
+          Love, hybrids, lineage views, war, disasters and a separate demon realm are
+          planned for later releases.</span>
+      </div>
+    </main>}
+  </div>;
+}
