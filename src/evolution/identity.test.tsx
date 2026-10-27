@@ -146,7 +146,7 @@ describe('v0.3 visual integration',()=>{
     expect(html).toContain('PEOPLE');
     expect(html).toContain('FAMILIES');
     expect(html).toContain('DIVINE CODEX');
-    expect(html).toContain('evo-world-person-buttons');
+    expect(html).toContain('WORLD INSPECTOR');
   });
   it('renders a searchable directory with generated names, filters and favorites',()=>{
     const world=createWorld({seed:431});
