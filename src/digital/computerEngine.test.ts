@@ -236,6 +236,30 @@ describe('CPU datapath, arithmetic and module hierarchy',()=>{
     expect(first.registers['top/'+block.id+'/ff']).toBeDefined();
     expect(first.registers['top/'+instances[1].id+'/ff']).toBeDefined();
   });
+  it('CPU can be captured as a reusable module with an external RESET input',()=>{
+    const cpu=cpuCoreDemo();
+    const {definition,condensed}=captureBlock(cpu,'CPU DATAPATH');
+    expect(definition.inputs.map(p=>p.label)).toEqual(['PC RESET']);
+    expect(definition.outputs).toHaveLength(4);
+    expect(isDigitalDocument(condensed)).toBe(true);
+    const instance=condensed.components.find(c=>c.kind==='block')!;
+    expect(instance.ports?.inputs).toEqual(['in0']);
+    let runtime=stepCircuit(condensed,emptyDigitalRuntime());
+    const bits=condensed.components.filter(c=>c.kind==='led').map(c=>
+      simulateLogic(condensed,runtime).ledValues[c.id]);
+    expect(bits).toEqual([1,0,0,0]);
+    runtime=stepCircuit(condensed,runtime);
+    expect(runtime.cycle).toBe(2);
+  });
+  it('CPU program counter can be synchronously reset through exposed RESET switch',()=>{
+    const doc=cpuCoreDemo();
+    const afterTwo=stepCircuit(doc,stepCircuit(doc,emptyDigitalRuntime()));
+    expect(word(doc,'pc',afterTwo)).toBe(2);
+    const reset={...doc,components:doc.components.map(c=>
+      c.id==='reset'?{...c,bit:1 as const}:c)};
+    const next=stepCircuit(reset,afterTwo);
+    expect(word(reset,'pc',next)).toBe(0);
+  });
   it('truth table refuses a sequential design rather than implying time has no effect',()=>{
     expect(()=>generateTruthTable(flipFlopDemo())).toThrow(/combinational/);
     expect(()=>generateTruthTable(counterDemo())).toThrow(/combinational/);
