@@ -54,8 +54,8 @@ describe('Evolution Lab integration and first-time user experience',()=>{
     expect(markup).toContain('role="grid"');
     expect(markup).toContain('tabindex="0"');
     expect(markup).toContain('Arrow keys');
-    expect(markup).toContain('width="768"');
-    expect(markup).toContain('height="504"');
+    expect(markup).toContain('width="960"');
+    expect(markup).toContain('height="624"');
   });
   it('accepts saved worlds but rejects malformed JSON and oversize inputs',()=>{
     const world=createWorld({seed:143});

@@ -16,8 +16,10 @@ import {
 
 function initialWorld():World{
   if(typeof window!=='undefined'){
-    const restored=loadBrowserWorld(window.localStorage);
-    if(restored)return restored;
+    try{
+      const restored=loadBrowserWorld(window.localStorage);
+      if(restored)return restored;
+    }catch{/* Restricted storage: continue with an in-memory world. */}
   }
   return createWorld(DEFAULT_SETTINGS);
 }
@@ -138,8 +140,14 @@ export function EvolutionLab(){
     setZoom(1);setNotice('New world created with seed '+settings.seed+'.');
   };
   const reset=()=>{
-    if(!window.confirm('Restart this world from year 0 using seed '+world.settings.seed+
-      '? The current timeline will be replaced.'))return;
+    const legacyDimensions=world.width!==({
+      small:96,medium:160,large:256,vast:320,
+    }[world.settings.size]);
+    const note=legacyDimensions?
+      'This is a migrated v0.1 world. Replaying its seed will start a NEW, LARGER v0.2 map. ':
+      '';
+    if(!window.confirm(note+'Restart from year 0 using seed '+world.settings.seed+
+      '? Your current timeline will be replaced. Export World JSON first to keep it.'))return;
     setPlaying(false);setWorld(createWorld(world.settings));
     setSelected(null);setSelectedAgentId(null);
     setNotice('World replayed from the same starting seed.');

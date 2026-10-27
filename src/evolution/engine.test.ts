@@ -175,7 +175,7 @@ describe('World interventions and portable saves',()=>{
     expect(isWorld({...saved,agents:[saved.agents[0],saved.agents[0]]})).toBe(false);
     expect(isWorld({...saved,agents:saved.agents.map((a,i)=>i===0?
       {...a,x:-1}:a)})).toBe(false);
-    expect(isWorld({...saved,version:2})).toBe(false);
+    expect(isWorld({...saved,version:3})).toBe(false);
     expect(isWorld(null)).toBe(false);
   });
 });
