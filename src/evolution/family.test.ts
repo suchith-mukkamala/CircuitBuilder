@@ -69,7 +69,7 @@ describe('Evolution Lab v0.2 · genetics and compatibility',()=>{
     // Force a meeting while keeping the actual engine path deterministic.
     const rand=()=>0;
     const before=ready.lineage.length;
-    const next={...ready,agents:ready.agents.map(agent=>({...agent})),bonds:[]};
+    const next:World={...ready,agents:ready.agents.map(agent=>({...agent})),bonds:[]};
     growBonds(next,rand);
     expect(next.bonds.length).toBe(1);
     expect(next.bonds[0].stage).toBe('courting');

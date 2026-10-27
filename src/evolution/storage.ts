@@ -51,15 +51,16 @@ function isRecord(input:unknown):input is Record<string,unknown>{
 /** Safe conversion of v0.1 worlds. Original geography stays the same. */
 export function migrateLegacyWorld(input:unknown):World|null{
   if(!isRecord(input)||input.version!==1||!isRecord(input.settings))return null;
-  const old=input,settings=old.settings;
+  const old=input,settings=input.settings as Record<string,unknown>;
   const size=settings.size;
   if(size!=='small'&&size!=='medium'&&size!=='large')return null;
-  const [width,height]=LEGACY_SIZES[size];
+  const [width,height]=LEGACY_SIZES[size as keyof typeof LEGACY_SIZES];
+  const starting=settings.starting as Record<string,unknown>;
   if(old.width!==width||old.height!==height||
     !Number.isSafeInteger(settings.seed)||Number(settings.seed)<1||
     !isRecord(settings.starting)||
-    !SPECIES.every(s=>Number.isInteger(settings.starting[s])&&
-      Number(settings.starting[s])>=0&&Number(settings.starting[s])<=75)||
+    !SPECIES.every(s=>Number.isInteger(starting[s])&&
+      Number(starting[s])>=0&&Number(starting[s])<=75)||
     !Number.isFinite(settings.resourceLevel)||Number(settings.resourceLevel)<.5||
     Number(settings.resourceLevel)>1.8||
     !Number.isFinite(settings.wandering)||Number(settings.wandering)<.5||

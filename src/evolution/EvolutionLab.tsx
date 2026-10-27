@@ -5,7 +5,7 @@ import {WorldCreator} from './WorldCreator';
 import {EvolutionHistory} from './EvolutionHistory';
 import {WorldFamily} from './WorldFamily';
 import {hybridFraction,traitProfile,ancestryLabel} from './family';
-import {compactWorld,loadBrowserWorld,WORLD_STORAGE_KEY,
+import {compactWorld,loadBrowserWorld,readSavedWorld,WORLD_STORAGE_KEY,
   MAX_WORLD_FILE_BYTES} from './storage';
 export {readSavedWorld} from './storage';
 import {
