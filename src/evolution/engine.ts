@@ -351,7 +351,7 @@ export function editWorld(previous:World,x:number,y:number,brush:Brush):World{
   if(brush.kind==='terrain'&&brush.biome==='water'&&
     previous.agents.some(a=>a.x===x&&a.y===y))return previous;
   const world:World={...previous,agents:[...previous.agents],
-    tiles:[...previous.tiles],events:[...previous.events]]};
+    tiles:[...previous.tiles],events:[...previous.events]};
   if(brush.kind==='spawn'){
     const state={n:prngState(previous.rngState)},info=SPECIES_INFO[brush.species];
     const age=info.maturity+Math.floor(random(state)*info.lifespan*.16);
@@ -371,41 +371,69 @@ export function editWorld(previous:World,x:number,y:number,brush:Brush):World{
 }
 export function isWorld(value:unknown):value is World{
   if(!value||typeof value!=='object')return false;
-  const w=value as Partial<World>;
-  if(w.version!==1||!w.settings||!Object.hasOwn(SIZES,w.settings.size)||
-    !Number.isInteger(w.width)||!Number.isInteger(w.height)||
+  const w=value as Partial<World>,settings=w.settings;
+  if(w.version!==1||!settings||!Object.hasOwn(SIZES,settings.size)||
+    !Number.isSafeInteger(settings.seed)||settings.seed<1||settings.seed>2147483647||
+    !Number.isFinite(settings.resourceLevel)||settings.resourceLevel<.5||
+    settings.resourceLevel>1.8||!Number.isFinite(settings.wandering)||
+    settings.wandering<.5||settings.wandering>1.8||
+    !settings.starting||typeof settings.starting!=='object'||
+    !SPECIES.every(s=>Number.isInteger(settings.starting[s])&&
+      settings.starting[s]>=0&&settings.starting[s]<=75))return false;
+  if(!Number.isInteger(w.width)||!Number.isInteger(w.height)||
     !w.width||!w.height||w.width>82||w.height>54||
-    !Number.isInteger(w.year)||w.year===undefined||w.year<0||
-    !Number.isInteger(w.rngState)||!Array.isArray(w.tiles)||
-    w.tiles.length!==w.width*w.height||!Array.isArray(w.agents)||
-    w.agents.length>850||!Array.isArray(w.settlements)||
-    w.settlements.length>54||!Array.isArray(w.events)||w.events.length>90||
-    !Array.isArray(w.history)||w.history.length>400)return false;
+    w.width!==SIZES[settings.size][0]||w.height!==SIZES[settings.size][1]||
+    !Number.isInteger(w.year)||w.year===undefined||w.year<0||w.year>9999||
+    !Number.isInteger(w.rngState)||w.rngState===undefined||
+    w.rngState<0||w.rngState>4294967295||
+    !Number.isSafeInteger(w.nextAgentId)||!Number.isSafeInteger(w.nextSettlementId)||
+    !Number.isSafeInteger(w.nextEventId)||
+    !Number.isFinite(w.totalBirths)||!Number.isFinite(w.totalDeaths)||
+    !Array.isArray(w.tiles)||w.tiles.length!==w.width*w.height||
+    !Array.isArray(w.agents)||w.agents.length>850||
+    !Array.isArray(w.settlements)||w.settlements.length>54||
+    !Array.isArray(w.events)||w.events.length>90||
+    !Array.isArray(w.history)||w.history.length>400||w.history.length===0)return false;
+  const width=w.width,height=w.height;
   if(!w.tiles.every(t=>t&&BIOMES.includes(t.biome)&&Number.isFinite(t.food)&&
     t.food>=0&&t.food<=16))return false;
   const ids=new Set<number>(),positions=new Set<number>();
   for(const a of w.agents){
-    if(!a||!SPECIES.includes(a.species)||!Number.isSafeInteger(a.id)||ids.has(a.id)||
-      !Number.isInteger(a.x)||!Number.isInteger(a.y)||
-      !within(w.width,w.height,a.x,a.y)||!Number.isFinite(a.age)||
-      !Number.isFinite(a.energy)||a.energy<0||a.energy>100||
-      !Number.isFinite(a.health)||a.health<0||a.health>100||!a.genes||
+    if(!a||!SPECIES.includes(a.species)||!Number.isSafeInteger(a.id)||a.id<=0||
+      ids.has(a.id)||!Number.isInteger(a.x)||!Number.isInteger(a.y)||
+      !within(width,height,a.x,a.y)||!Number.isInteger(a.age)||a.age<0||
+      !Number.isInteger(a.born)||!Number.isFinite(a.energy)||
+      a.energy<0||a.energy>100||!Number.isFinite(a.health)||
+      a.health<=0||a.health>100||!a.genes||
       !(['vigor','curiosity','fertility'] as const).every(k=>
-        Number.isFinite(a.genes[k])&&a.genes[k]>=.5&&a.genes[k]<=1.5))return false;
-    const index=offset(w.width,a.x,a.y);
+        Number.isFinite(a.genes[k])&&a.genes[k]>=.5&&a.genes[k]<=1.5)||
+      (a.parents!==undefined&&(!Array.isArray(a.parents)||a.parents.length!==2||
+        !a.parents.every(p=>Number.isSafeInteger(p)&&p>0))))return false;
+    const index=offset(width,a.x,a.y);
     if(positions.has(index)||w.tiles[index].biome==='water')return false;
     ids.add(a.id);positions.add(index);
   }
+  const settlementIds=new Set<number>();
   for(const s of w.settlements){
     if(!s||!SPECIES.includes(s.species)||!Number.isSafeInteger(s.id)||
-      !Number.isInteger(s.x)||!Number.isInteger(s.y)||
-      !within(w.width,w.height,s.x,s.y)||typeof s.name!=='string'||
-      s.name.length>100||!Number.isFinite(s.stores)||
-      !Number.isFinite(s.population)||!Number.isFinite(s.emptyYears))return false;
+      s.id<=0||settlementIds.has(s.id)||!Number.isInteger(s.x)||
+      !Number.isInteger(s.y)||!within(width,height,s.x,s.y)||
+      typeof s.name!=='string'||s.name.length>100||
+      !Number.isInteger(s.founded)||!Number.isFinite(s.stores)||
+      s.stores<0||s.stores>100||!Number.isFinite(s.population)||
+      !Number.isInteger(s.emptyYears)||s.emptyYears<0)return false;
+    settlementIds.add(s.id);
   }
-  if(!w.history.every(p=>Number.isInteger(p.year)&&Number.isFinite(p.total)&&
-    SPECIES.every(s=>Number.isFinite(p[s]))))return false;
-  if(!w.events.every(e=>Number.isInteger(e.year)&&typeof e.message==='string'&&
-    e.message.length<500))return false;
+  if(!w.history.every(p=>Number.isInteger(p.year)&&p.year>=0&&
+    Number.isInteger(p.total)&&p.total>=0&&
+    Number.isInteger(p.births)&&Number.isInteger(p.deaths)&&
+    Number.isInteger(p.settlements)&&
+    SPECIES.every(s=>Number.isInteger(p[s])&&p[s]>=0)))return false;
+  if(w.history.at(-1)!.year!==w.year||
+    w.history.at(-1)!.total!==w.agents.length)return false;
+  if(!w.events.every(e=>Number.isSafeInteger(e.id)&&
+    Number.isInteger(e.year)&&e.year>=0&&
+    ['world','birth','death','settlement','collapse','milestone'].includes(e.type)&&
+    typeof e.message==='string'&&e.message.length<500))return false;
   return true;
 }
