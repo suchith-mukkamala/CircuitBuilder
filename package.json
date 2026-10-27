@@ -1,15 +1,14 @@
 {
   "name": "circuitbuilder",
   "private": true,
-  "version": "0.19.1",
+  "version": "0.20.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest",
-    "test:long-evolution": "vite-node src/evolution/longRun.ts"
+    "test:watch": "vitest"
   },
   "dependencies": {
     "react": "^19.1.0",

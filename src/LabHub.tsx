@@ -2,12 +2,11 @@ import { useState } from 'react';
 import { App as AnalogLab } from './App';
 import { SignalLab } from './digital/SignalLab';
 import { ComputerBuilder } from './ComputerBuilder';
-import { EvolutionLab } from './evolution/EvolutionLab';
 import { HomeScreen } from './HomeScreen';
 import { useDigitalStore } from './digital/useDigitalStore';
 import type { DigitalWorkspace } from './digital/useDigitalStore';
 
-type Destination = 'home'|'analog'|'signal'|'computer'|'evolution';
+type Destination = 'home'|'analog'|'signal'|'computer';
 
 export function LabHub(){
   const [page,setPage]=useState<Destination>('home');
@@ -55,21 +54,14 @@ export function LabHub(){
             <span className="lab-switch-symbol">▣</span>
             <span>03 <strong>COMPUTER</strong></span>
           </button>
-          <button role="tab" aria-selected={page==='evolution'}
-            className={page==='evolution'?'lab-active':''}
-            onClick={()=>choose('evolution')}>
-            <span className="lab-switch-symbol">✦</span>
-            <span>04 <strong>EVOLUTION</strong></span>
-          </button>
         </div>
-        <div className="lab-switcher-status"><span/> FOUR LABORATORIES</div>
+        <div className="lab-switcher-status"><span/> THREE LABORATORIES</div>
       </>}
     </nav>
     {page==='home'?
       <HomeScreen onAnalog={()=>choose('analog')}
-        onSignal={()=>choose('signal')} onComputer={()=>choose('computer')}
-        onEvolution={()=>choose('evolution')}/>:
+        onSignal={()=>choose('signal')} onComputer={()=>choose('computer')}/>:
       page==='analog'?<AnalogLab/>:
-      page==='signal'?<SignalLab/>:page==='computer'?<ComputerBuilder/>:<EvolutionLab/>}
+      page==='signal'?<SignalLab/>:<ComputerBuilder/>}
   </div>;
 }
