@@ -1,6 +1,6 @@
 import {useEffect,useMemo,useState} from 'react';
 import {useDigitalStore} from './useDigitalStore';
-import {assembleCasm,CASM_INSTRUCTIONS,DEFAULT_CASM_SOURCE,
+import {assembleCasm,CASM_INSTRUCTIONS,CASM_EXAMPLES,DEFAULT_CASM_SOURCE,
   disassembleCasm,EMPTY_PROGRAM} from './casm';
 import {readCpuState} from './cpuCore';
 import {simulateLogic} from './engine';
@@ -21,7 +21,7 @@ const freshSource=(rom:DigitalComponent):string=>
   rom.source??disassembleCasm(rom.program??EMPTY_PROGRAM())
     .map(i=>i.source).join('\n');
 
-export function CasmProgramPanel(){
+export function CasmProgramPanel({active=true}:{active?:boolean}={}){
   const doc=useDigitalStore(s=>s.document);
   const runtime=useDigitalStore(s=>s.runtime);
   const clock=useDigitalStore(s=>s.clockStep);
@@ -43,7 +43,8 @@ export function CasmProgramPanel(){
     setSource(rom?freshSource(rom):DEFAULT_CASM_SOURCE);
     setFeedback('');
     setRunning(false);
-  },[rom?.id,rom?.source,rom?.program,doc.name]);
+  },[rom?.id,rom?.source,rom?.program]);
+  useEffect(()=>{if(!active)setRunning(false);},[active]);
   useEffect(()=>{setRunning(false);},[cpu?.id]);
   const assembled=useMemo(()=>assembleCasm(source),[source]);
   const dirty=rom?source!==freshSource(rom):false;
@@ -111,10 +112,23 @@ export function CasmProgramPanel(){
     <div className="casm-editor-heading">
       <span>main.casm</span><span>{dirty?'● UNSAVED SOURCE':'✓ ROM SYNCED'}</span>
     </div>
+    <div className="casm-example-picker">
+      <label htmlFor="casm-example">EXAMPLE PROGRAM</label>
+      <select id="casm-example" value="" onChange={e=>{
+        const chosen=CASM_EXAMPLES.find(x=>x.id===e.target.value);
+        if(chosen){setSource(chosen.source);
+          setFeedback('Example loaded into editor. Press ASSEMBLE & LOAD to program your ROM.');}
+      }}>
+        <option value="">Choose a sample…</option>
+        {CASM_EXAMPLES.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}
+      </select>
+    </div>
     <textarea className="casm-code" aria-label="CASM assembly source" rows={10}
       spellCheck={false} autoCapitalize="off" autoComplete="off"
       value={source} onChange={e=>{setSource(e.target.value);setFeedback('');}}
       placeholder={'LDI 3\nADD 5\nOUT\nHLT'}/>
+    {dirty&&<p className="casm-draft-hint">Draft not loaded: RUN and STEP still execute
+      the previous machine code in ROM until you press ASSEMBLE & LOAD.</p>}
     <div className="casm-compile-actions">
       <button disabled={!rom||!assembled.ok} className="casm-primary"
         onClick={assembleAndLoad}>▣ ASSEMBLE & LOAD</button>
