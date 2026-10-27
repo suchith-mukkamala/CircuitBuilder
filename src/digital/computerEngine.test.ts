@@ -1,6 +1,6 @@
 import {beforeEach,describe,expect,it} from 'vitest';
 import {
-  type DigitalDocument,type DigitalComponent,type DigitalRuntime,
+  type DigitalDocument,type DigitalComponent,type DigitalRuntime,type LogicValue,
   emptyDigitalRuntime,isDigitalDocument,inputsOf,outputsOf,defaultRomWords,
 } from './types';
 import { simulateLogic, calculateAlu4, generateTruthTable } from './engine';
