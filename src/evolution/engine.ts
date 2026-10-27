@@ -554,7 +554,7 @@ export function isWorld(value:unknown):value is World{
     !Array.isArray(w.lineage)||w.lineage.length>14000||
     !Array.isArray(w.events)||w.events.length>90||
     !Array.isArray(w.history)||w.history.length>400||w.history.length===0)return false;
-  const width=w.width,height=w.height;
+  const width=w.width,height=w.height,year=w.year as number;
   if(!w.tiles.every(t=>t&&BIOMES.includes(t.biome)&&Number.isFinite(t.food)&&
     t.food>=0&&t.food<=20))return false;
   const ids=new Set<number>(),positions=new Set<number>();
@@ -620,7 +620,7 @@ export function isWorld(value:unknown):value is World{
       (r.house!==undefined&&(typeof r.house!=='string'||r.house.length>64))||
       (r.moments!==undefined&&(!Array.isArray(r.moments)||r.moments.length>40||
         !r.moments.every(m=>m&&Number.isInteger(m.year)&&m.year>=0&&
-          m.year<=w.year&&
+          m.year<=year&&
           ['arrival','birth','courtship','partner','separation','parenthood','death',
             'founding','renamed'].includes(m.kind)&&
           typeof m.text==='string'&&m.text.length<=220&&
@@ -663,9 +663,9 @@ export function isWorld(value:unknown):value is World{
         SPECIES.includes(v.species)&&typeof v.name==='string'&&v.name.length<=100&&
         Number.isInteger(v.x)&&Number.isInteger(v.y)&&
         within(width,height,v.x,v.y)&&Number.isInteger(v.founded)&&
-        v.founded<=w.year&&
+        v.founded<=year&&
         (v.collapsed===undefined||(Number.isInteger(v.collapsed)&&
-          v.collapsed>=v.founded&&v.collapsed<=w.year))&&
+          v.collapsed>=v.founded&&v.collapsed<=year))&&
         (v.founderId===undefined||Number.isSafeInteger(v.founderId)))||
       new Set(c.settlements.map(v=>v.id)).size!==c.settlements.length)
       return false;
