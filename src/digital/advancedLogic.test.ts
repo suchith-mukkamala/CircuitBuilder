@@ -39,9 +39,9 @@ const outputBits=(doc:DigitalDocument): LogicValue[] => {
 
 describe('new component catalog and metadata',()=>{
   it('has unique, searchable metadata for every placeable component',()=>{
-    expect(allParts.length).toBe(31);
-    expect(new Set(allParts.map(p=>p.kind)).size).toBe(31);
-    expect(new Set(gateKinds).size).toBe(18);
+    expect(allParts.length).toBe(33);
+    expect(new Set(allParts.map(p=>p.kind)).size).toBe(33);
+    expect(new Set(gateKinds).size).toBe(19);
     expect(allParts.map(p=>p.kind).sort())
       .toEqual(digitalKinds.filter(k=>k!=='block').sort());
     for(const part of allParts){
@@ -63,7 +63,7 @@ describe('new component catalog and metadata',()=>{
       .toEqual(['halfadder','fulladder']);
     expect(searchParts('mux','sources')).toEqual([]);
     expect(paletteCategories).toHaveLength(8);
-    expect(searchParts('')).toHaveLength(31);
+    expect(searchParts('')).toHaveLength(33);
   });
   it('declares exact input/output pads for multiplexers, adders and sources',()=>{
     const pins=(kind:DigitalKind)=>pinsOf({id:'x',kind,x:0,y:0,rotation:0});

@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { useDigitalStore } from './useDigitalStore';
 import type { DigitalDocument, DigitalComponent, LogicResult } from './types';
 import { digitalLabel,defaultRomWords } from './types';
-import { counterDemo,cpuCoreDemo,flipFlopDemo } from './computerSamples';
+import { counterDemo,cpuCoreDemo,flipFlopDemo,programmableCpuDemo } from './computerSamples';
+import {readCpuState} from './cpuCore';
 
 const word = (result:LogicResult,id:string):string => {
   const bits=[3,2,1,0].map(i=>result.terminalValues[id+':q'+i]??'Z');
@@ -28,9 +29,9 @@ export function ComputerPanel({doc,result}:{
   useEffect(()=>{setRunning(false);},[doc.name,editStack.length]);
   const clockCount=doc.components.filter(c=>c.kind==='clock').length;
   const seqCount=doc.components.filter(c=>
-    ['dff','tff','register4','counter4','ram16x4'].includes(c.kind)).length;
+    ['dff','tff','register4','counter4','ram16x4','cpu4'].includes(c.kind)).length;
   const stateParts=doc.components.filter(c=>
-    ['dff','tff','register4','counter4','ram16x4'].includes(c.kind));
+    ['dff','tff','register4','counter4','ram16x4','cpu4'].includes(c.kind));
   const loadExample=(make:()=>DigitalDocument)=>{
     try{load(make());reset();setRunning(false);}
     catch(error){window.alert(error instanceof Error?error.message:'Unable to load example.');}
@@ -75,7 +76,9 @@ export function ComputerPanel({doc,result}:{
         <span>{digitalLabel(c,doc.components)}</span>
         <strong>{['dff','tff'].includes(c.kind)
           ?String(result.terminalValues[c.id+':q']??'Z')
-          :c.kind==='ram16x4'?'MEMORY · 16×4':word(result,c.id)}</strong>
+          :c.kind==='ram16x4'?'MEMORY · 16×4':c.kind==='cpu4'?
+            'PC '+readCpuState(runtime,'top/'+c.id).pc.toString(16).toUpperCase()+' · ACC '+
+            readCpuState(runtime,'top/'+c.id).acc.toString(16).toUpperCase():word(result,c.id)}</strong>
       </div>)}
     </div>
     <div className="computer-demo-picker">
@@ -89,10 +92,12 @@ export function ComputerPanel({doc,result}:{
       <button disabled={!!editStack.length} onClick={()=>loadExample(cpuCoreDemo)}>
         ◈ 4-BIT CPU DATAPATH
       </button>
+      <button disabled={!!editStack.length} onClick={()=>loadExample(programmableCpuDemo)}>
+        ⌘ PROGRAMMABLE CASM CPU
+      </button>
     </div>
     <p className="computer-hint">
-      Clock steps are logical events, not nanosecond delays. This first
-      computer foundation uses four individual bit wires, not bundled buses.
+      Clock steps are logical events, not nanosecond delays. This computer foundation supports separate bit wires and grouped buses.
       Registers and RAM reset to zero when the simulation resets.
     </p>
   </section>;

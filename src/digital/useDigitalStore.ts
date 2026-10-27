@@ -9,7 +9,8 @@ import {
 } from './types';
 import { simulateLogic } from './engine';
 import { stepCircuit,transitionInputs,resetComputer } from './computerEngine';
-import { cpuCoreDemo } from './computerSamples';
+import {cpuCoreDemo,programmableCpuDemo} from './computerSamples';
+import {assembleCasm,DEFAULT_CASM_SOURCE} from './casm';
 import {digitalBusPath,digitalWirePath,endpointPoint} from './network';
 import { applyInputVector, captureBlock, placeBlock, reviseBlockDefinition, updatedBlockCatalog } from './blocks';
 
@@ -74,6 +75,7 @@ export type DigitalStore = {
   clockSteps: (count:number) => void;
   resetClock: () => void;
   setRomWords: (id:string,words:number[]) => void;
+  setCasmProgram: (id:string,source:string) => boolean;
   blockLibrary: DigitalBlock[];
   favoriteKinds: DigitalKind[];
   recentKinds: DigitalKind[];
@@ -182,7 +184,7 @@ export const useDigitalStore = create<DigitalStore>()(persist((set, get) => ({
   document: initialDigitalCircuit(),
   activeWorkspace:'signal',
   signalDocument:initialDigitalCircuit(),
-  computerDocument:cpuCoreDemo(),
+  computerDocument:programmableCpuDemo(),
   switchWorkspace:destination=>{
     const state=get();
     if(state.activeWorkspace===destination)return true;
@@ -226,6 +228,23 @@ export const useDigitalStore = create<DigitalStore>()(persist((set, get) => ({
       c.id===id?{...c,words:[...words]}:c)},
       {message:'ROM program saved · 16 addressable words.'});
   }),
+  setCasmProgram:(id,source)=>{
+    const compiled=assembleCasm(source);
+    if(!compiled.ok){
+      set({message:'Assembler errors: '+compiled.issues.map(e=>'line '+e.line+': '+e.message).join(' | ')});
+      return false;
+    }
+    const state=get();
+    if(!state.document.components.some(c=>c.id===id&&c.kind==='rom16x8')){
+      set({message:'Choose a 16×8 instruction ROM to load CASM code.'});
+      return false;
+    }
+    set(current=>patch(current,{...current.document,
+      components:current.document.components.map(c=>c.id===id?
+        {...c,source,program:compiled.bytes}:c)},
+      {message:'Assembled '+compiled.listing.length+' CASM instruction(s) to 16×8 ROM. CPU reset.'}));
+    return true;
+  },
   toggleFavorite: kind => set(state => ({ favoriteKinds:
     state.favoriteKinds.includes(kind) ? state.favoriteKinds.filter(k => k!==kind) : [...state.favoriteKinds,kind],
   })),
@@ -365,6 +384,9 @@ export const useDigitalStore = create<DigitalStore>()(persist((set, get) => ({
       id: digitalId(), kind, x: digitalSnap(at.x), y: digitalSnap(at.y), rotation: 0,
       ...(kind === 'input' ? { bit: 0 as const } : {}),
       ...(kind === 'rom16x4' ? {words:defaultRomWords()} : {}),
+      ...(kind === 'rom16x8' ? {
+        source:DEFAULT_CASM_SOURCE,program:assembleCasm(DEFAULT_CASM_SOURCE).bytes,
+      } : {}),
     };
     return patch(state, {
       ...state.document, components: [...state.document.components, c],

@@ -1,0 +1,113 @@
+/* v0.11 · CASM: programmable 4-bit computing inside the retro arcade */
+.computer-tools-panel .computer-tool-tabs{grid-template-columns:repeat(6,minmax(0,1fr))}
+.computer-tools-panel .computer-tool-tabs button{font-size:6px;letter-spacing:-.25px}
+.computer-tools-panel .computer-tool-tabs button:first-child{color:#a8f9e0}
+.computer-tools-panel .computer-tool-tabs button:first-child.active{
+  background:#15443b;color:#d5fff0;border-color:#78f7d0}
+.casm-workspace{background:#0e162e;color:#dfe4f5;border:1px solid #374f6c;
+  min-width:0;padding-bottom:14px}
+.casm-workspace .signal-panel-heading{color:#b9f6e5;border-color:#376c65;
+  background:linear-gradient(90deg,#183a42,#171b38);font-size:8px}
+.casm-intro{color:#9eb3d0;padding:12px 11px 9px;font:10px/1.8 'Space Mono',monospace}
+.casm-notice{margin:8px 11px;padding:10px;border:1px solid #8c749c;
+  color:#e4c9f4;background:#28203a;font:10px/1.75 'Space Mono',monospace}
+.casm-notice b{color:#c5ffe9}
+.casm-notice.casm-fault{color:#ffc1cd;border-color:#c16a87;background:#3d2039}
+.casm-selectors{padding:0 11px 9px;display:grid;gap:8px}
+.casm-selectors label{display:flex;flex-direction:column;gap:5px;color:#8bb6c9;
+  font:9px/1.6 'Space Mono',monospace}
+.casm-selectors select,.casm-speed select{min-width:0;width:100%;background:#121f39;
+  color:#d9fff1;border:1px solid #4e7385;padding:9px 6px;
+  font:10px/1.6 'Space Mono',monospace}
+.casm-editor-heading{display:flex;justify-content:space-between;gap:6px;
+  padding:10px 11px;background:#171a38;border-top:1px solid #38516b;
+  color:#b5d9f1;font:9px/1.7 'Space Mono',monospace}
+.casm-editor-heading span:last-child{color:#97e1ca}
+.casm-code{display:block;box-sizing:border-box;width:calc(100% - 20px);
+  margin:0 10px;min-height:215px;resize:vertical;
+  border:1px solid #46637e;border-left:3px solid #7bd9b6;
+  color:#d7ffeb;background:#09142c;
+  font:12px/1.8 'Space Mono',monospace;padding:12px 11px;
+  tab-size:4;caret-color:#b0ffe0;white-space:pre}
+.casm-code:focus{outline:1px solid #9dffdc;box-shadow:0 0 15px #8bffda2e}
+.casm-compile-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px;
+  padding:10px 11px 12px}
+.casm-workspace button{cursor:pointer}
+.casm-primary{background:#1b574b!important;color:#bcffe3!important;
+  border:1px solid #79f6c6!important;box-shadow:0 0 11px #60eab22e!important}
+.casm-primary:hover:not(:disabled){background:#276e60!important;box-shadow:0 0 18px #60eab250!important}
+.casm-workspace button:disabled{opacity:.35;cursor:not-allowed;box-shadow:none!important}
+.casm-compile-actions button,.casm-run-row button{border:1px solid #625f8d;
+  background:#222543;color:#d6dafa;padding:9px 8px;
+  font:9px/1.6 'Space Mono',monospace;white-space:normal}
+.casm-compiled{font:9px 'Space Mono',monospace;color:#8df4c4}
+.casm-invalid{font:9px 'Space Mono',monospace;color:#ff9eb6}
+.casm-feedback{margin:0 11px 10px;padding:9px;border:1px solid #477968;
+  background:#173c3d;color:#b6ffe6;font:10px/1.7 'Space Mono',monospace}
+.casm-errors{margin:0 11px 12px;padding:9px;background:#321f38;border:1px solid #a66687}
+.casm-errors p{font:10px/1.7 'Space Mono',monospace;color:#ffd0e0;margin:5px 0}
+.casm-errors b{color:#ff9bb3}
+.casm-section-title{margin:13px 10px 9px;padding:8px 5px;border-bottom:1px solid #3c5c72;
+  color:#abdfed;font:8px/1.7 var(--pixel)}
+.casm-listing{margin:0 10px;max-height:235px;overflow:auto;border:1px solid #304966;
+  background:#0b152a}
+.casm-listing-header{display:grid;grid-template-columns:23px 31px 41px minmax(0,1fr);
+  gap:5px;padding:7px 8px;background:#18243d;border-bottom:1px solid #435f7c;
+  font:9px 'Space Mono',monospace;color:#95accf}
+.casm-listing-row{display:grid;grid-template-columns:23px 31px 41px minmax(0,1fr);
+  width:100%;gap:5px;padding:8px 8px;text-align:left;border:0;border-bottom:1px solid #273b50;
+  background:#0e1932;color:#c8d6e9;font:10px/1.6 'Space Mono',monospace}
+.casm-listing-row:hover{background:#263e4c}
+.casm-listing-row.is-current{background:#1b4a42;color:#c1ffe9;
+  box-shadow:inset 3px 0 #86ffce}
+.casm-listing-row span:first-child{color:#8d9bb7}
+.casm-listing-row.has-breakpoint span:first-child{color:#ff9dbb;text-shadow:0 0 10px #ff90b3}
+.casm-listing-row span:last-child{overflow-wrap:anywhere}
+.casm-hint{color:#8ba9bf;padding:5px 12px;font:10px/1.8 'Space Mono',monospace}
+.casm-cpu-readouts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));
+  margin:0 10px;gap:5px}
+.casm-cpu-readouts>div{background:#13213a;border:1px solid #3c6272;
+  min-width:0;padding:10px 3px;display:flex;flex-direction:column;gap:6px;
+  align-items:center}
+.casm-cpu-readouts small{font:8px 'Space Mono',monospace;color:#92acc2}
+.casm-cpu-readouts strong{color:#baffea;text-shadow:0 0 9px #71ffc25e;
+  font:bold 16px monospace}
+.casm-flags{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;
+  margin:8px 10px}
+.casm-flags span{display:flex;align-items:center;justify-content:center;gap:5px;
+  padding:7px 1px;border:1px solid #485172;background:#171e39;
+  color:#adbed3;font:9px/1.6 'Space Mono',monospace}
+.casm-flags b{color:#d0ffe9}
+.casm-flags .is-lit{border-color:#ffdf9e;background:#493b2a}
+.casm-flags .is-fault{border-color:#ff82a3;background:#472139}
+.casm-current{display:flex;flex-direction:column;gap:5px;margin:8px 10px}
+.casm-current span{display:flex;justify-content:space-between;gap:6px;
+  background:#131d36;border-bottom:1px solid #35506c;padding:8px 9px;
+  font:9px/1.7 'Space Mono',monospace;color:#9eb9d1}
+.casm-current strong{color:#b3ffe3;font:10px monospace}
+.casm-run-row{margin:0 10px 8px;display:flex;align-items:center;gap:6px}
+.casm-run-row button{flex:1;min-width:0}
+.casm-run-row .casm-running{border-color:#f8b4d5;background:#48314c;color:#ffdbf0}
+.casm-speed label{color:#94adcd;font:9px 'Space Mono',monospace;flex:1}
+.casm-speed select{flex:1}
+.casm-ram-grid{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));
+  margin:0 10px;gap:4px}
+.casm-ram-grid>div{border:1px solid #3d5473;background:#111e39;
+  padding:6px 2px;min-width:0;text-align:center}
+.casm-ram-grid span{display:block;color:#849bb9;font:9px monospace}
+.casm-ram-grid strong{display:block;color:#b7ffe7;font:15px monospace;margin-top:4px}
+.casm-reference{margin:16px 10px 0;border:1px solid #465d7d;background:#111d35}
+.casm-reference summary{padding:11px 9px;color:#b9d8ec;cursor:pointer;
+  font:9px/1.8 var(--pixel)}
+.casm-reference p{padding:0 10px;color:#a9b9d5;font:10px/1.8 'Space Mono',monospace}
+.casm-ref-line{display:grid;grid-template-columns:20px 63px minmax(0,1fr);
+  gap:5px;padding:6px 8px;border-top:1px solid #2f415d;
+  color:#c5d7eb;font:10px/1.6 'Space Mono',monospace}
+.casm-ref-line strong{color:#9fffe0}
+.casm-ref-line small{font-size:9px;color:#8facbe}
+.computer-workbench-help{display:none}
+@media(max-width:740px){
+  .computer-tools-panel .computer-tool-tabs{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .computer-tools-panel .computer-tool-tabs button{font-size:8px}
+  .casm-code{min-height:170px}
+}

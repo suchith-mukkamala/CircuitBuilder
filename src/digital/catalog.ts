@@ -67,6 +67,9 @@ export const paletteCategories: CategoryInfo[] = [
     parts:[
       {kind:'alu4',glyph:'ALU',name:'4-BIT ALU',description:'ADD / AND / OR / XOR',keywords:'alu4 arithmetic logic unit processor cpu zero carry'},
       {kind:'rom16x4',glyph:'ROM',name:'16×4 ROM',description:'Editable 16-word program table',keywords:'rom16x4 read only memory instructions program firmware lookup'},
+      {kind:'rom16x8',glyph:'P▣',name:'16×8 PROGRAM ROM',description:'Stores CASM machine code (16 bytes)',keywords:'rom16x8 assembly assembler program instructions firmware byte'},
+      {kind:'cpu4',glyph:'CPU',name:'4-BIT CASM CPU',description:'Clocked instruction-decoding processor',keywords:'cpu4 programmable processor instruction decoder accumulator ram casm assembly'},
+
     ]},
   {id:'outputs',name:'OUTPUT & DISPLAY',icon:'◉',description:'Visualize logic states',
     parts:[
