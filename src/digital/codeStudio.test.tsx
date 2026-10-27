@@ -119,7 +119,7 @@ describe('Code Studio page usability',()=>{
     expect(html).toContain('INJECTED ROM');
     expect(html).toContain('LIVE DEBUGGER');
     expect(html).toContain('RAM INSPECTOR');
-    expect(html).toContain('ASSEMBLER');
+    expect(html).toContain('READY TO INJECT');
     expect(html).toContain('STEP INSTRUCTION');
     expect(html).not.toContain('CIRCUIT CANVAS');
   });
@@ -128,7 +128,7 @@ describe('Code Studio page usability',()=>{
     const html=renderToStaticMarkup(createElement(CasmProgramPanel));
     expect(html).toContain('DRAFT NOT INJECTED');
     expect(html).toContain('previous ROM program');
-    expect(html).toContain('LDI 10');
+    expect(useDigitalStore.getState().casmDrafts.rom).toBe('LDI 10\nOUT\nHLT');
     expect(html).toContain('Ctrl');
     expect(html).toContain('RESTORE FROM ROM');
   });
@@ -137,7 +137,7 @@ describe('Code Studio page usability',()=>{
     useDigitalStore.getState().setCasmDraft('__casm_scratch__','LDI 7');
     const html=renderToStaticMarkup(createElement(CasmProgramPanel));
     expect(html).toContain('HARDWARE REQUIRED');
-    expect(html).toContain('LDI 7');
+    expect(useDigitalStore.getState().casmDrafts.__casm_scratch__).toBe('LDI 7');
     expect(html).toContain('No instruction ROM in circuit');
   });
 });
