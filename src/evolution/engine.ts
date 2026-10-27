@@ -9,6 +9,9 @@ import {makeLifeRecord,appendLifeMoment,registerSettlement,
   registerSettlementCollapse} from './identity';
 import {initialMind,planMind,movementIntent,rememberForage,foodAround,MIND_GOALS,
   type AgentMind} from './mind';
+import {prepareDevelopment,cloneDevelopment,helpDependent,developSociety,
+  lifeStage,initialDevelopment,SKILLS,VALUES,CAREERS,MEMORY_KINDS,
+  type Development,type Household,type CareOutcome} from './development';
 export type Species='human'|'elf'|'dwarf'|'demon';
 export type Biome='plains'|'forest'|'mountain'|'cave'|'wasteland'|'volcanic'|'water';
 export type WorldSize='small'|'medium'|'large'|'vast';
@@ -20,13 +23,15 @@ export type Genes={vigor:number;curiosity:number;fertility:number;social:number}
 export type Ancestry=Record<Species,number>;
 export type Agent={id:number;species:Species;ancestry:Ancestry;generation:number;
   x:number;y:number;age:number;energy:number;health:number;genes:Genes;
-  born:number;parents?:[number,number];partnerId?:number;mind?:AgentMind};
+  born:number;parents?:[number,number];partnerId?:number;mind?:AgentMind;
+  development?:Development};
 export type Bond={id:number;a:number;b:number;since:number;
   stage:'courting'|'partner'|'ended';strength:number;ended?:number;
   lastBirthYear?:number;children:number[]};
 export type LifeMoment={year:number;
   kind:'arrival'|'birth'|'courtship'|'partner'|'separation'|'parenthood'|
-    'death'|'founding'|'renamed';text:string;relatedIds?:number[]};
+    'death'|'founding'|'renamed'|'adoption'|'mentorship'|'career'|
+    'independence';text:string;relatedIds?:number[]};
 export type LineageRecord={id:number;species:Species;ancestry:Ancestry;
   genes:Genes;born:number;died?:number;generation:number;name?:string;house?:string;
   moments?:LifeMoment[];parents?:[number,number];children:number[];partnerIds:number[]};
@@ -58,7 +63,8 @@ export type World={version:2;settings:WorldSettings;width:number;height:number;
   nextBondId:number;rngState:number;tiles:Tile[];agents:Agent[];
   settlements:Settlement[];bonds:Bond[];lineage:LineageRecord[];
   events:WorldEvent[];history:Sample[];totalBirths:number;totalDeaths:number;
-  demography?:Demography;codex?:WorldCodex};
+  demography?:Demography;codex?:WorldCodex;
+  households?:Household[];nextHouseholdId?:number};
 export const SPECIES:Species[]=['human','elf','dwarf','demon'];
 export const BIOMES:Biome[]=['plains','forest','mountain','cave','wasteland','volcanic','water'];
 export const SPECIES_INFO:Record<Species,{name:string;symbol:string;color:string;
@@ -233,6 +239,7 @@ export function createWorld(input:Partial<WorldSettings>={}):World{
     }
   }
   world.rngState=state.n;
+  prepareDevelopment(world);
   log(world,'world','A world awakens. Humans, elves, dwarves and demons explore their homelands.');
   world.history.push(sample(world,0,0));
   return world;
@@ -258,7 +265,9 @@ const settlementNames:Record<Species,string[]>={
 export function stepWorld(previous:World):World{
   const world:World={...previous,year:previous.year+1,
     tiles:previous.tiles.map(t=>({...t})),
-    agents:previous.agents.map(a=>({...a,mind:a.mind?{
+    agents:previous.agents.map(a=>({...a,
+      development:a.development?cloneDevelopment(a.development):undefined,
+      mind:a.mind?{
       ...a.mind,target:a.mind.target?{...a.mind.target}:undefined,
       lastScarcity:a.mind.lastScarcity?{...a.mind.lastScarcity}:undefined,
       lastGoodFood:a.mind.lastGoodFood?{...a.mind.lastGoodFood}:undefined,
@@ -278,7 +287,11 @@ export function stepWorld(previous:World):World{
       bySpecies:Object.fromEntries(SPECIES.map(s=>[s,
         {...previous.demography!.bySpecies[s],
           causes:{...previous.demography!.bySpecies[s].causes}}])) as Record<Species,SpeciesVital>,
-    }:emptyDemography(previous.year)};
+    }:emptyDemography(previous.year),
+    households:previous.households?.map(h=>({...h,home:{...h.home},
+      members:[...h.members],caregivers:[...h.caregivers]}))??[],
+    nextHouseholdId:previous.nextHouseholdId??1};
+  prepareDevelopment(world);
   for(const s of world.settlements){
     if(!world.codex!.settlements.some(r=>r.id===s.id)){
       world.codex!.settlements.push({id:s.id,species:s.species,name:s.name,
@@ -308,6 +321,7 @@ export function stepWorld(previous:World):World{
     [shuffled[i],shuffled[j]]=[shuffled[j],shuffled[i]];
   }
   const survivors:Agent[]=[];
+  const careOutcomes=new Map<number,CareOutcome>();
   let deaths=0;
   for(const a of shuffled){
     const info=traitProfile(a.ancestry);
@@ -358,7 +372,9 @@ export function stepWorld(previous:World):World{
     // An individual forages the immediate neighborhood, rather than relying
     // entirely on the resources of one tile. Each gathered unit is actually
     // withdrawn from terrain; dense populations deplete their local supply.
-    const targetMeal=info.metabolism*(juvenile?.074:.11);
+    const stage=lifeStage(a);
+    const targetMeal=info.metabolism*(stage==='infant'?0:
+      stage==='child'?.074:stage==='adolescent'?.095:.11);
     let gathered=0;
     const sites:{tile:Tile;score:number}[]=[];
     for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
@@ -375,32 +391,20 @@ export function stepWorld(previous:World):World{
       gathered+=take;
       if(gathered>=targetMeal-.001)break;
     }
-    rememberForage(a,world.year,gathered,targetMeal);
-    const dailyCost=info.metabolism*(juvenile?.62:1)*
+    if(targetMeal>0)rememberForage(a,world.year,gathered,targetMeal);
+    const dailyCost=info.metabolism*(stage==='infant'?.50:
+      stage==='child'?.62:stage==='adolescent'?.82:1)*
       (comfortable?.86:1.12);
     const nourishment=gathered*(comfortable?13.4:10.5);
     a.energy=round(clamp(a.energy+nourishment-dailyCost-
       Math.max(0,a.age/info.lifespan-.7)*1.3,0,100));
-    // Basic community support: nearby mature peers can help a hungry child.
-    // This is deliberately modest; full households/caregivers come in v0.5.
-    if(juvenile&&a.energy<58){
-      careSearch: for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){
-        const x=a.x+dx,y=a.y+dy;
-        if(!within(world.width,world.height,x,y))continue;
-        const helper=partnerPositions.get(occupied.get(offset(world.width,x,y))??-1);
-        if(helper&&helper.id!==a.id&&
-          (helper.species===a.species||a.parents?.includes(helper.id))&&
-          helper.age>=traitProfile(helper.ancestry).maturity&&helper.energy>63){
-          const aid=Math.min(5,helper.energy-63,65-a.energy);
-          if(aid>0){a.energy=round(clamp(a.energy+aid,0,100));
-            helper.energy=round(Math.max(1,helper.energy-aid));}
-          break careSearch;
-        }
-      }
-    }
+    const care=helpDependent(world,a,occupied,partnerPositions);
+    if(juvenile)careOutcomes.set(a.id,care);
     if(a.energy<32)a.health-=2.5+(32-a.energy)*.21;
     else a.health=Math.min(100,a.health+1.45*a.genes.vigor);
-    if(!comfortable)a.health-=.45*(1-suitability);
+    if(stage==='infant'&&!care.providerId)a.health-=1.65;
+    if(juvenile&&!care.shelter)a.health-=stage==='infant'?.45:.09;
+    if(!comfortable)a.health-=.45*(1-suitability)*(care.protected?.45:1);
     // Very low senescence until old age, then sharply increasing mortality.
     const ageRatio=a.age/info.lifespan;
     const senescence=ageRatio>.84?
@@ -439,6 +443,7 @@ export function stepWorld(previous:World):World{
     return point;
   });
   world.agents=[...survivors,...newborns].sort((a,b)=>a.id-b.id);
+  developSociety(world,careOutcomes,()=>random(state));
   for(const baby of newborns){
     world.demography!.bySpecies[baby.species].births++;
     yearVitals.births[baby.species]++;
@@ -519,6 +524,7 @@ export function editWorld(previous:World,x:number,y:number,brush:Brush):World{
       ancestry:pureAncestry(brush.species),generation:0,x,y,
       age,energy:88,health:95,genes:genes(state),born:world.year-age,
       mind:initialMind(world.year)};
+    newcomer.development=initialDevelopment(newcomer,tile.biome);
     world.agents.push(newcomer);
     world.lineage.push(makeLifeRecord(world,newcomer));
     world.rngState=state.n;
@@ -584,6 +590,33 @@ export function isWorld(value:unknown):value is World{
     Number.isInteger(p.x)&&Number.isInteger(p.y)&&within(width,height,p.x,p.y);
   const checkMemory=(m:{x:number;y:number;year:number})=>
     checkPlace(m)&&Number.isInteger(m.year)&&m.year>=0&&m.year<=year;
+  const validNumber=(v:number)=>Number.isFinite(v)&&v>=0&&v<=100;
+  const validIds=(ids:number[],limit:number)=>Array.isArray(ids)&&
+    ids.length<=limit&&new Set(ids).size===ids.length&&
+    ids.every(id=>Number.isSafeInteger(id)&&id>0);
+  const checkDevelopment=(d:Development)=>!!d&&
+    (d.householdId===undefined||(Number.isSafeInteger(d.householdId)&&d.householdId>0))&&
+    validIds(d.caregiverIds,4)&&validIds(d.friends,4)&&
+    (d.adoptedBy===undefined||
+      Number.isSafeInteger(d.adoptedBy)&&d.adoptedBy>0)&&
+    (d.mentorId===undefined||Number.isSafeInteger(d.mentorId)&&d.mentorId>0)&&
+    (d.career===undefined||CAREERS.includes(d.career))&&
+    (d.leftHomeYear===undefined||Number.isInteger(d.leftHomeYear)&&
+      d.leftHomeYear>=0&&d.leftHomeYear<=year)&&
+    !!d.skills&&SKILLS.every(s=>validNumber(d.skills[s]))&&
+    !!d.values&&VALUES.every(v=>validNumber(d.values[v]))&&
+    validNumber(d.trust)&&validNumber(d.empathy)&&validNumber(d.resilience)&&
+    !!d.languages&&SPECIES.every(s=>validNumber(d.languages[s]))&&
+    Array.isArray(d.knownBiomes)&&d.knownBiomes.length<=BIOMES.length&&
+    new Set(d.knownBiomes).size===d.knownBiomes.length&&
+    d.knownBiomes.every(b=>BIOMES.includes(b))&&
+    Array.isArray(d.memories)&&d.memories.length<=18&&
+    d.memories.every(m=>m&&Number.isInteger(m.year)&&m.year>=0&&m.year<=year&&
+      MEMORY_KINDS.includes(m.kind)&&typeof m.detail==='string'&&
+      m.detail.length<=220&&(m.otherId===undefined||
+        Number.isSafeInteger(m.otherId)&&m.otherId>0))&&
+    [d.yearsCared,d.yearsWithoutCare,d.yearsTaught].every(n=>
+      Number.isInteger(n)&&n>=0);
   for(const a of w.agents){
     if(!a||!SPECIES.includes(a.species)||!Number.isSafeInteger(a.id)||a.id<=0||
       ids.has(a.id)||!Number.isInteger(a.x)||!Number.isInteger(a.y)||
@@ -603,7 +636,8 @@ export function isWorld(value:unknown):value is World{
             a.mind.targetPersonId<=0||a.mind.targetPersonId>=w.nextAgentId!))||
         (a.mind.target!==undefined&&!checkPlace(a.mind.target))||
         (a.mind.lastScarcity!==undefined&&!checkMemory(a.mind.lastScarcity))||
-        (a.mind.lastGoodFood!==undefined&&!checkMemory(a.mind.lastGoodFood)))))return false;
+        (a.mind.lastGoodFood!==undefined&&!checkMemory(a.mind.lastGoodFood))))||
+      (a.development!==undefined&&!checkDevelopment(a.development)))return false;
     const index=offset(width,a.x,a.y);
     if(positions.has(index)||w.tiles[index].biome==='water')return false;
     ids.add(a.id);positions.add(index);
@@ -651,7 +685,8 @@ export function isWorld(value:unknown):value is World{
         !r.moments.every(m=>m&&Number.isInteger(m.year)&&m.year>=0&&
           m.year<=year&&
           ['arrival','birth','courtship','partner','separation','parenthood','death',
-            'founding','renamed'].includes(m.kind)&&
+            'founding','renamed','adoption','mentorship','career',
+            'independence'].includes(m.kind)&&
           typeof m.text==='string'&&m.text.length<=220&&
           (m.relatedIds===undefined||(Array.isArray(m.relatedIds)&&
             m.relatedIds.length<=20&&m.relatedIds.every(id=>Number.isSafeInteger(id)&&id>0))))))||
@@ -698,6 +733,22 @@ export function isWorld(value:unknown):value is World{
         (v.founderId===undefined||Number.isSafeInteger(v.founderId)))||
       new Set(c.settlements.map(v=>v.id)).size!==c.settlements.length)
       return false;
+  }
+  if(w.households!==undefined){
+    if(!Array.isArray(w.households)||w.households.length>850||
+      !Number.isSafeInteger(w.nextHouseholdId)||w.nextHouseholdId!<1)return false;
+    const householdIds=new Set<number>();
+    for(const h of w.households){
+      if(!h||!Number.isSafeInteger(h.id)||h.id<1||
+        householdIds.has(h.id)||!Number.isInteger(h.formed)||
+        h.formed<0||h.formed>year||!checkPlace(h.home)||
+        !SPECIES.includes(h.culture)||!validIds(h.members,850)||
+        !validIds(h.caregivers,850)||
+        !h.caregivers.every(id=>h.members.includes(id)))return false;
+      householdIds.add(h.id);
+    }
+    if(!w.agents.every(a=>a.development?.householdId===undefined||
+      householdIds.has(a.development.householdId)))return false;
   }
   if(!w.agents.every(a=>records.has(a.id)))return false;
   if(!w.history.every(p=>{

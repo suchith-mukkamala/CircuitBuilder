@@ -20,6 +20,7 @@ import './evolution-v02.css';
 import './evolution-v021.css';
 import './evolution-v03.css';
 import './evolution-v04.css';
+import './evolution-v05.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode><LabHub /></React.StrictMode>,

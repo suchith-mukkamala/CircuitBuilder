@@ -9,6 +9,7 @@ import {DivineCodex} from './DivineCodex';
 import {personName,isPersonFavorite,renamePerson,togglePersonFavorite,
   toggleSettlementFavorite,renameSettlement,knownSettlements} from './identity';
 import {hybridFraction,traitProfile,ancestryLabel} from './family';
+import {lifeStage,CAREER_LABELS} from './development';
 import {GOAL_LABELS} from './mind';
 import {compactWorld,loadBrowserWorld,readSavedWorld,WORLD_STORAGE_KEY,
   MAX_WORLD_FILE_BYTES} from './storage';
@@ -102,6 +103,8 @@ export function EvolutionLab(){
     [world.agents]);
   const partnerships=useMemo(()=>world.bonds.filter(b=>b.stage==='partner').length,
     [world.bonds]);
+  const explorers=useMemo(()=>world.agents.filter(a=>a.mind?.goal==='venture').length,
+    [world.agents]);
   const focusPerson=(id:number)=>{
     setPlaying(false);setSelectedAgentId(id);setTab('family');
   };
@@ -270,8 +273,8 @@ export function EvolutionLab(){
           <strong>{hybrids}</strong><span>Mixed-species ancestry</span></div>
         <div className="evo-stat"><small>PARTNERSHIPS</small>
           <strong>{partnerships}</strong><span>Active mutual bonds</span></div>
-        <div className="evo-stat"><small>TOTAL BIRTHS</small>
-          <strong>{world.totalBirths}</strong><span>New individuals born</span></div>
+        <div className="evo-stat"><small>ON EXPEDITION</small>
+          <strong>{explorers}</strong><span>Exploring beyond home biomes</span></div>
       </section>
       <div className="evo-playground-layout">
         <section className="evo-map-card">
@@ -389,6 +392,13 @@ export function EvolutionLab(){
                   <span>Maturity <b>{Math.round(traitProfile(agent.ancestry).maturity)} years</b></span>
                   <span>Typical lifespan <b>{Math.round(traitProfile(agent.ancestry).lifespan)} years</b></span>
                   <span>Partner <b>{agent.partnerId?'#'+agent.partnerId:'None'}</b></span>
+                  <span>Life stage <b>{lifeStage(agent)}</b></span>
+                  {agent.development?.career&&<span>Career <b>
+                    {CAREER_LABELS[agent.development.career]}</b></span>}
+                  {agent.development?.householdId&&<span>Household <b>
+                    #{agent.development.householdId}</b></span>}
+                  {agent.development&&<span>Places explored <b>
+                    {agent.development.knownBiomes.length} biomes</b></span>}
                   <span>Curiosity <b>{agent.genes.curiosity.toFixed(2)}×</b></span>
                   <span>Vigor <b>{agent.genes.vigor.toFixed(2)}×</b></span>
                   {agent.parents&&<span>Parent IDs <b>{agent.parents.join(' + ')}</b></span>}
@@ -427,9 +437,10 @@ export function EvolutionLab(){
         </aside>
       </div>
       <div className="evo-future-note">
-        <strong>V0.4: MIND ENGINE I</strong>
-        <span>People choose goals, remember food scarcity, seek loved ones, and act on survival
-          needs. Follow an individual to see what motivates their next move.</span>
+        <strong>V0.5: LIVES SHAPED BY EXPERIENCE</strong>
+        <span>Children rely on caregivers and neighbors, learn skills and languages,
+          form friendships, remember hardship and support, and eventually choose their paths.
+          Explorers can venture into unfamiliar biomes.</span>
       </div>
     </main>}
   </div>;

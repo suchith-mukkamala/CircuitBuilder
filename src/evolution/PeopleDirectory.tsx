@@ -2,6 +2,7 @@ import {useEffect,useMemo,useState} from 'react';
 import {SPECIES,SPECIES_INFO,type LineageRecord,type Species,type World} from './engine';
 import {ancestryLabel} from './family';
 import {GOAL_LABELS} from './mind';
+import {CAREER_LABELS,SKILLS,VALUES,lifeStage,guidingBelief} from './development';
 import {cleanIdentityName,isPersonFavorite,personName} from './identity';
 
 type Props={world:World;selectedId:number|null;onOpen:(id:number)=>void;
@@ -63,6 +64,10 @@ export function PeopleDirectory({world,selectedId,onOpen,onFavorite,
       b.id-a.id);
   },[world,query,filter,species,living,favoriteIds]);
   const alive=focused&&living.get(focused.id);
+  const development=alive?.development;
+  const household=world.households?.find(h=>h.id===development?.householdId);
+  const nameFor=(id:number)=>recordMap.has(id)?
+    personName(world,recordMap.get(id)!):'Person #'+id;
   const saveRename=()=>{
     if(!focused)return;
     const name=cleanIdentityName(draft);
@@ -137,6 +142,7 @@ export function PeopleDirectory({world,selectedId,onOpen,onFavorite,
                 <p>{ancestryLabel(focused.ancestry)} · Gen {focused.generation}</p>
                 <p>Born Y{focused.born}{focused.died!==undefined?
                   ' · Died Y'+focused.died:alive?' · Age '+alive.age:''}</p>
+                {alive&&<p>Life stage: {lifeStage(alive)}</p>}
               </div>
             </div>
             <div className="evo-directory-actions">
@@ -175,6 +181,68 @@ export function PeopleDirectory({world,selectedId,onOpen,onFavorite,
               </small>}
               <small>Decisions follow needs, relationships, terrain and experience.
                 These are simulated rules, not generated dialogue.</small>
+            </div>
+          </section>}
+          {alive&&development&&<section className="evo-section-card evo-development-profile">
+            <div className="evo-card-heading"><strong>◈ UPBRINGING & SOCIAL WORLD</strong>
+              <span>EVOLUTION LAB V0.5</span></div>
+            <div className="evo-development-body">
+              <div className="evo-development-highlights">
+                <span><small>LIFE STAGE</small><strong>{lifeStage(alive)}</strong></span>
+                <span><small>PATH</small><strong>{development.career?
+                  CAREER_LABELS[development.career]:'Still discovering'}</strong></span>
+                <span><small>HOUSEHOLD</small><strong>{household?
+                  '#'+household.id+' · '+household.members.length+' residents':'Unassigned'}</strong></span>
+              </div>
+              <div className="evo-development-relationships">
+                <p><b>Care</b> {development.yearsCared} supported years ·
+                  {development.yearsWithoutCare} years without nearby care ·
+                  {development.yearsTaught} years of instruction</p>
+                {development.adoptedBy&&<p><b>Adopted by</b>
+                  <button onClick={()=>setActiveId(development.adoptedBy!)}>
+                    {nameFor(development.adoptedBy)}</button></p>}
+                {development.caregiverIds.length>0&&<p><b>Caregivers</b>
+                  {development.caregiverIds.map(id=><button key={id}
+                    onClick={()=>setActiveId(id)}>{nameFor(id)}</button>)}</p>}
+                {development.mentorId&&<p><b>Mentor</b>
+                  <button onClick={()=>setActiveId(development.mentorId!)}>
+                    {nameFor(development.mentorId)}</button></p>}
+                {development.friends.length>0&&<p><b>Friends</b>
+                  {development.friends.map(id=><button key={id}
+                    onClick={()=>setActiveId(id)}>{nameFor(id)}</button>)}</p>}
+              </div>
+              <div className="evo-development-pairs">
+                <div><h4>LEARNED SKILLS</h4>{SKILLS.map(skill=><label key={skill}>
+                  <span>{skill}</span><progress max="100" value={development.skills[skill]}/>
+                  <b>{Math.round(development.skills[skill])}</b></label>)}</div>
+                <div><h4>PERSONAL VALUES</h4>{VALUES.map(value=><label key={value}>
+                  <span>{value}</span><progress max="100" value={development.values[value]}/>
+                  <b>{Math.round(development.values[value])}</b></label>)}
+                  <h4>EMOTIONAL DEVELOPMENT</h4>
+                  <small>Trust {Math.round(development.trust)} ·
+                    Empathy {Math.round(development.empathy)} ·
+                    Resilience {Math.round(development.resilience)}</small>
+                </div>
+              </div>
+              <div className="evo-development-culture">
+                <h4>EVOLVING GUIDING BELIEF</h4>
+                <p>{guidingBelief(development)}</p>
+                <h4>LANGUAGES & EXPOSURE</h4>
+                <p>{SPECIES.filter(s=>development.languages[s]>0).map(s=>
+                  SPECIES_INFO[s].name+': '+Math.round(development.languages[s])+'%'
+                ).join(' · ')}</p>
+                <small>Visited biomes: {development.knownBiomes.join(', ')}.
+                  Language familiarity and values grow through lived contact, not ancestry alone.</small>
+              </div>
+              <div className="evo-development-memories">
+                <h4>FORMATIVE MEMORIES</h4>
+                {development.memories.slice().reverse().map((memory,i)=><p key={i}>
+                  <span>Y{memory.year} · {memory.kind.toUpperCase()}</span>
+                  {memory.detail}{memory.otherId&&' · '+nameFor(memory.otherId)}
+                </p>)}
+                {!development.memories.length&&<small>
+                  No formative events have been observed since tracking began.</small>}
+              </div>
             </div>
           </section>}
           <section className="evo-section-card">

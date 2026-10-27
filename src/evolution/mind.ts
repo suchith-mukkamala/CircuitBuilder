@@ -5,7 +5,7 @@
 import type {Agent,Ancestry,Biome,World} from './engine';
 
 export type MindGoal='forage'|'seek_safety'|'seek_family'|'seek_partner'|
-  'stay_together'|'explore';
+  'stay_together'|'explore'|'venture'|'vocation';
 export type PlaceMemory={x:number;y:number;year:number};
 export type AgentMind={goal:MindGoal;reason:string;since:number;
   target?:{x:number;y:number};targetPersonId?:number;lastScarcity?:PlaceMemory;
@@ -13,11 +13,14 @@ export type AgentMind={goal:MindGoal;reason:string;since:number;
 
 export const MIND_GOALS:MindGoal[]=[
   'forage','seek_safety','seek_family','seek_partner','stay_together','explore',
+  'venture','vocation',
 ];
 export const GOAL_LABELS:Record<MindGoal,string>={
   forage:'Gather food',seek_safety:'Find safer ground',
   seek_family:'Stay near family',seek_partner:'Find companionship',
   stay_together:'Stay with partner',explore:'Explore the world',
+  venture:'Expedition beyond home',
+  vocation:'Pursue a vocation',
 };
 export const initialMind=(year:number):AgentMind=>({goal:'explore',
   reason:'Discovering a new world.',since:year});
@@ -76,6 +79,32 @@ function bestHabitat(w:World,a:Agent,goal:MindGoal,
   return target;
 }
 
+/** A nearby land-reachable waypoint outside the traveler's familiar terrain. */
+function expedition(w:World,a:Agent):{x:number;y:number}|undefined{
+  let best=-Infinity,target:AgentMind['target'];
+  for(let dy=-21;dy<=21;dy+=3)for(let dx=-21;dx<=21;dx+=3){
+    const x=a.x+dx,y=a.y+dy;
+    if(!edible(w,x,y)||distance(a,{x,y})<7)continue;
+    // A river is a genuine barrier until crossing technology exists. Pick
+    // destinations reachable over land rather than sending minds into water.
+    const steps=Math.max(Math.abs(dx),Math.abs(dy));
+    let reachable=true;
+    for(let i=1;i<=steps;i++){
+      const px=Math.round(a.x+dx*i/steps),py=Math.round(a.y+dy*i/steps);
+      if(!edible(w,px,py)){reachable=false;break;}
+    }
+    if(!reachable)continue;
+    const biome=w.tiles[index(w,x,y)].biome;
+    const newBiome=!a.development?.knownBiomes.includes(biome);
+    const different=biome!==w.tiles[index(w,a.x,a.y)].biome;
+    const variation=((a.id*7919+x*131+y*73+w.year*17)>>>0)%29;
+    const score=(newBiome?65:different?35:-25)+variation*.25+
+      Math.min(12,foodAround(w,x,y))*.10-distance(a,{x,y})*.20;
+    if(score>best){best=score;target={x,y};}
+  }
+  return best>0?target:undefined;
+}
+
 export function planMind(w:World,a:Agent,occupied:Map<number,number>,
   byId:Map<number,Agent>,contacts:Map<number,number>,
   suitability:(ancestry:Ancestry,biome:Biome)=>number,
@@ -86,22 +115,53 @@ export function planMind(w:World,a:Agent,occupied:Map<number,number>,
   const adult=a.age>=maturity&&a.age<lifespan*.76;
   let goal:MindGoal='explore',reason='Healthy and curious about the surroundings.';
   let target:AgentMind['target'],targetPersonId:number|undefined;
+  const expeditionReady=a.age>=maturity*.85&&a.age<lifespan*.76&&
+    a.energy>77&&a.health>76&&
+    (a.development?.career==='scout'||a.genes.curiosity>1.08||
+      (a.development?.values.discovery??0)>57);
+  const continuing=expeditionReady&&prior?.goal==='venture'&&prior.target&&
+    w.year-prior.since<18&&distance(a,prior.target)>2;
   if(a.energy<57||foodAround(w,a.x,a.y)<4){
     goal='forage';reason='Food or stored energy is running low.';
     target=bestHabitat(w,a,goal,suitability);
-  }else if((safe<.45||a.health<52)&&a.energy>=57){
+  }else if((safe<.45||a.health<52)&&a.energy>=57&&!continuing){
     goal='seek_safety';reason='The terrain or current condition is unsafe.';
     target=bestHabitat(w,a,goal,suitability);
-  }else if(a.age<maturity&&a.parents){
-    const parent=a.parents.map(id=>byId.get(id)).find(Boolean);
-    if(parent){goal='seek_family';reason='Seeking a familiar caregiver.';
-      target={x:parent.x,y:parent.y};}
+  }else if(a.age<maturity){
+    const parent=[...(a.development?.caregiverIds??[]),...(a.parents??[])]
+      .map(id=>byId.get(id)).find(Boolean);
+    const nearby=parent??nearestPerson(w,a,occupied,byId,b=>
+      b.age>=traits(b.ancestry).maturity&&b.energy>55,5);
+    if(nearby){goal='seek_family';reason='Seeking adult support and companionship.';
+      target={x:nearby.x,y:nearby.y};}
+  }else if(continuing){
+    goal='venture';reason='Continuing a chosen expedition into unfamiliar land.';
+    target={...prior!.target!};
   }else if((a.partnerId||contacts.has(a.id))&&
     byId.has(a.partnerId??contacts.get(a.id)!)){
     const partner=byId.get(a.partnerId??contacts.get(a.id)!)!;
     goal='stay_together';reason=a.partnerId?
       'Protecting a close partnership.':'Building trust in a developing bond.';
     target={x:partner.x,y:partner.y};
+  }else if(expeditionReady&&
+    (a.development?.career==='scout'||(w.year+a.id*7)%19===0)){
+    const waypoint=expedition(w,a);
+    if(waypoint){goal='venture';reason='Seeking places beyond familiar biomes.';
+      target=waypoint;}
+  }else if(adult&&a.development?.career&&(w.year+a.id)%4===0){
+    goal='vocation';
+    reason={forager:'Gathering provisions for people nearby.',
+      scout:'Surveying routes and landmarks.',artisan:'Practicing a craft.',
+      scholar:'Studying and sharing knowledge.',healer:'Learning to help the sick or injured.',
+      guardian:'Watching over the local community.',
+      trader:'Seeking exchange and cooperation with neighbors.'
+    }[a.development.career];
+    if(a.development.career==='forager')target=bestHabitat(w,a,'forage',suitability);
+    else{
+      const place=w.settlements.filter(s=>distance(a,s)<=15)
+        .sort((x,y)=>distance(a,x)-distance(a,y))[0];
+      if(place)target={x:place.x,y:place.y};
+    }
   }else if(adult&&a.energy>=57&&a.health>=52){
     const eligible=(b:Agent)=>{
       if(b.partnerId||contacts.has(b.id)||b.energy<=40||b.health<=45||
@@ -131,7 +191,8 @@ export function movementIntent(a:Agent,x:number,y:number,year:number):number{
   const progress=m.target?(distance(here,m.target)-distance(candidate,m.target)):0;
   const urgency=m.goal==='forage'||m.goal==='seek_safety'?7:
     m.goal==='stay_together'?10:m.goal==='seek_partner'?8:
-    m.goal==='seek_family'?7:0;
+    m.goal==='seek_family'?7:m.goal==='venture'?55:
+    m.goal==='vocation'?5:0;
   const bad=m.lastScarcity;
   return progress*urgency-
     (bad&&year-bad.year<12&&distance(candidate,bad)<=1?6:0);
