@@ -1,4 +1,5 @@
 import {useState} from 'react';
+import {PopulationDiagnostics} from './PopulationDiagnostics';
 import {SPECIES,SPECIES_INFO,type Sample,type Species,type World} from './engine';
 
 const chartWidth=810,chartHeight=270;
@@ -72,6 +73,7 @@ export function EvolutionHistory({world}:{world:World}){
         Species survival depends on resources, reproduction, aging, and local biomes.
       </div>
     </section>
+    <PopulationDiagnostics world={world}/>
     <div className="evo-history-columns">
       <section className="evo-section-card">
         <div className="evo-card-heading">
@@ -107,7 +109,7 @@ export function EvolutionHistory({world}:{world:World}){
         </div>
         <div className="evo-chart-footnote">Population counts represent individuals.
           Settlements track nearby residents of any species. Warfare, disasters,
-          politics, and romantic partnerships arrive in later releases.</div>
+          politics, and disasters arrive in later releases. Partnerships are simulated.</div>
       </section>
     </div>
   </main>;

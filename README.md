@@ -1,3 +1,41 @@
+# CircuitBuilder v0.14.1 — Evolution Lab v0.2.1: Population Stability
+
+**This is a balancing and diagnostics release**, not a new civilization system. It targets the problem of humans, dwarves and demons dying before multi-generational societies can form. Four separate species still differ in maturity, fertility, lifespan, territory and habits; harsh worlds may still face extinction.
+
+## What changed
+
+- **Real ecological foraging:** An individual can gather food from its immediate 3×3 neighborhood, not just from the tile it stands on. All gathered resources are withdrawn from tiles, and regrow at biome-specific rates. Harsh mountain, cavern and scorched-borderland biomes now have improved—but still lower than forests—productivity.
+- **More sustainable energy budgets:** Metabolic demands depend on maturity, terrain compatibility, food intake, and age. Children have smaller food needs; modest aid from nearby adults can help hungry young people. Food scarcity still causes genuine health damage and eventual death. There is no invented illness mechanic yet.
+- **Population replacement:** Courtship develops more consistently; partnered individuals deliberately prefer staying nearby for an opportunity to reproduce. Birth chances were retuned and couples observe recovery periods between births, scaled by species maturity. Parents and children retain actual ancestry and relationship records.
+- **Species-aware lifespan curves:** Senescent mortality begins later and increases steeply in old age rather than treating everyone beyond a single threshold identically.
+- **Transparent causes of death:** Each death is categorized as old age, starvation, harsh-terrain exposure, or declining health. The World Chronicle records yearly causes rather than a generic death message. "Declining health" is not a claim that illnesses or disease are simulated.
+- **World History → Population Health:** Shows annual births/deaths, living juveniles, counts and trends by species, births/deaths since tracking started, recorded juvenile deaths, average age at death, and cumulative mortality breakdowns.
+- **Legacy save compatibility:** This remains world schema v2. Old v0.2 worlds load unchanged and begin collecting detailed demographic records on their first new annual tick. Older snapshots retain their population counts; the app never fabricates unobserved historical death causes. v0.1 migrations still work.
+- **Expanded tests:** Mortality attribution, childhood losses, conservation of births/deaths, deterministic seeds, legacy snapshots, file round-trips, map interventions and long-running seeded ecology tests.
+
+## How to test the balance
+
+1. Launch the app, select **Evolution Lab**, and create a new world using **Four Kingdoms** with normal resources. 
+2. Advance time in increments or run for 150–300 simulated years. Open **History** and inspect **Population Health**: births and deaths by species and recorded causes.
+3. Compare normal and resource-poor scenarios using the same seed and starting populations. Harsh scarcity should still matter; stable worlds should no longer routinely lose most species immediately.
+4. Export world JSON to preserve a timeline. Worlds saved before v0.2.1 show diagnostics only from their first post-update year.
+
+### Limits
+
+This is a transparent, rule-based fantasy ecology, not real demographic science, learned cognition, advanced parenting or illness epidemiology. Population equilibrium is an outcome of needs, regrowth, movement and reproduction—not an artificial guarantee of immortality or guaranteed species survival. The world population remains capped at 850 individuals per simulated world for browser performance. Diagnostics deliberately do not predict the future or retroactively reconstruct unspecified causes. Full households, childcare, psychology and occupations remain on the long-term roadmap.
+
+\`\`\`bash
+git pull origin main
+npm install
+npm run dev
+npm test
+npm run build
+\`\`\`
+
+---
+
+## Previous releases
+
 # CircuitBuilder v0.14.0 — Evolution Lab v0.2: Relationships & Family
 
 **Lab 04 now simulates lasting bonds, interbreeding, heritable ancestry and persistent family history.** Its world is significantly larger and the people are deliberately smaller.
