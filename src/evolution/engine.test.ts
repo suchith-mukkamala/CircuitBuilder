@@ -14,9 +14,9 @@ describe('Evolution Lab v0.1: reproducible fantasy worlds',()=>{
   });
   it('provides four distinct founding species and suitable habitats',()=>{
     const world=createWorld();
-    expect(world.version).toBe(1);
-    expect(world.width).toBe(64);
-    expect(world.height).toBe(42);
+    expect(world.version).toBe(2);
+    expect(world.width).toBe(160);
+    expect(world.height).toBe(104);
     expect(world.tiles).toHaveLength(world.width*world.height);
     expect(population(world)).toEqual(DEFAULT_SETTINGS.starting);
     expect(world.agents.every(a=>a.id>0&&a.age>=0&&a.energy>0)).toBe(true);
@@ -40,9 +40,9 @@ describe('Evolution Lab v0.1: reproducible fantasy worlds',()=>{
     const small=createWorld({size:'small',seed:73,starting:{
       human:2,elf:0,dwarf:1,demon:0,
     }});
-    expect([small.width,small.height,small.agents.length]).toEqual([44,30,3]);
+    expect([small.width,small.height,small.agents.length]).toEqual([96,64,3]);
     const large=createWorld({size:'large',seed:74});
-    expect([large.width,large.height]).toEqual([82,54]);
+    expect([large.width,large.height]).toEqual([256,160]);
     const blank=createWorld({starting:{human:0,elf:0,dwarf:0,demon:0}});
     expect(blank.agents).toHaveLength(0);
     expect(blank.history[0].total).toBe(0);
@@ -175,7 +175,7 @@ describe('World interventions and portable saves',()=>{
     expect(isWorld({...saved,agents:[saved.agents[0],saved.agents[0]]})).toBe(false);
     expect(isWorld({...saved,agents:saved.agents.map((a,i)=>i===0?
       {...a,x:-1}:a)})).toBe(false);
-    expect(isWorld({...saved,version:2})).toBe(false);
+    expect(isWorld({...saved,version:3})).toBe(false);
     expect(isWorld(null)).toBe(false);
   });
 });

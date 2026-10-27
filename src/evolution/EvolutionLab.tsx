@@ -3,29 +3,27 @@ import type {ChangeEvent} from 'react';
 import {WorldCanvas} from './WorldCanvas';
 import {WorldCreator} from './WorldCreator';
 import {EvolutionHistory} from './EvolutionHistory';
+import {WorldFamily} from './WorldFamily';
+import {hybridFraction,traitProfile,ancestryLabel} from './family';
+import {compactWorld,loadBrowserWorld,readSavedWorld,WORLD_STORAGE_KEY,
+  MAX_WORLD_FILE_BYTES} from './storage';
+export {readSavedWorld} from './storage';
 import {
   BIOME_INFO,BIOMES,DEFAULT_SETTINGS,SPECIES,SPECIES_INFO,
-  advanceWorld,createWorld,editWorld,isWorld,population,
+  advanceWorld,createWorld,editWorld,population,
   type Brush,type World,type WorldSettings,type Biome,
 } from './engine';
 
-const STORAGE_KEY='circuitbuilder:evolution:v1';
-const maxBytes=2_500_000;
-export function readSavedWorld(raw:string|null):World|null{
-  if(!raw||raw.length>maxBytes)return null;
-  try{const obj:unknown=JSON.parse(raw);return isWorld(obj)?obj:null;}
-  catch{return null;}
-}
 function initialWorld():World{
   if(typeof window!=='undefined'){
     try{
-      const saved=readSavedWorld(window.localStorage.getItem(STORAGE_KEY));
-      if(saved)return saved;
-    }catch{/* Private browsing or storage disabled: use an in-memory world. */}
+      const restored=loadBrowserWorld(window.localStorage);
+      if(restored)return restored;
+    }catch{/* Restricted storage: continue with an in-memory world. */}
   }
   return createWorld(DEFAULT_SETTINGS);
 }
-type Tab='world'|'creator'|'history';
+type Tab='world'|'creator'|'history'|'family';
 const format=(n:number)=>n.toLocaleString('en-US');
 const brushValue=(b:Brush)=>b.kind==='inspect'?'inspect':
   b.kind==='food'?'food':b.kind==='spawn'?'spawn-'+b.species:'terrain-'+b.biome;
@@ -56,21 +54,23 @@ export function EvolutionLab(){
   const [zoom,setZoom]=useState(1);
   const [selected,setSelected]=useState<{x:number;y:number}|null>(null);
   const [selectedAgentId,setSelectedAgentId]=useState<number|null>(null);
+  const [mapFocus,setMapFocus]=useState<number|null>(null);
+  const mapScrollRef=useRef<HTMLDivElement>(null);
   const [notice,setNotice]=useState('');
   const fileRef=useRef<HTMLInputElement>(null);
   const currentWorld=useRef(world);
   currentWorld.current=world;
   useEffect(()=>{
     const timer=window.setTimeout(()=>{
-      try{window.localStorage.setItem(STORAGE_KEY,JSON.stringify(world));}
-      catch{/* World remains usable without storage; JSON export still works. */}
+      try{window.localStorage.setItem(WORLD_STORAGE_KEY,compactWorld(world));}
+      catch{setNotice('Browser storage is full. Export World JSON to keep this world.');}
     },500);
     return ()=>window.clearTimeout(timer);
   },[world]);
   // Ensure the latest tick is retained even if the user switches to another lab
   // before the debounced autosave fires.
-  useEffect(()=>()=>{try{window.localStorage.setItem(STORAGE_KEY,
-    JSON.stringify(currentWorld.current));}catch{/* Storage may be unavailable. */}},[]);
+  useEffect(()=>()=>{try{window.localStorage.setItem(WORLD_STORAGE_KEY,
+    compactWorld(currentWorld.current));}catch{/* Storage may be unavailable. */}},[]);
   useEffect(()=>{if(tab!=='world')setPlaying(false);},[tab]);
   useEffect(()=>{
     if(!playing||tab!=='world')return;
@@ -93,6 +93,30 @@ export function EvolutionLab(){
   const settlement=displayed?world.settlements.find(s=>s.x===displayed.x&&
     s.y===displayed.y)??null:null;
   const latest=world.history.at(-1);
+  const hybrids=useMemo(()=>world.agents.filter(a=>hybridFraction(a.ancestry)>.01).length,
+    [world.agents]);
+  const partnerships=useMemo(()=>world.bonds.filter(b=>b.stage==='partner').length,
+    [world.bonds]);
+  const focusPerson=(id:number)=>{
+    setPlaying(false);setSelectedAgentId(id);setTab('family');
+  };
+  const findOnMap=(id:number)=>{
+    const target=world.agents.find(a=>a.id===id);
+    if(!target)return;
+    setSelectedAgentId(id);setSelected({x:target.x,y:target.y});
+    setZoom(3);setTab('world');setMapFocus(id);
+  };
+  useEffect(()=>{
+    if(tab!=='world'||mapFocus===null)return;
+    const target=world.agents.find(a=>a.id===mapFocus);
+    const viewport=mapScrollRef.current;
+    if(target&&viewport){
+      const scaledTile=viewport.scrollWidth/world.width;
+      viewport.scrollLeft=Math.max(0,(target.x+.5)*scaledTile-viewport.clientWidth/2);
+      viewport.scrollTop=Math.max(0,(target.y+.5)*scaledTile-viewport.clientHeight/2);
+    }
+    setMapFocus(null);
+  },[tab,mapFocus,zoom]);
   const chooseTile=(x:number,y:number)=>{
     setSelected({x,y});
     const individual=world.agents.find(a=>a.x===x&&a.y===y);
@@ -116,8 +140,14 @@ export function EvolutionLab(){
     setZoom(1);setNotice('New world created with seed '+settings.seed+'.');
   };
   const reset=()=>{
-    if(!window.confirm('Restart this world from year 0 using seed '+world.settings.seed+
-      '? The current timeline will be replaced.'))return;
+    const legacyDimensions=world.width!==({
+      small:96,medium:160,large:256,vast:320,
+    }[world.settings.size]);
+    const note=legacyDimensions?
+      'This is a migrated v0.1 world. Replaying its seed will start a NEW, LARGER v0.2 map. ':
+      '';
+    if(!window.confirm(note+'Restart from year 0 using seed '+world.settings.seed+
+      '? Your current timeline will be replaced. Export World JSON first to keep it.'))return;
     setPlaying(false);setWorld(createWorld(world.settings));
     setSelected(null);setSelectedAgentId(null);
     setNotice('World replayed from the same starting seed.');
@@ -125,7 +155,9 @@ export function EvolutionLab(){
   const importWorld=async(event:ChangeEvent<HTMLInputElement>)=>{
     const file=event.currentTarget.files?.[0];event.currentTarget.value='';
     if(!file)return;
-    if(file.size>maxBytes){setNotice('World file exceeds the 2.5 MB safety limit.');return;}
+    if(file.size>MAX_WORLD_FILE_BYTES){
+      setNotice('World file exceeds the 12 MB safety limit.');return;
+    }
     if(!window.confirm('Load '+file.name+'? This replaces the current world. '+
       'Export your world first if you want a backup.'))return;
     try{
@@ -158,12 +190,17 @@ export function EvolutionLab(){
         <button role="tab" aria-selected={tab==='history'}
           className={tab==='history'?'active':''} onClick={()=>navigate('history')}>
           ≋ HISTORY</button>
+        <button role="tab" aria-selected={tab==='family'}
+          className={tab==='family'?'active':''} onClick={()=>navigate('family')}>
+          ♡ FAMILIES</button>
       </nav>
       <div className="evo-nav-status"><span/> YEAR {world.year}</div>
     </header>
     {tab==='creator'?<WorldCreator key={world.settings.seed+'-'+world.year}
       current={world.settings} onCreate={startWorld} onReturn={()=>navigate('world')}/>:
     tab==='history'?<EvolutionHistory world={world}/>:
+    tab==='family'?<WorldFamily world={world} focusId={selectedAgentId}
+      onChoose={focusPerson} onShowOnMap={findOnMap}/>:
     <main className="evo-playground">
       <header className="evo-playground-heading">
         <div>
@@ -195,7 +232,11 @@ export function EvolutionLab(){
         </div>
         <div className="evo-stat"><small>SETTLEMENTS</small>
           <strong>{world.settlements.length}</strong><span>Founded by local groups</span></div>
-        <div className="evo-stat"><small>GENERATIONS</small>
+        <div className="evo-stat"><small>LIVING HYBRIDS</small>
+          <strong>{hybrids}</strong><span>Mixed-species ancestry</span></div>
+        <div className="evo-stat"><small>PARTNERSHIPS</small>
+          <strong>{partnerships}</strong><span>Active mutual bonds</span></div>
+        <div className="evo-stat"><small>TOTAL BIRTHS</small>
           <strong>{world.totalBirths}</strong><span>New individuals born</span></div>
       </section>
       <div className="evo-playground-layout">
@@ -208,8 +249,8 @@ export function EvolutionLab(){
               <button onClick={()=>setZoom(v=>Math.max(1,v-.5))}
                 disabled={zoom<=1} title="Zoom out">−</button>
               <button onClick={()=>setZoom(1)} title="Fit map to view">⌖ FIT</button>
-              <button onClick={()=>setZoom(v=>Math.min(3,v+.5))}
-                disabled={zoom>=3} title="Zoom in">+</button>
+              <button onClick={()=>setZoom(v=>Math.min(8,v+.5))}
+                disabled={zoom>=8} title="Zoom in">+</button>
             </div>
           </div>
           <div className="evo-map-toolbar">
@@ -236,7 +277,7 @@ export function EvolutionLab(){
               <option value="resources">Food levels</option>
             </select>
           </div>
-          <div className="evo-map-scroll">
+          <div className="evo-map-scroll" ref={mapScrollRef}>
             <WorldCanvas world={world} brush={brush} overlay={overlay} zoom={zoom}
               selected={displayed} onSelect={chooseTile} onEdit={brushAt}/>
           </div>
@@ -277,8 +318,20 @@ export function EvolutionLab(){
                     {SPECIES_INFO[agent.species].symbol}
                   </span>
                   <div><strong>{SPECIES_INFO[agent.species].name.slice(0,-1)} #{agent.id}</strong>
-                    <small>{agent.age} years old · Born year {agent.born}</small></div>
+                    <small>{agent.age} years old · Born year {agent.born}
+                      · Generation {agent.generation}</small></div>
                 </div>
+                <div className="evo-inspector-heritage">
+                  <strong>{ancestryLabel(agent.ancestry)}</strong>
+                  <div className="evo-ancestry-bar" aria-label="Ancestry breakdown">
+                    {SPECIES.map(s=><i key={s} style={{width:
+                      (agent.ancestry[s]*100)+'%',
+                      background:SPECIES_INFO[s].color}}/>)}
+                  </div>
+                  {hybridFraction(agent.ancestry)>.01&&<small>✧ MIXED ANCESTRY</small>}
+                </div>
+                <button className="evo-ancestry-open"
+                  onClick={()=>focusPerson(agent.id)}>♡ VIEW FAMILY TREE ↗</button>
                 <div className="evo-vitals">
                   <label>ENERGY <b>{Math.round(agent.energy)}%</b>
                     <progress max="100" value={agent.energy}/></label>
@@ -286,8 +339,9 @@ export function EvolutionLab(){
                     <progress max="100" value={agent.health}/></label>
                 </div>
                 <div className="evo-individual-facts">
-                  <span>Maturity <b>{SPECIES_INFO[agent.species].maturity} years</b></span>
-                  <span>Typical lifespan <b>{SPECIES_INFO[agent.species].lifespan} years</b></span>
+                  <span>Maturity <b>{Math.round(traitProfile(agent.ancestry).maturity)} years</b></span>
+                  <span>Typical lifespan <b>{Math.round(traitProfile(agent.ancestry).lifespan)} years</b></span>
+                  <span>Partner <b>{agent.partnerId?'#'+agent.partnerId:'None'}</b></span>
                   <span>Curiosity <b>{agent.genes.curiosity.toFixed(2)}×</b></span>
                   <span>Vigor <b>{agent.genes.vigor.toFixed(2)}×</b></span>
                   {agent.parents&&<span>Parent IDs <b>{agent.parents.join(' + ')}</b></span>}
@@ -326,10 +380,9 @@ export function EvolutionLab(){
         </aside>
       </div>
       <div className="evo-future-note">
-        <strong>V0.1: LIVING WORLD</strong>
-        <span>Reproduction is currently within species, without relationships.
-          Love, hybrids, lineage views, war, disasters and a separate demon realm are
-          planned for later releases.</span>
+        <strong>V0.2: LIVING LINEAGES</strong>
+        <span>Partnerships, interbreeding, inherited ancestry and family trees are here.
+          War, natural disasters, separate realms and neural learning come later.</span>
       </div>
     </main>}
   </div>;

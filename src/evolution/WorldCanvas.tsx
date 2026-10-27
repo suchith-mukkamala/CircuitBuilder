@@ -2,7 +2,8 @@ import {useEffect,useRef} from 'react';
 import type {KeyboardEvent,MouseEvent} from 'react';
 import {BIOME_INFO,SPECIES_INFO,type Brush,type World} from './engine';
 
-const CELL=12;
+export const WORLD_CELL_SIZE=6;
+const CELL=WORLD_CELL_SIZE;
 const hex=(n:number)=>Math.abs(Math.imul(n,16807))>>>0;
 /** Pixel-art fantasy map. Canvas redraw depends ONLY on world / map settings. */
 export function WorldCanvas({
@@ -21,63 +22,53 @@ export function WorldCanvas({
       const tile=world.tiles[y*W+x],biome=BIOME_INFO[tile.biome];
       const px=x*CELL,py=y*CELL,h=hex((x+5)*73+(y+11)*317+world.settings.seed);
       ctx.fillStyle=biome.color;ctx.fillRect(px,py,CELL,CELL);
-      // Seeded tiny marks add texture without breaking deterministic replays.
+      // Small textures preserve geographic scale even in 320×208 worlds.
       if(tile.biome==='forest'){
         ctx.fillStyle=h%3===0?'#43836b':'#32705c';
-        ctx.fillRect(px+(h%7)+1,py+((h>>>4)%6)+1,3,4);
-        ctx.fillStyle='#1b5046';ctx.fillRect(px+8,py+8,2,2);
+        ctx.fillRect(px+(h%3)+1,py+((h>>>4)%3)+1,2,2);
       }else if(tile.biome==='mountain'){
-        ctx.fillStyle='#9da2b2';
-        ctx.fillRect(px+(h%5)+2,py+2,4,2);
-        ctx.fillStyle='#343b4d';ctx.fillRect(px+8,py+7,2,3);
+        ctx.fillStyle='#a2a8bb';ctx.fillRect(px+1+(h%2),py+1,3,1);
       }else if(tile.biome==='cave'){
-        ctx.fillStyle='#71738e';ctx.fillRect(px+2,py+3,8,1);
-        ctx.fillStyle='#131b31';ctx.fillRect(px+4,py+5,5,5);
+        ctx.fillStyle='#111829';ctx.fillRect(px+2,py+2,3,3);
       }else if(tile.biome==='water'){
-        ctx.fillStyle=h%2?'#2a6180':'#347291';
-        ctx.fillRect(px+(h%7),py+4,5,1);
+        ctx.fillStyle='#377698';ctx.fillRect(px+(h%3),py+3,3,1);
       }else if(tile.biome==='volcanic'){
-        ctx.fillStyle=h%2?'#e48e6f':'#c36d6e';
-        ctx.fillRect(px+3,py+4,3,3);
+        ctx.fillStyle='#d68170';ctx.fillRect(px+2,py+2,2,2);
       }else if(tile.biome==='plains'){
-        ctx.fillStyle=h%3===0?'#89a179':'#637e60';
-        ctx.fillRect(px+(h%7),py+((h>>>4)%8),2,2);
+        ctx.fillStyle='#86a07c';ctx.fillRect(px+(h%4),py+1,1,1);
       }else if(tile.biome==='wasteland'){
-        ctx.fillStyle='#9e6e7c';
-        ctx.fillRect(px+(h%7),py+((h>>>4)%8),3,1);
+        ctx.fillStyle='#a97882';ctx.fillRect(px+(h%4),py+4,2,1);
       }
       if(overlay==='resources'&&tile.biome!=='water'){
         const fullness=Math.min(1,tile.food/Math.max(1,biome.food*world.settings.resourceLevel));
         ctx.fillStyle=fullness>.66?'rgba(117,255,176,.34)':
           fullness>.32?'rgba(233,202,99,.35)':'rgba(255,88,124,.45)';
-        ctx.fillRect(px+1,py+1,10,10);
+        ctx.fillRect(px,py,CELL,CELL);
       }
     }
     for(const s of world.settlements){
-      const px=s.x*CELL+6,py=s.y*CELL+6;
-      ctx.save();ctx.strokeStyle='#ffe7a1';ctx.lineWidth=1.4;
-      ctx.fillStyle='#101c34';
-      ctx.fillRect(px-8,py-8,16,16);ctx.strokeRect(px-8,py-8,16,16);
+      const px=s.x*CELL,py=s.y*CELL;
+      ctx.fillStyle='#f7dea1';ctx.fillRect(px-2,py-3,10,10);
+      ctx.fillStyle='#17253a';ctx.fillRect(px-1,py-2,8,8);
       ctx.fillStyle=SPECIES_INFO[s.species].color;
-      ctx.fillRect(px-5,py-4,10,9);
-      ctx.fillStyle='#182437';ctx.fillRect(px-1,py+1,3,4);
-      ctx.fillStyle='#f6e5ba';ctx.fillRect(px-6,py-7,12,3);
-      ctx.restore();
+      ctx.fillRect(px+1,py,4,4);
+      ctx.fillStyle='#f7dea1';ctx.fillRect(px,py-4,6,2);
     }
     for(const a of world.agents){
       const px=a.x*CELL,py=a.y*CELL;
-      ctx.fillStyle='#0b1025';ctx.fillRect(px+2,py+2,9,9);
+      ctx.fillStyle='#081323';ctx.fillRect(px+1,py+1,4,4);
       ctx.fillStyle=SPECIES_INFO[a.species].color;
-      ctx.fillRect(px+3,py+2,7,7);
-      ctx.fillStyle='#f5ebdc';ctx.fillRect(px+5,py+3,2,2);
-      if(a.age<SPECIES_INFO[a.species].maturity){
-        ctx.fillStyle='#121c2e';ctx.fillRect(px+4,py+8,5,2);
+      // Two pixels versus the old 7-pixel sprites: people look like small
+      // inhabitants of a broad landscape rather than occupying whole tiles.
+      ctx.fillRect(px+2,py+2,2,2);
+      if(a.partnerId!==undefined){
+        ctx.fillStyle='#ffe7b8';ctx.fillRect(px+4,py+1,1,1);
       }
     }
     if(selected){
       const px=selected.x*CELL,py=selected.y*CELL;
-      ctx.strokeStyle='#fff3b4';ctx.lineWidth=2;ctx.strokeRect(px+1,py+1,CELL-2,CELL-2);
-      ctx.strokeStyle='#15192e';ctx.lineWidth=1;ctx.strokeRect(px-1,py-1,CELL+2,CELL+2);
+      ctx.strokeStyle='#fff3b4';ctx.lineWidth=2;ctx.strokeRect(px+.5,py+.5,CELL-1,CELL-1);
+      ctx.strokeStyle='#15192e';ctx.lineWidth=1;ctx.strokeRect(px-.5,py-.5,CELL+1,CELL+1);
     }
   },[world,overlay,selected]);
   const select=(event:MouseEvent<HTMLCanvasElement>)=>{
