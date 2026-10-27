@@ -2,16 +2,18 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import {
   DigitalComponent, DigitalDocument, DigitalEndpoint, DigitalKind, DigitalPoint,
-  DigitalSelection, DigitalWire, DigitalBlock, LogicValue, digitalId, digitalSnap,
+  DigitalSelection, DigitalWire, DigitalBus, DigitalBusEnd, BusGroup,
+  DigitalBlock, LogicValue, digitalId, digitalSnap, legalNetName, busGroups,
   initialDigitalCircuit, isDigitalDocument, isDigitalTerminal, pinsOf, digitalKinds,
   DigitalRuntime, emptyDigitalRuntime, defaultRomWords,
 } from './types';
 import { simulateLogic } from './engine';
 import { stepCircuit,transitionInputs,resetComputer } from './computerEngine';
 import { cpuCoreDemo } from './computerSamples';
+import {digitalBusPath,digitalWirePath,endpointPoint} from './network';
 import { applyInputVector, captureBlock, placeBlock, reviseBlockDefinition, updatedBlockCatalog } from './blocks';
 
-type Clip = { components: DigitalComponent[]; wires: DigitalWire[] };
+type Clip = {components:DigitalComponent[];wires:DigitalWire[];buses?:DigitalBus[]};
 export type DigitalWorkspace = 'signal' | 'computer';
 type Side = 'from' | 'to';
 /** Navigation frame for a block editor. The original parent is not mutated
@@ -58,6 +60,9 @@ export type DigitalStore = {
   selection: DigitalSelection;
   selectedIds: string[];
   pending: DigitalEndpoint | null;
+  pendingBus: BusGroup | null;
+  focusTarget: {id:string;nonce:number}|null;
+  focusIssue: (selection:{type:'component'|'wire'|'bus';id:string})=>void;
   past: DigitalDocument[];
   future: DigitalDocument[];
   dragOrigin: DigitalDocument | null;
@@ -99,6 +104,14 @@ export type DigitalStore = {
   finishWire: (endpoint: DigitalEndpoint) => void;
   cancelWire: () => void;
   straighten: (id: string) => void;
+  startBus: (group:BusGroup) => void;
+  finishBus: (group:BusGroup) => void;
+  cancelBus: () => void;
+  setWireLabel: (id:string,label:string) => void;
+  setBusLabel: (id:string,label:string) => void;
+  flipBend: (kind:'wire'|'bus',id:string) => void;
+  setBend: (kind:'wire'|'bus',id:string,at:DigitalPoint) => void;
+  autoRoute: (kind:'wire'|'bus',id:string) => void;
   dragStart: () => void;
   dragEnd: () => void;
   undo: () => void;
@@ -143,7 +156,7 @@ export function workspaceTransition(state:DigitalStore,next:DigitalWorkspace):Pa
     computerDocument:state.activeWorkspace==='computer'?committed:state.computerDocument,
     document:destination,
     runtime,
-    selection:null,selectedIds:[],pending:null,
+    selection:null,selectedIds:[],pending:null,pendingBus:null,focusTarget:null,
     past:[],future:[],dragOrigin:null,
     clipboard:null,pasteCount:0,
     probes:[],trace:[sample(destination,0,runtime)],
@@ -177,7 +190,9 @@ export const useDigitalStore = create<DigitalStore>()(persist((set, get) => ({
     set(workspaceTransition(state,destination));
     return true;
   },
-  selection: null, selectedIds: [], pending: null,
+  selection: null, selectedIds: [], pending: null, pendingBus:null,focusTarget:null,
+  focusIssue:target=>set(state=>({selection:target,selectedIds:target.type==='component'?[target.id]:[],
+    focusTarget:{id:target.id,nonce:(state.focusTarget?.nonce??0)+1}})),
   past: [], future: [], dragOrigin: null,
   clipboard: null, pasteCount: 0,
   blockLibrary: [], favoriteKinds:[], recentKinds:[], editStack: [],
@@ -247,7 +262,7 @@ export const useDigitalStore = create<DigitalStore>()(persist((set, get) => ({
       document: working,
       editStack: [...state.editStack, frame],
       past: [], future: [], selection: null, selectedIds: [],
-      pending: null, dragOrigin: null, clipboard: null, pasteCount: 0,
+      pending: null, pendingBus:null, dragOrigin: null, clipboard: null, pasteCount: 0,
       probes: [], trace: [sample(working, 0)],runtime:emptyDigitalRuntime(),
       message: 'Editing ' + definition.name + '. Save Block updates all instances; Cancel discards edits.',
     });
@@ -280,7 +295,7 @@ export const useDigitalStore = create<DigitalStore>()(persist((set, get) => ({
         ? { type: 'component', id: frame.instanceId } : frame.selection,
       selectedIds: parent.components.some(c => c.id === frame.instanceId)
         ? [frame.instanceId] : frame.selectedIds,
-      pending: null, dragOrigin: null,
+      pending: null, pendingBus:null, dragOrigin: null,
       probes: frame.probes, trace: [sample(parent, 0)],runtime:emptyDigitalRuntime(),
       clipboard: frame.clipboard, pasteCount: frame.pasteCount,
       message: 'Saved ' + revised.name + '. All instances now use the updated internal circuit.',
@@ -295,7 +310,7 @@ export const useDigitalStore = create<DigitalStore>()(persist((set, get) => ({
       editStack: state.editStack.slice(0, -1),
       past: frame.past, future: frame.future,
       selection: frame.selection, selectedIds: frame.selectedIds,
-      pending: null, dragOrigin: null, probes: frame.probes,
+      pending: null, pendingBus:null, dragOrigin: null, probes: frame.probes,
       trace: frame.trace, runtime:frame.runtime, clipboard: frame.clipboard,
       pasteCount: frame.pasteCount,
       message: 'Closed ' + frame.name + ' without saving internal edits.',
@@ -354,7 +369,7 @@ export const useDigitalStore = create<DigitalStore>()(persist((set, get) => ({
     return patch(state, {
       ...state.document, components: [...state.document.components, c],
     }, {
-      selection: { type: 'component', id: c.id }, selectedIds: [c.id], pending: null,
+      selection: { type: 'component', id: c.id }, selectedIds: [c.id], pending: null,pendingBus:null,
       recentKinds: [kind,...state.recentKinds.filter(k=>k!==kind)].slice(0,6),
       message: kind.toUpperCase() + ' placed. Click a pin to wire it.',
     });
@@ -425,8 +440,9 @@ export const useDigitalStore = create<DigitalStore>()(persist((set, get) => ({
   remove: () => set(state => {
     const ids = new Set(state.selectedIds);
     if (state.selection?.type === 'component') ids.add(state.selection.id);
-    const wireId = state.selection?.type === 'wire' ? state.selection.id : null;
-    if (!ids.size && !wireId) return {};
+    const wireId=state.selection?.type==='wire'?state.selection.id:null;
+    const busId=state.selection?.type==='bus'?state.selection.id:null;
+    if(!ids.size&&!wireId&&!busId)return {};
     return patch(state, {
       ...state.document,
       components: state.document.components.filter(c => !ids.has(c.id)),
@@ -434,10 +450,12 @@ export const useDigitalStore = create<DigitalStore>()(persist((set, get) => ({
         w.id !== wireId &&
         !(isDigitalTerminal(w.from) && ids.has(w.from.componentId)) &&
         !(isDigitalTerminal(w.to) && ids.has(w.to.componentId))),
-    }, { selection: null, selectedIds: [], pending: null });
+      buses:(state.document.buses??[]).filter(b=>b.id!==busId&&
+        !ids.has(b.from.componentId)&&!ids.has(b.to.componentId)),
+    }, {selection:null,selectedIds:[],pending:null,pendingBus:null});
   }),
-  startWire: endpoint => set({ pending: endpoint, selection: null, selectedIds: [],
-    message: 'Click another terminal or free space to finish the wire. ESC cancels.' }),
+  startWire: endpoint => set({pending:endpoint,pendingBus:null,selection:null,selectedIds:[],
+    message:'Click another terminal or free space to finish the wire. ESC cancels.'}),
   finishWire: endpoint => {
     const previous = get().pending;
     if (!previous) { get().startWire(endpoint); return; }
@@ -464,7 +482,96 @@ export const useDigitalStore = create<DigitalStore>()(persist((set, get) => ({
     }, { selection: null, selectedIds: [], pending: isDigitalTerminal(endpoint) ? null : endpoint,
       message: isDigitalTerminal(endpoint) ? 'Signal wire connected.' : 'Free signal tip created · ESC to stop.' }));
   },
-  cancelWire: () => set({ pending: null, message: 'Wire drawing finished.' }),
+  cancelWire:()=>set({pending:null,pendingBus:null,message:'Connection drawing stopped.'}),
+  startBus: group=>set(state=>{
+    const part=state.document.components.find(c=>c.id===group.componentId);
+    if(!part||!busGroups(part).some(g=>g.width===group.width&&
+      JSON.stringify(g.pins)===JSON.stringify(group.pins)))
+      return {message:'Choose a valid grouped 4/8/16-bit port.'};
+    return {pending:null,pendingBus:group,selection:null,selectedIds:[],
+      message:'BUS '+group.title+' ready. Click a compatible component, or right-click its grouped port. ESC cancels.'};
+  }),
+  finishBus:group=>set(state=>{
+    const source=state.pendingBus;
+    if(!source)return {message:'Choose a source bus group first.'};
+    const left=state.document.components.find(c=>c.id===source.componentId);
+    const right=state.document.components.find(c=>c.id===group.componentId);
+    if(!left||!right||!busGroups(left).some(g=>g.width===source.width&&
+      JSON.stringify(g.pins)===JSON.stringify(source.pins))||
+      !busGroups(right).some(g=>g.width===group.width&&
+      JSON.stringify(g.pins)===JSON.stringify(group.pins)))
+      return {pendingBus:null,message:'Invalid bus port.'};
+    if(source.width!==group.width)
+      return {message:'Bus width mismatch: '+source.width+' bits cannot connect to '+group.width+
+        ' bits. Use a matching splitter or group.'};
+    if(source.componentId===group.componentId)
+      return {message:'Connect the bus to a different component.'};
+    const equal=(a:DigitalBusEnd,b:DigitalBusEnd)=>a.componentId===b.componentId&&
+      JSON.stringify(a.pins)===JSON.stringify(b.pins);
+    if((state.document.buses??[]).some(b=>(equal(b.from,source)&&equal(b.to,group))||
+      (equal(b.to,source)&&equal(b.from,group))))
+      return {pendingBus:null,message:'These bus ports are already connected.'};
+    const bus:DigitalBus={id:digitalId(),width:source.width,
+      from:{componentId:source.componentId,pins:[...source.pins]},
+      to:{componentId:group.componentId,pins:[...group.pins]}};
+    return patch(state,{...state.document,buses:[...(state.document.buses??[]),bus]},
+      {selection:{type:'bus',id:bus.id},selectedIds:[],pendingBus:null,
+        message:bus.width+'-bit bus connected, bit 0 to bit 0.'});
+  }),
+  cancelBus:()=>set({pendingBus:null,message:'Bus connection canceled.'}),
+  setWireLabel:(id,label)=>set(state=>{
+    const wire=state.document.wires.find(w=>w.id===id);
+    if(!wire)return {};
+    const name=label.trim();
+    if(name&&!legalNetName(name))return {message:'Net name must be 1–24 letters, numbers or underscores; start with a letter or underscore.'};
+    return patch(state,{...state.document,wires:state.document.wires.map(w=>w.id===id?
+      {...w,label:name||undefined}:w)},
+      {message:name?'Net named '+name+'. Matching one-bit nets now connect.':'Wire name cleared.'});
+  }),
+  setBusLabel:(id,label)=>set(state=>{
+    const bus=state.document.buses?.find(b=>b.id===id);
+    if(!bus)return {};
+    const name=label.trim();
+    if(name&&!legalNetName(name))return {message:'Use a simple bus name: letters, digits and underscores only.'};
+    const conflict=(state.document.buses??[]).find(b=>b.id!==id&&b.label===name&&b.width!==bus.width);
+    if(conflict)return {message:'A bus named '+name+' already has width '+conflict.width+'. Choose a different name or width.'};
+    return patch(state,{...state.document,buses:state.document.buses?.map(b=>b.id===id?
+      {...b,label:name||undefined}:b)},
+      {message:name?'Named '+bus.width+'-bit bus '+name+'.':'Bus label cleared.'});
+  }),
+  flipBend:(kind,id)=>set(state=>{
+    const found=kind==='wire'?state.document.wires.find(w=>w.id===id):
+      state.document.buses?.find(b=>b.id===id);
+    if(!found)return {};
+    const path=kind==='wire'?digitalWirePath(state.document,found as DigitalWire):
+      digitalBusPath(state.document,found as DigitalBus);
+    if(path.length<2)return {};
+    const from=path[0],to=path.at(-1)!;
+    const current=path.length===3?path[1]:undefined;
+    const option1={x:from.x,y:to.y},option2={x:to.x,y:from.y};
+    const next=current?.x===option1.x&&current?.y===option1.y?option2:option1;
+    const changed=(kind==='wire'?{wires:state.document.wires.map(w=>w.id===id?
+      {...w,waypoints:[next]}:w)}:{buses:state.document.buses?.map(b=>b.id===id?
+      {...b,waypoints:[next]}:b)});
+    return patch(state,{...state.document,...changed},{message:'Connection bend flipped.'});
+  }),
+  setBend:(kind,id,at)=>set(state=>{
+    const point={x:digitalSnap(at.x),y:digitalSnap(at.y)};
+    const changed=kind==='wire'?{wires:state.document.wires.map(w=>w.id===id?
+      {...w,waypoints:[point]}:w)}:{buses:state.document.buses?.map(b=>b.id===id?
+      {...b,waypoints:[point]}:b)};
+    if(kind==='wire'&&!state.document.wires.some(w=>w.id===id)||
+       kind==='bus'&&!state.document.buses?.some(b=>b.id===id))return {};
+    return patch(state,{...state.document,...changed},
+      {message:'Bend moved. Auto-route clears custom corners.'});
+  }),
+  autoRoute:(kind,id)=>set(state=>{
+    const changed=kind==='wire'?{wires:state.document.wires.map(w=>w.id===id?
+      {...w,waypoints:[]}:w)}:{buses:state.document.buses?.map(b=>b.id===id?
+      {...b,waypoints:[]}:b)};
+    return patch(state,{...state.document,...changed},
+      {message:'Smart orthogonal routing restored.'});
+  }),
   straighten: id => set(state => {
     const wire = state.document.wires.find(w => w.id === id);
     if (!wire || !wire.waypoints?.length) return {};
@@ -486,7 +593,7 @@ export const useDigitalStore = create<DigitalStore>()(persist((set, get) => ({
       document: state.past[state.past.length - 1],
       past: state.past.slice(0, -1),
       future: [state.document, ...state.future].slice(0, 80),
-      selection: null, selectedIds: [], pending: null,
+      selection: null, selectedIds: [], pending: null,pendingBus:null,
       dragOrigin: null,runtime:emptyDigitalRuntime(),trace:[sample(state.past[state.past.length-1],0)],
       message: 'Undo · previous digital schematic restored.',
     };
@@ -496,7 +603,7 @@ export const useDigitalStore = create<DigitalStore>()(persist((set, get) => ({
     return {
       document: state.future[0], future: state.future.slice(1),
       past: limit([...state.past, state.document]),
-      selection: null, selectedIds: [], pending: null,
+      selection: null, selectedIds: [], pending: null,pendingBus:null,
       dragOrigin: null,runtime:emptyDigitalRuntime(),trace:[sample(state.future[0],0)],
       message: 'Redo · next schematic restored.',
     };
@@ -507,6 +614,11 @@ export const useDigitalStore = create<DigitalStore>()(persist((set, get) => ({
     if (!parts.length) return { message: 'Select components before copying.' };
     return {
       clipboard: { components: parts.map(c => ({ ...c })),
+        buses:(state.document.buses??[]).filter(b=>ids.has(b.from.componentId)&&
+          ids.has(b.to.componentId)).map(b=>({...b,
+          from:{...b.from,pins:[...b.from.pins]},
+          to:{...b.to,pins:[...b.to.pins]},
+          waypoints:b.waypoints?.map(p=>({...p}))})),
         wires: state.document.wires.filter(w => ownWire(w, ids)).map(w => ({
           ...w, from: { ...w.from }, to: { ...w.to },
           waypoints: w.waypoints?.map(p => ({ ...p })),
@@ -527,11 +639,19 @@ export const useDigitalStore = create<DigitalStore>()(persist((set, get) => ({
         : { x: endpoint.x + offset, y: endpoint.y + offset };
     const wires = state.clipboard.wires.map(w => ({
       id: digitalId(), from: translate(w.from), to: translate(w.to),
+      label:undefined, // cloning a named connection must not accidentally short into the source
       waypoints: w.waypoints?.map(p => ({ x: p.x + offset, y: p.y + offset })),
+    }));
+    const buses=(state.clipboard.buses??[]).map(b=>({
+      ...b,id:digitalId(),label:undefined,
+      from:{componentId:ids.get(b.from.componentId)!,pins:[...b.from.pins]},
+      to:{componentId:ids.get(b.to.componentId)!,pins:[...b.to.pins]},
+      waypoints:b.waypoints?.map(p=>({x:p.x+offset,y:p.y+offset})),
     }));
     return patch(state, {
       ...state.document, components: [...state.document.components, ...comps],
       wires: [...state.document.wires, ...wires],
+      buses:[...(state.document.buses??[]),...buses],
     }, {
       selectedIds: comps.map(c => c.id),
       selection: { type: 'component', id: comps[comps.length - 1].id },

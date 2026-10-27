@@ -13,7 +13,8 @@ export type GateKind = 'and' | 'or' | 'not' | 'xor' | 'nand' | 'nor' | 'xnor' | 
   | 'and3' | 'or3' | 'xor3' | 'majority' | 'mux2' | 'demux2'
   | 'halfadder' | 'fulladder' | 'alu4' | 'rom16x4';
 export type SequentialKind = 'clock' | 'dff' | 'tff' | 'register4' | 'counter4' | 'ram16x4';
-export type DigitalKind = GateKind | SequentialKind | 'input' | 'high' | 'low' | 'led' | 'block';
+export type DigitalKind = GateKind | SequentialKind | 'input' | 'high' | 'low' | 'led' | 'block'
+  | 'splitter4' | 'splitter8' | 'splitter16';
 export type DigitalPin = string;
 export type DigitalPoint = { x: number; y: number };
 export type DigitalTerminal = { componentId: string; pin: DigitalPin };
@@ -36,7 +37,21 @@ export type DigitalWire = {
   from: DigitalEndpoint;
   to: DigitalEndpoint;
   waypoints?: DigitalPoint[];
+  /** A named 1-bit net. Same names connect without a drawn trace (local to this schematic). */
+  label?: string;
 };
+/** A real multi-bit connection: bit i of from.pins drives/connects bit i of to.pins. */
+export type DigitalBusEnd = {componentId:string; pins:string[]};
+export type DigitalBus = {
+  id:string;
+  width:4|8|16;
+  from:DigitalBusEnd;
+  to:DigitalBusEnd;
+  label?:string;
+  waypoints?:DigitalPoint[];
+};
+export type BusGroup = DigitalBusEnd & {width:4|8|16;direction:'in'|'out';title:string};
+export const legalNetName = (s:string):boolean => /^[A-Za-z_][A-Za-z0-9_]{0,23}$/.test(s);
 export type BlockPort = { pin: string; componentId: string; label: string };
 export type DigitalBlock = {
   id: string;
@@ -51,9 +66,10 @@ export type DigitalDocument = {
   name: string;
   components: DigitalComponent[];
   wires: DigitalWire[];
+  buses?: DigitalBus[];
   blocks?: DigitalBlock[];
 };
-export type DigitalSelection = { type: 'component' | 'wire'; id: string } | null;
+export type DigitalSelection = { type: 'component' | 'wire' | 'bus'; id: string } | null;
 export type LogicResult = {
   terminalValues: Record<string, LogicValue>;
   wireValues: Record<string, LogicValue>;
@@ -79,7 +95,8 @@ export const sequentialKinds: SequentialKind[] = [
 ];
 export const isSequential = (kind: DigitalKind): kind is SequentialKind =>
   sequentialKinds.includes(kind as SequentialKind);
-export const digitalKinds: DigitalKind[] = ['input','high','low',...gateKinds,...sequentialKinds,'led','block'];
+export const digitalKinds: DigitalKind[] = ['input','high','low',...gateKinds,...sequentialKinds,
+  'splitter4','splitter8','splitter16','led','block'];
 export const isDigitalTerminal = (p: DigitalEndpoint): p is DigitalTerminal => 'componentId' in p;
 export const isGate = (c: DigitalComponent): boolean => gateKinds.includes(c.kind as GateKind);
 export const pinId = (t: DigitalTerminal) => t.componentId + ':' + t.pin;
@@ -94,6 +111,9 @@ const multiInputs: Partial<Record<DigitalKind, string[]>> = {
   rom16x4:['a0','a1','a2','a3'],
   ram16x4:['a0','a1','a2','a3','d0','d1','d2','d3','we','clk'],
   alu4:['a0','a1','a2','a3','b0','b1','b2','b3','op0','op1'],
+  splitter4:Array.from({length:4},(_,i)=>'bus'+i),
+  splitter8:Array.from({length:8},(_,i)=>'bus'+i),
+  splitter16:Array.from({length:16},(_,i)=>'bus'+i),
 };
 const multiOutputs: Partial<Record<DigitalKind, string[]>> = {
   demux2:['out0','out1'], halfadder:['sum','carry'],
@@ -103,6 +123,9 @@ const multiOutputs: Partial<Record<DigitalKind, string[]>> = {
   rom16x4:['q0','q1','q2','q3'],
   ram16x4:['q0','q1','q2','q3'],
   alu4:['y0','y1','y2','y3','carry','zero'],
+  splitter4:Array.from({length:4},(_,i)=>'bit'+i),
+  splitter8:Array.from({length:8},(_,i)=>'bit'+i),
+  splitter16:Array.from({length:16},(_,i)=>'bit'+i),
 };
 export const inputsOf = (c: DigitalComponent): DigitalPin[] => {
   if (c.kind === 'block') return [...(c.ports?.inputs ?? [])];
@@ -119,6 +142,27 @@ export const outputsOf = (c: DigitalComponent): DigitalPin[] => {
 };
 export const pinsOf = (c: DigitalComponent): DigitalPin[] =>
   [...inputsOf(c), ...outputsOf(c)];
+/** Return matching, ordered 4/8/16-bit groups, including ALU A/B buses and splitters. */
+export function busGroups(c:DigitalComponent):BusGroup[]{
+  const result:BusGroup[]=[];
+  for(const [pins,direction] of [[inputsOf(c),'in'],[outputsOf(c),'out']] as const){
+    const groups=new Map<string,string[]>();
+    for(const pin of pins){
+      const match=/^([A-Za-z_]+)(\d+)$/.exec(pin);
+      if(!match)continue;
+      const group=groups.get(match[1])??[];
+      group.push(pin);groups.set(match[1],group);
+    }
+    for(const [prefix,items] of groups){
+      const ordered=[...items].sort((a,b)=>Number(a.slice(prefix.length))-Number(b.slice(prefix.length)));
+      const count=ordered.length;
+      if(![4,8,16].includes(count)||ordered.some((pin,i)=>pin!==prefix+i))continue;
+      result.push({componentId:c.id,pins:ordered,width:count as 4|8|16,
+        direction,title:prefix.toUpperCase()+'['+(count-1)+':0]'});
+    }
+  }
+  return result;
+}
 export const isOutput = (c: DigitalComponent, pin: DigitalPin): boolean =>
   outputsOf(c).includes(pin);
 export const isWidePart = (c: DigitalComponent): boolean =>
@@ -183,7 +227,8 @@ export function isDigitalDocument(input: unknown): input is DigitalDocument {
   const validate = (doc: DigitalDocument): boolean => {
     if (doc.version !== 1 || doc.lab !== 'signal' || typeof doc.name !== 'string' ||
         !Array.isArray(doc.components) || !Array.isArray(doc.wires) ||
-        doc.components.length > 600 || doc.wires.length > 1400) return false;
+        doc.components.length > 600 || doc.wires.length > 1400 ||
+        (doc.buses!==undefined&&(!Array.isArray(doc.buses)||doc.buses.length>500))) return false;
     const parts = new Map<string, DigitalComponent>();
     for (const c of doc.components) {
       if (!c || typeof c.id !== 'string' || !c.id || parts.has(c.id) ||
@@ -217,8 +262,26 @@ export function isDigitalDocument(input: unknown): input is DigitalDocument {
           !validEndpoint(w.from) || !validEndpoint(w.to) ||
           (w.waypoints !== undefined &&
             (!Array.isArray(w.waypoints) || w.waypoints.length > 100 ||
-              !w.waypoints.every(validPoint)))) return false;
+              !w.waypoints.every(validPoint))) ||
+          (w.label!==undefined&&(!legalNetName(w.label)))) return false;
       ids.add(w.id);
+    }
+    const busIds=new Set<string>();
+    for(const bus of doc.buses??[]){
+      if(!bus||typeof bus.id!=='string'||!bus.id||busIds.has(bus.id)||
+        ![4,8,16].includes(bus.width)||
+        (bus.label!==undefined&&!legalNetName(bus.label))||
+        (bus.waypoints!==undefined&&(!Array.isArray(bus.waypoints)||
+          bus.waypoints.length>40||!bus.waypoints.every(validPoint))))return false;
+      busIds.add(bus.id);
+      for(const end of [bus.from,bus.to]){
+        const part=parts.get(end?.componentId);
+        if(!part||!Array.isArray(end.pins)||end.pins.length!==bus.width||
+          new Set(end.pins).size!==bus.width||
+          end.pins.some(pin=>typeof pin!=='string'||!pinsOf(part).includes(pin)))return false;
+        if(!busGroups(part).some(g=>g.width===bus.width&&
+            JSON.stringify(g.pins)===JSON.stringify(end.pins)))return false;
+      }
     }
     return true;
   };

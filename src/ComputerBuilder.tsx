@@ -5,17 +5,20 @@ import { SignalPalette } from './digital/SignalPalette';
 import { SignalInspector } from './digital/SignalLab';
 import { SignalScopePanel,SignalVectorPanel } from './digital/SignalTools';
 import { ComputerPanel } from './digital/ComputerPanel';
+import { SignalDiagnostics } from './digital/SignalDiagnostics';
+import { diagnoseDigitalCircuit } from './digital/diagnostics';
 import { cpuCoreDemo,counterDemo,flipFlopDemo } from './digital/computerSamples';
 import { simulateLogic } from './digital/engine';
 import type { DigitalDocument } from './digital/types';
 import { useDigitalStore } from './digital/useDigitalStore';
 
-type ComputerTab='run'|'inspect'|'scope'|'inputs';
+type ComputerTab='run'|'inspect'|'scope'|'inputs'|'check';
 
 /** A dedicated, persistent CPU-design workbench powered by the shared digital engine. */
 export function ComputerBuilder(){
   const doc=useDigitalStore(s=>s.document);
   const runtime=useDigitalStore(s=>s.runtime);
+  const focusTarget=useDigitalStore(s=>s.focusTarget);
   const selection=useDigitalStore(s=>s.selection);
   const editStack=useDigitalStore(s=>s.editStack);
   const message=useDigitalStore(s=>s.message);
@@ -37,6 +40,7 @@ export function ComputerBuilder(){
   const fileRef=useRef<HTMLInputElement>(null);
   const actionsRef=useRef<HTMLDetailsElement>(null);
   const result=useMemo(()=>simulateLogic(doc,runtime),[doc,runtime]);
+  const issues=useMemo(()=>diagnoseDigitalCircuit(doc),[doc]);
   const inBlock=editStack.length>0;
   const closeMenu=()=>{if(actionsRef.current)actionsRef.current.open=false;};
   const openExample=(make:()=>DigitalDocument)=>{
@@ -109,8 +113,11 @@ export function ComputerBuilder(){
   // User journey: clicking a component should reveal its editable properties
   // rather than forcing a hunt for the inspector tab.
   useEffect(()=>{
-    if(selection?.type==='component')setTab('inspect');
+    if(selection?.type==='component'||selection?.type==='wire'||selection?.type==='bus')
+      setTab('inspect');
   },[selection?.type,selection?.id]);
+  useEffect(()=>{if(focusTarget){setPanelOpen(true);setTab('inspect');}},
+    [focusTarget?.nonce]);
 
   return <div className="signal-lab-shell computer-builder-shell">
     <header className="signal-workbench-header computer-builder-header">
@@ -194,13 +201,14 @@ export function ComputerBuilder(){
         <div className="signal-status">
           <span><i/> COMPUTER ENGINE</span>
           <span className="signal-status-message">{message}</span>
-          <span>{result.warnings.length?'⚠ '+result.warnings.length+' WARNINGS':'✓ CONNECTED'}</span>
+          <span>{issues.length?'⚠ '+issues.length+' CIRCUIT ISSUES':'✓ CIRCUIT CHECK'}</span>
         </div>
       </main>
       {panelOpen&&<aside className="signal-right-panel computer-tools-panel">
         <div className="signal-tabs computer-tool-tabs" role="tablist" aria-label="Computer Builder tools">
           {([
-            ['run','↯ RUN'],['inspect','◈ EDIT'],['scope','〰 GRAPH'],['inputs','101 INPUT'],
+            ['run','↯ RUN'],['inspect','◈ EDIT'],['scope','〰 GRAPH'],
+            ['inputs','101 INPUT'],['check','⚠ CHECK'],
           ] as [ComputerTab,string][]).map(([id,label])=><button
             key={id} role="tab" aria-selected={tab===id}
             className={tab===id?'active':''} onClick={()=>setTab(id)}>{label}</button>)}
@@ -208,12 +216,14 @@ export function ComputerBuilder(){
         {tab==='run'?<ComputerPanel doc={doc} result={result}/>:
           tab==='inspect'?<SignalInspector result={result}/>:
           tab==='scope'?<SignalScopePanel doc={doc}/>:
-          <SignalVectorPanel doc={doc} result={result}/>}
+          tab==='inputs'?<SignalVectorPanel doc={doc} result={result}/>:
+          <SignalDiagnostics/>}
         <div className="computer-workbench-help">
           <strong>QUICK TIPS</strong>
           <p>Select a ROM chip to edit its program in <b>EDIT</b>. Use
-            <b> FIT</b> on the canvas to view the whole design. Double-click
-            a custom block to edit its internals. Ctrl/Cmd+Z undoes a change,
+            <b> FIT</b> on the canvas to view the whole design. Right-click a
+            four-bit port to create a bus, and use <b>CHECK</b> to locate wiring
+            errors. Double-click custom blocks to edit them. Ctrl/Cmd+Z undoes a change,
             and Ctrl/Cmd+S confirms local autosave; Export JSON makes a backup.</p>
         </div>
       </aside>}

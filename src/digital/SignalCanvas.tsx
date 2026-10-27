@@ -4,22 +4,25 @@ import {
 } from 'react';
 import {
   DigitalComponent, DigitalDocument, DigitalEndpoint, DigitalKind, DigitalPoint,
-  DigitalSelection, DigitalWire, LogicResult, LogicValue,
+  DigitalSelection, DigitalWire, LogicResult, LogicValue, BusGroup,
   digitalLabel, digitalSnap, isDigitalTerminal, pinAt, pinsOf, blockHeight,
-  isWidePart, partHeight, localPinAt, outputsOf, inputsOf, digitalKinds,
+  isWidePart, partHeight, localPinAt, outputsOf, inputsOf, digitalKinds, busGroups,
 } from './types';
 import {
-  digitalWirePath, endpointPoint, intentionalJunctions,
+  digitalWirePath, digitalBusPath, digitalBusPoint, endpointPoint, intentionalJunctions,
 } from './network';
 import { useDigitalStore } from './useDigitalStore';
 import { paletteCategories,partByKind } from './catalog';
 import { fitDigitalCircuit } from './canvasViewport';
+import { diagnoseDigitalCircuit, type CircuitIssue } from './diagnostics';
 
 type Camera = { x: number; y: number; zoom: number };
 type Drag = {
   type: 'component'; id: string; at: DigitalPoint; x: number; y: number; moved: boolean;
 } | {
   type: 'tip'; wireId: string; side: 'from' | 'to'; at: DigitalPoint; x: number; y: number;
+} | {
+  type: 'bend';kind:'wire'|'bus';id:string;
 } | {
   type: 'pan'; x: number; y: number; atX: number; atY: number;
 };
@@ -208,7 +211,7 @@ function drawSignalCanvas(
   canvas: HTMLCanvasElement, doc: DigitalDocument, view: Camera,
   result: LogicResult, selected: DigitalSelection, selectedIds: string[],
   pending: DigitalEndpoint | null, hover: DigitalPoint | null,
-  frameTime: number, motion: boolean,
+  frameTime: number, motion: boolean, pendingBus:BusGroup|null, issues:CircuitIssue[],
 ) {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
@@ -282,12 +285,44 @@ function drawSignalCanvas(
       }
     }
     ctx.restore();
+    if(wire.label){
+      const at=points[Math.floor(points.length/2)];
+      ctx.save();ctx.font='bold 11px monospace';ctx.textAlign='center';
+      ctx.fillStyle='#d2e6ff';ctx.shadowColor='#142544';ctx.shadowBlur=5;
+      ctx.fillText(wire.label,at.x,at.y-14);ctx.restore();
+    }
+    if(isSelected&&wire.waypoints?.length){
+      for(const p of wire.waypoints){ctx.save();ctx.fillStyle='#fff2b4';
+        ctx.fillRect(p.x-7,p.y-7,14,14);ctx.restore();}
+    }
     for (const end of [wire.from, wire.to]) {
       if (isDigitalTerminal(end)) continue;
       ctx.save(); ctx.strokeStyle = ink.pink; ctx.shadowColor = ink.pink;
       ctx.shadowBlur = 13; ctx.lineWidth = 2.5;
       ctx.strokeRect(end.x-6, end.y-6, 12, 12); ctx.restore();
     }
+  }
+  for(const bus of doc.buses??[]){
+    const path=digitalBusPath(doc,bus);
+    if(path.length<2)continue;
+    const bits=bus.from.pins.map(pin=>result.terminalValues[bus.from.componentId+':'+pin]??'Z');
+    const selectedBus=selected?.type==='bus'&&selected.id===bus.id;
+    const tint=bits.some(v=>v==='X')?'#ff9aca':bits.some(v=>v===1)?'#86e9d1':'#789dcb';
+    ctx.save();ctx.strokeStyle=selectedBus?'#fff1a6':tint;
+    ctx.lineWidth=selectedBus?12:9;ctx.lineJoin='bevel';ctx.shadowColor=tint;ctx.shadowBlur=13;
+    ctx.beginPath();ctx.moveTo(path[0].x,path[0].y);
+    for(const point of path.slice(1))ctx.lineTo(point.x,point.y);
+    ctx.stroke();ctx.shadowBlur=0;
+    ctx.strokeStyle='#18283c';ctx.lineWidth=3;ctx.stroke();
+    const middle=path[Math.floor(path.length/2)];
+    const label=(bus.label?bus.label+' ':'')+'['+(bus.width-1)+':0]';
+    ctx.font='bold 12px monospace';ctx.textAlign='center';
+    ctx.fillStyle='#edfff7';ctx.shadowColor='#070e25';ctx.shadowBlur=8;
+    ctx.fillText(label,middle.x,middle.y-16);
+    if(selectedBus&&bus.waypoints?.length)for(const p of bus.waypoints){
+      ctx.fillStyle='#fff0ac';ctx.fillRect(p.x-7,p.y-7,14,14);
+    }
+    ctx.restore();
   }
   for (const point of intentionalJunctions(doc)) {
     ctx.save(); ctx.fillStyle = '#f6b5ff'; ctx.shadowColor = '#e38bff'; ctx.shadowBlur = 12;
@@ -311,6 +346,25 @@ function drawSignalCanvas(
         ctx.fillText(pin.toUpperCase(), point.x, point.y < c.y ? point.y-13 : point.y+20);
       ctx.restore();
     }
+  }
+  const marked=new Map<string,CircuitIssue['severity']>();
+  for(const issue of issues)if(issue.componentId&&!marked.has(issue.componentId))
+    marked.set(issue.componentId,issue.severity);
+  for(const c of doc.components){
+    const severity=marked.get(c.id);
+    if(!severity)continue;
+    ctx.save();ctx.shadowColor=severity==='error'?'#ff7caa':'#ffdb9b';
+    ctx.shadowBlur=13;ctx.fillStyle=severity==='error'?'#ff86b2':'#ffe09c';
+    const offset=partHeight(c)/2+19;
+    ctx.fillRect(c.x+23,c.y-offset,19,19);
+    ctx.fillStyle='#122035';ctx.font='bold 15px monospace';ctx.textAlign='center';
+    ctx.fillText('!',c.x+32.5,c.y-offset+14);ctx.restore();
+  }
+  if(pendingBus&&hover){
+    const start=digitalBusPoint(doc,pendingBus);
+    if(start){ctx.save();ctx.setLineDash([8,6]);ctx.strokeStyle='#a4ffe3';
+      ctx.lineWidth=6;ctx.beginPath();ctx.moveTo(start.x,start.y);
+      ctx.lineTo(hover.x,start.y);ctx.lineTo(hover.x,hover.y);ctx.stroke();ctx.restore();}
   }
   if (pending && hover) {
     const start = endpointPoint(doc, pending);
@@ -339,6 +393,14 @@ export function SignalCanvas({ result, onProbe }: { result: LogicResult; onProbe
   const selection = useDigitalStore(s => s.selection);
   const selectedIds = useDigitalStore(s => s.selectedIds);
   const pending = useDigitalStore(s => s.pending);
+  const pendingBus=useDigitalStore(s=>s.pendingBus);
+  const focusTarget=useDigitalStore(s=>s.focusTarget);
+  const issues=useMemo(()=>diagnoseDigitalCircuit(doc),[doc]);
+  const startBus=useDigitalStore(s=>s.startBus);
+  const finishBus=useDigitalStore(s=>s.finishBus);
+  const flipBend=useDigitalStore(s=>s.flipBend);
+  const setBend=useDigitalStore(s=>s.setBend);
+  const autoRoute=useDigitalStore(s=>s.autoRoute);
   const select = useDigitalStore(s => s.select);
   const move = useDigitalStore(s => s.move);
   const moveEnd = useDigitalStore(s => s.moveEnd);
@@ -378,6 +440,18 @@ export function SignalCanvas({ result, onProbe }: { result: LogicResult; onProbe
       setView(fitDigitalCircuit(doc,size));
     }
   },[size.width,size.height,doc]);
+  useEffect(()=>{
+    if(!focusTarget||!size.width||!size.height)return;
+    let point:DigitalPoint|null=null;
+    const part=doc.components.find(c=>c.id===focusTarget.id);
+    if(part)point={x:part.x,y:part.y};
+    const wire=doc.wires.find(w=>w.id===focusTarget.id);
+    if(wire)point=digitalWirePath(doc,wire)[0]??null;
+    const bus=doc.buses?.find(b=>b.id===focusTarget.id);
+    if(bus)point=digitalBusPath(doc,bus)[0]??null;
+    if(point)setView(v=>({...v,x:size.width/2-point.x*v.zoom,
+      y:size.height/2-point.y*v.zoom}));
+  },[focusTarget?.nonce,size.width,size.height]);
 
   useEffect(() => {
     const media = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -393,13 +467,13 @@ export function SignalCanvas({ result, onProbe }: { result: LogicResult; onProbe
       Object.values(result.wireValues).some(v => v === 1);
     const draw = (ms: number) => {
       if (canvas.current) drawSignalCanvas(canvas.current, doc, view, result, selection,
-        selectedIds, pending, hover, ms / 1000, moving);
+        selectedIds,pending,hover,ms/1000,moving,pendingBus,issues);
       if (moving) raf = window.requestAnimationFrame(draw);
     };
     draw(0);
     return () => window.cancelAnimationFrame(raf);
   }, [doc, view, result, selection, selectedIds, pending, hover, size,
-    animate, reducedMotion, junctions]);
+    animate,reducedMotion,junctions,pendingBus,issues]);
 
   const localPoint = (event: { clientX: number; clientY: number }) => {
     const r = canvas.current!.getBoundingClientRect();
@@ -432,6 +506,28 @@ export function SignalCanvas({ result, onProbe }: { result: LogicResult; onProbe
     }
     return null;
   };
+  const findBus=(p:DigitalPoint)=>{
+    let best:{id:string;point:DigitalPoint;distance:number}|null=null;
+    for(const b of doc.buses??[]){
+      const next=nearestOnTrace(p,digitalBusPath(doc,b));
+      if(next.distance<11/view.zoom&&(!best||next.distance<best.distance))
+        best={id:b.id,...next};
+    }
+    return best;
+  };
+  const findBend=(p:DigitalPoint)=>{
+    for(const wire of doc.wires){
+      for(const bend of wire.waypoints??[])
+        if(Math.hypot(bend.x-p.x,bend.y-p.y)<12/view.zoom)
+          return {kind:'wire' as const,id:wire.id};
+    }
+    for(const bus of doc.buses??[]){
+      for(const bend of bus.waypoints??[])
+        if(Math.hypot(bend.x-p.x,bend.y-p.y)<12/view.zoom)
+          return {kind:'bus' as const,id:bus.id};
+    }
+    return null;
+  };
   const findWire = (p: DigitalPoint) => {
     let best: { wire: DigitalWire; point: DigitalPoint; distance: number } | null = null;
     for (const wire of [...doc.wires].reverse()) {
@@ -447,7 +543,19 @@ export function SignalCanvas({ result, onProbe }: { result: LogicResult; onProbe
     if (e.button !== 0 && e.button !== 1) return;
     e.preventDefault(); setMenu(null);
     const p = world(e);
-    if (e.button === 0) {
+    if(e.button===0){
+      if(pendingBus){
+        const target=[...doc.components].reverse().find(c=>hitPart(c,p)||
+          pinsOf(c).some(pin=>{const at=pinAt(c,pin);
+            return Math.hypot(at.x-p.x,at.y-p.y)<14/view.zoom;}));
+        if(target){
+          const groups=busGroups(target).filter(g=>g.width===pendingBus.width&&
+            g.componentId!==pendingBus.componentId);
+          const best=groups.find(g=>g.direction!==pendingBus.direction)??groups[0];
+          if(best)finishBus(best);
+          return;
+        }
+      }
       const pin = findPin(p);
       if (pin) { finishWire(pin); return; }
       const tip = findTip(p);
@@ -478,8 +586,14 @@ export function SignalCanvas({ result, onProbe }: { result: LogicResult; onProbe
         e.currentTarget.setPointerCapture(e.pointerId);
         return;
       }
-      const trace = findWire(p);
-      if (trace) { select({ type: 'wire', id: trace.wire.id }); return; }
+      const bend=findBend(p);
+      if(bend){select({type:bend.kind,id:bend.id});
+        dragStart();dragging.current={type:'bend',...bend};
+        e.currentTarget.setPointerCapture(e.pointerId);return;}
+      const trace=findWire(p);
+      if(trace){select({type:'wire',id:trace.wire.id});return;}
+      const bus=findBus(p);
+      if(bus){select({type:'bus',id:bus.id});return;}
       select(null);
     }
     dragging.current = { type: 'pan', x: e.clientX, y: e.clientY, atX: view.x, atY: view.y };
@@ -496,13 +610,15 @@ export function SignalCanvas({ result, onProbe }: { result: LogicResult; onProbe
       const x = digitalSnap(d.x + p.x-d.at.x), y = digitalSnap(d.y + p.y-d.at.y);
       if (x !== d.x || y !== d.y) d.moved = true;
       move(d.id,{ x,y });
-    } else {
-      moveEnd(d.wireId,d.side, { x: d.x+p.x-d.at.x, y: d.y+p.y-d.at.y });
+    } else if(d.type==='tip'){
+      moveEnd(d.wireId,d.side,{x:d.x+p.x-d.at.x,y:d.y+p.y-d.at.y});
+    }else if(d.type==='bend'){
+      setBend(d.kind,d.id,p);
     }
   };
   const up = (e: PointerEvent<HTMLCanvasElement>) => {
     const d = dragging.current;
-    if (d?.type === 'component' || d?.type === 'tip') dragEnd();
+    if(d?.type==='component'||d?.type==='tip'||d?.type==='bend')dragEnd();
     if (d?.type === 'component' && !d.moved) {
       const c = useDigitalStore.getState().document.components.find(c => c.id === d.id);
       if (c?.kind === 'input') toggleInput(c.id);
@@ -523,9 +639,11 @@ export function SignalCanvas({ result, onProbe }: { result: LogicResult; onProbe
     e.preventDefault();
     const p = world(e), screen = localPoint(e);
     const c = [...doc.components].reverse().find(c => hitPart(c,p));
-    const trace = c ? null : findWire(p);
-    const choice: DigitalSelection = c ? { type: 'component', id:c.id }
-      : trace ? { type:'wire', id:trace.wire.id } : null;
+    const trace=c?null:findWire(p);
+    const bus=c||trace?null:findBus(p);
+    const choice:DigitalSelection=c?{type:'component',id:c.id}:
+      trace?{type:'wire',id:trace.wire.id}:
+        bus?{type:'bus',id:bus.id}:null;
     select(choice);
     const r = wrapper.current!.getBoundingClientRect();
     setMenu({ x: Math.max(8,Math.min(r.width-245,screen.x)),
@@ -558,7 +676,8 @@ export function SignalCanvas({ result, onProbe }: { result: LogicResult; onProbe
   const action = (fn: () => void) => () => { fn(); setMenu(null); };
   const menuPart = menu?.selection?.type === 'component'
     ? doc.components.find(c => c.id === menu.selection?.id) : null;
-  const wireSelected = menu?.selection?.type === 'wire' ? menu.selection.id : null;
+  const wireSelected=menu?.selection?.type==='wire'?menu.selection.id:null;
+  const busSelected=menu?.selection?.type==='bus'?menu.selection.id:null;
   return (
     <div className="signal-canvas-wrapper" ref={wrapper}>
       <canvas ref={canvas} className="signal-canvas" aria-label="Digital logic schematic editor"
@@ -569,7 +688,7 @@ export function SignalCanvas({ result, onProbe }: { result: LogicResult; onProbe
         onDragOver={e=>e.preventDefault()} onDrop={onDrop} />
       <div className="signal-canvas-hint">
         <span className="spark">✦</span> CLICK PINS TO WIRE <span>·</span> DOUBLE-CLICK BLOCK TO EDIT
-        <span>·</span> RIGHT-CLICK FOR TOOLS
+        <span>·</span> RIGHT-CLICK FOR BUSES & NETS
       </div>
       <div className="signal-canvas-controls">
         <button className={animate && !reducedMotion ? 'is-active' : ''}
@@ -584,7 +703,10 @@ export function SignalCanvas({ result, onProbe }: { result: LogicResult; onProbe
         <button title="Fit all circuit components into view" onClick={() =>
           setView(fitDigitalCircuit(doc,size))}>⊡ FIT</button>
       </div>
-      {pending && <div className="signal-wire-tip">WIRE IN PROGRESS · CLICK DESTINATION · ESC ENDS</div>}
+      {pending&&<div className="signal-wire-tip">WIRE · CLICK DESTINATION · ESC CANCELS</div>}
+      {pendingBus&&<div className="signal-wire-tip signal-bus-tip">
+        {pendingBus.width}-BIT BUS FROM {pendingBus.title} · CLICK TARGET OR RIGHT-CLICK A SPECIFIC GROUP · ESC CANCELS
+      </div>
       {menu && <>
         <div className="signal-menu-backdrop" onPointerDown={() => setMenu(null)} />
         <div className="signal-context-menu" role="menu" aria-label="Digital schematic actions"
@@ -598,6 +720,12 @@ export function SignalCanvas({ result, onProbe }: { result: LogicResult; onProbe
               onClick={action(()=>toggleInput(menuPart.id))}>↯ TOGGLE TO {menuPart.bit===1?'LOW':'HIGH'}</button>}
             {menuPart.kind==='block' && <button className="signal-menu-accent"
               onClick={action(()=>openBlock(menuPart.id))}>▣ OPEN & EDIT INTERNAL CIRCUIT</button>}
+            {busGroups(menuPart).length>0&&<div className="signal-menu-section">▰ MULTI-BIT BUSES</div>}
+            {busGroups(menuPart).map(group=><button key={group.direction+group.title}
+              className="signal-menu-accent"
+              onClick={action(()=>pendingBus?finishBus(group):startBus(group))}>
+              {pendingBus?'↳ CONNECT '+group.title:'▰ START '+group.width+'-BIT '+group.title}
+            </button>)}
             {pinsOf(menuPart).map(pin=><div className="signal-port-actions" key={pin}>
               <button onClick={action(()=>startWire({componentId:menuPart.id,pin}))}>
                 ⌁ {menuPart.kind==='block'
@@ -622,8 +750,16 @@ export function SignalCanvas({ result, onProbe }: { result: LogicResult; onProbe
             <button onClick={action(()=>{
               addProbe('wire',wireSelected,'WIRE '+wireSelected.slice(0,5));onProbe?.();
             })}>〰 GRAPH THIS WIRE</button>
-            <button onClick={action(()=>straighten(wireSelected))}>⌁ STRAIGHTEN ROUTE</button>
+            <button onClick={action(()=>flipBend('wire',wireSelected))}>↴ FLIP CORNER</button>
+            <button onClick={action(()=>setBend('wire',wireSelected,menu.world))}>◈ MOVE BEND HERE</button>
+            <button onClick={action(()=>autoRoute('wire',wireSelected))}>⌁ SMART AUTO ROUTE</button>
             <button className="signal-danger" onClick={action(remove)}>× DELETE WIRE</button>
+          </> : busSelected ? <>
+            <div className="signal-menu-subtitle">▰ MULTI-BIT BUS</div>
+            <button onClick={action(()=>flipBend('bus',busSelected))}>↴ FLIP BUS CORNER</button>
+            <button onClick={action(()=>setBend('bus',busSelected,menu.world))}>◈ MOVE BEND HERE</button>
+            <button onClick={action(()=>autoRoute('bus',busSelected))}>⌁ SMART AUTO ROUTE</button>
+            <button className="signal-danger" onClick={action(remove)}>× DELETE BUS</button>
           </> : <>
             <div className="signal-menu-subtitle">GRID · {menu.world.x}, {menu.world.y}</div>
             <button className="signal-menu-accent"

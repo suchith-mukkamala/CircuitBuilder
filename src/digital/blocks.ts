@@ -46,6 +46,11 @@ export function captureBlock(doc: DigitalDocument, name: string): {
         ? { inputs: [...c.ports.inputs], outputs: [...c.ports.outputs] } : undefined })),
       wires: doc.wires.map(w => ({ ...w, from: { ...w.from }, to: { ...w.to },
         waypoints: w.waypoints?.map(p => ({ ...p })) })),
+      buses: doc.buses?.map(b=>({ ...b,
+        from:{componentId:b.from.componentId,pins:[...b.from.pins]},
+        to:{componentId:b.to.componentId,pins:[...b.to.pins]},
+        waypoints:b.waypoints?.map(p=>({...p})),
+      })),
     },
   };
   const instance: DigitalComponent = {

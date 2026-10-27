@@ -93,7 +93,7 @@ export function compileSignals(doc: DigitalDocument): CompiledSignals {
         }
         continue;
       }
-      if (noSim.has(c.id)) continue;
+      if (noSim.has(c.id) || c.kind.startsWith('splitter')) continue;
       primitives.push({
         id: namespace + '/' + c.id,
         component: c,

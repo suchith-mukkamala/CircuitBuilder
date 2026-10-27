@@ -1,3 +1,67 @@
+# CircuitBuilder v0.10 — Digital Buses, Named Nets, Smart Wiring & Live Diagnostics
+
+This release focuses on **designing bigger digital computers without manually drawing dozens of one-bit connections**. Signal Lab and Computer Builder share a backwards-compatible electrical model and editor controls. Analog Lab is unchanged.
+
+## 1. Connect a real 4 / 8 / 16-bit bus
+
+- In Signal Lab or Computer Builder, place any component with numbered bit ports (for example, a ROM's \`Q[3:0]\`, a register's \`D[3:0]\`, or a 4-bit ALU's \`A[3:0]\`).
+- **Right-click the source chip**, then choose **START 4-BIT Q[3:0]** (or the appropriate grouped port).
+- Click a destination chip with a matching group to connect automatically. If it has multiple groups, **right-click the destination** and choose the precise one (for example, \`B[3:0]\` instead of \`A[3:0]\`).
+- The **thick, colored bus** is an electrical connection made from separate bit-level nets, not a short between all the wires. Bit 0 connects to bit 0, and so on.
+- Select the bus to give it a name such as \`DATA\`. **Two buses with the same name and width** join bit-for-bit within the same schematic, even if the bus strokes are far apart.
+- Delete a bus, undo/redo its creation, or edit its routing with the same tools as scalar wires. Esc cancels an incomplete bus operation.
+
+New passive **4-bit, 8-bit, and 16-bit splitters** appear under Data Routing. Each splitter maps \`BUS0 ↔ BIT0\`, \`BUS1 ↔ BIT1\`, and so on. Wire a specific BIT pin as a normal one-bit wire to drive an LED, selector or control pin. You can combine ordinary one-bit wires with grouped connections freely.
+
+**Note:** A grouped bus connects existing numbered ports; arbitrary-width 32/64-bit scalable chip models are still a future feature. This release supports 4, 8 and 16-bit bus groups and 1-bit taps. Bus width mismatches are blocked rather than silently truncated.
+
+## 2. Name nets instead of drawing long signal lines
+
+- Select any one-bit wire. In the Inspector's **NAMED SIGNAL** field, enter a name such as \`CLK\`, \`RESET\` or \`READY\` and press Enter or click away.
+- Every one-bit wire bearing **the same exact name** now shares an electrical node **inside that schematic**. This also works through custom blocks when editing their internal circuit; names do *not* leak into unrelated block instances.
+- Clear the field to disconnect the implicit link. Names are case-sensitive, 1–24 characters, beginning with a letter or underscore, followed by letters/digits/underscores.
+- A scalar signal named \`DATA\` will **not** short all bits of a bus named \`DATA\` together. Use a splitter to select a bit instead.
+
+When copying components with named wires or buses, the copies intentionally **lose their names** to avoid unintended connections back to the originals.
+
+## 3. Smarter wire routes and movable corners
+
+- One-bit wires and buses now prefer **orthogonal routes that avoid other chip bodies**, with horizontal/vertical alternatives and detours.
+- Right-click a wire or bus to **FLIP CORNER**, **MOVE BEND HERE**, or restore **SMART AUTO ROUTE**.
+- After placing a manual bend, select its connection and **drag the glowing square handle** to reposition the bend on the grid.
+- These changes work with undo/redo and are exported in the JSON schematic.
+
+## 4. Circuit Check — diagnostics with locations
+
+In either digital lab, open **⚠ CHECK** to see problems updated as you edit:
+- Conflicting outputs driving the same net (error)
+- Unconnected inputs and undriven clock pins (warning/error)
+- Multiple widths sharing one named bus (error)
+- A one-bit wire and bus sharing a name (warning; they remain separate)
+- Combinational feedback loops without a sequential element (warning)
+
+Click **LOCATE IN CIRCUIT** to select and center the affected chip, wire, or bus; small warning markers appear on affected chips. You can filter errors or warnings. The existing four-state logic and waveform analyzer still run separately.
+
+## Compatibility and limits
+
+The file structure retains **Signal Lab version 1** with optional \`buses\` and wire/bus \`label\` fields. Older files lacking those fields continue working. Captured reusable block definitions retain internal buses and names; each module instance is still electrically isolated unless connected through explicit external ports.
+
+The static diagnostics apply to the **currently open schematic** (open a block to inspect its internals). They are not a formal proof that a circuit is functionally correct; for correctness, use truth tables, typed input tests, clock stepping and waveforms.
+
+## Run locally
+
+\`\`\`bash
+git pull origin main
+npm install
+npm run dev
+npm test
+npm run build
+\`\`\`
+
+---
+
+## Earlier releases
+
 # CircuitBuilder v0.9 — Clean Home + Three Purpose-Built Labs
 
 The landing page is deliberately minimal: a small, labeled CPU circuit diagram and
