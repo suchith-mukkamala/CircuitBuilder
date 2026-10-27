@@ -140,6 +140,12 @@ describe('Ecological survival smoke tests across seeded worlds',()=>{
     expect(surviving.length).toBeGreaterThanOrEqual(3);
     const producing=worlds.filter(w=>w.totalBirths>=20);
     expect(producing.length).toBeGreaterThanOrEqual(3);
+    for(const species of ['human','dwarf','demon'] as const){
+      const counts=worlds.map(w=>w.agents.filter(a=>a.species===species).length);
+      const alive=counts.filter(n=>n>=3).length;
+      expect(alive,species+' populations after 180 years: '+counts.join(', '))
+        .toBeGreaterThanOrEqual(3);
+    }
     for(const world of worlds){
       expect(world.agents.length).toBeLessThanOrEqual(850);
       expect(isWorld(world)).toBe(true);
