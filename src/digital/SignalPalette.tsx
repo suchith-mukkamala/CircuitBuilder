@@ -17,8 +17,15 @@ const exampleCircuits = [
 ];
 type CategoryFilter = PartCategory | 'all' | 'custom';
 
-export function SignalPalette(){
+export function SignalPalette({focus='signal'}:{focus?:'signal'|'computer'}={}){
   const searchRef=useRef<HTMLInputElement>(null);
+  const groups=useMemo(()=>{
+    if(focus!=='computer')return paletteCategories;
+    const first=['memory','compute','sources'];
+    return [...paletteCategories.filter(c=>first.includes(c.id)).sort((a,b)=>
+      first.indexOf(a.id)-first.indexOf(b.id)),
+      ...paletteCategories.filter(c=>!first.includes(c.id))];
+  },[focus]);
   const [query,setQuery]=useState('');
   const [category,setCategory]=useState<CategoryFilter>('all');
   const [expanded,setExpanded]=useState<Record<string,boolean>>({});
@@ -97,7 +104,7 @@ export function SignalPalette(){
     </div>
 
     <div className="signal-catalog-filters" aria-label="Filter components by category">
-      {[{id:'all' as const,name:'ALL',icon:'▦'},...paletteCategories,
+      {[{id:'all' as const,name:'ALL',icon:'▦'},...groups,
         {id:'custom' as const,name:'MY BLOCKS',icon:'▣'}].map(cat=>
         <button key={cat.id}
           className={'signal-filter-chip'+(category===cat.id?' selected':'')}
@@ -130,7 +137,7 @@ export function SignalPalette(){
         </div>
       </section>}
 
-    {paletteCategories.map((group,index)=>{
+    {groups.map((group,index)=>{
       const parts=group.parts.filter(part=>shown.has(part.kind));
       if(!parts.length)return null;
       return <details key={group.id+'-'+(query?'search':category)}

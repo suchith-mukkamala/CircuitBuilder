@@ -8,9 +8,11 @@ import {
 } from './types';
 import { simulateLogic } from './engine';
 import { stepCircuit,transitionInputs,resetComputer } from './computerEngine';
+import { cpuCoreDemo } from './computerSamples';
 import { applyInputVector, captureBlock, placeBlock, reviseBlockDefinition, updatedBlockCatalog } from './blocks';
 
 type Clip = { components: DigitalComponent[]; wires: DigitalWire[] };
+export type DigitalWorkspace = 'signal' | 'computer';
 type Side = 'from' | 'to';
 /** Navigation frame for a block editor. The original parent is not mutated
  * until SAVE BLOCK, so CANCEL can leave the circuit untouched. */
@@ -48,6 +50,11 @@ const samples = (previous: SignalSample[],doc:DigitalDocument,runtime:DigitalRun
 };
 export type DigitalStore = {
   document: DigitalDocument;
+  /** Separate, locally saved editor projects for each laboratory. */
+  activeWorkspace: DigitalWorkspace;
+  signalDocument: DigitalDocument;
+  computerDocument: DigitalDocument;
+  switchWorkspace: (destination:DigitalWorkspace) => boolean;
   selection: DigitalSelection;
   selectedIds: string[];
   pending: DigitalEndpoint | null;
@@ -122,11 +129,36 @@ const ownWire = (w: DigitalWire, ids: Set<string>) =>
   ((isDigitalTerminal(w.from) && ids.has(w.from.componentId)) ||
    (isDigitalTerminal(w.to) && ids.has(w.to.componentId)));
 
-/** Exported separately so draft/committed persistence can be regression-tested
- * even when Node test runners do not provide localStorage. */
-export function persistedDigitalState(state: DigitalStore) {
+/** Switching workbenches does not overwrite the other lab's schematic. */
+export function workspaceTransition(state:DigitalStore,next:DigitalWorkspace):Partial<DigitalStore> {
+  if(next===state.activeWorkspace)return {};
+  if(state.editStack.length)throw new Error(
+    'Finish editing the current reusable block (Save or Cancel) before switching labs.');
+  const committed=state.document;
+  const destination=next==='signal'?state.signalDocument:state.computerDocument;
+  const runtime=emptyDigitalRuntime();
   return {
-    document: state.editStack[0]?.document ?? state.document,
+    activeWorkspace:next,
+    signalDocument:state.activeWorkspace==='signal'?committed:state.signalDocument,
+    computerDocument:state.activeWorkspace==='computer'?committed:state.computerDocument,
+    document:destination,
+    runtime,
+    selection:null,selectedIds:[],pending:null,
+    past:[],future:[],dragOrigin:null,
+    clipboard:null,pasteCount:0,
+    probes:[],trace:[sample(destination,0,runtime)],
+    message:next==='computer'?'Computer Builder · edit the CPU datapath, then step the clock.'
+      :'Signal Lab · your digital logic project is restored.',
+  };
+}
+/** Never persist a temporary block drilldown as the active circuit. */
+export function persistedDigitalState(state: DigitalStore) {
+  const committed=state.editStack[0]?.document ?? state.document;
+  return {
+    document: committed,
+    activeWorkspace:state.activeWorkspace,
+    signalDocument:state.activeWorkspace==='signal'?committed:state.signalDocument,
+    computerDocument:state.activeWorkspace==='computer'?committed:state.computerDocument,
     blockLibrary: state.blockLibrary,
     favoriteKinds: state.favoriteKinds,
     recentKinds: state.recentKinds,
@@ -135,6 +167,16 @@ export function persistedDigitalState(state: DigitalStore) {
 
 export const useDigitalStore = create<DigitalStore>()(persist((set, get) => ({
   document: initialDigitalCircuit(),
+  activeWorkspace:'signal',
+  signalDocument:initialDigitalCircuit(),
+  computerDocument:cpuCoreDemo(),
+  switchWorkspace:destination=>{
+    const state=get();
+    if(state.activeWorkspace===destination)return true;
+    if(state.editStack.length)return false;
+    set(workspaceTransition(state,destination));
+    return true;
+  },
   selection: null, selectedIds: [], pending: null,
   past: [], future: [], dragOrigin: null,
   clipboard: null, pasteCount: 0,

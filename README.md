@@ -1,3 +1,75 @@
+# CircuitBuilder v0.9 — Clean Home + Three Purpose-Built Labs
+
+The landing page is deliberately minimal: a small, labeled CPU circuit diagram and
+**exactly three buttons**—**01 Analog Lab**, **02 Signal Lab**, and **03 Computer Builder**.
+No oversized dashboard, summary cards, counters, or extra action panels. The original
+pixel-arcade aesthetic remains, with a more restrained navy, violet and mint palette.
+
+## What changed in v0.9
+
+### Lab 03 — Computer Builder (new workbench)
+
+**Computer Builder is a real third laboratory**, not a link back to Signal Lab.
+It reuses the tested digital simulation engine and circuit-editor tools, but has
+a purpose-built CPU interface:
+
+- Starts with an **editable, simulated 4-bit CPU datapath**, not a blank board.
+- Focused controls: Parts, Undo/Redo, **Step Clock**, simulation tools, and project actions.
+- An uncluttered, three-step onboarding strip: **Pick a part → Connect pins → Step the clock**.
+- Right-side **RUN / EDIT / GRAPH / INPUT** tools. Clicking a component
+  automatically opens its inspector; click ROM to edit program words.
+- **Clock stepping, +8/+16 cycles, auto run, reset, logic waveforms**, and live stored-state readouts.
+- Part search and favorites; state/memory and computing-unit categories open first
+  in Computer Builder rather than burying them below every Boolean gate.
+- Open example designs: CPU datapath, four-bit counter and D flip-flop.
+- Project menu for creating a new circuit, importing valid Signal Lab JSON and
+  exporting the full editable schematic. Local changes autosave in the browser.
+- Existing custom blocks still open on double-click and support Save / Cancel edits.
+
+The current CPU example is a **clocked four-bit datapath**. It does not implement a
+full instruction decoder or execute machine code. No new ISA or assembler is claimed.
+
+### Separate saved projects
+
+Signal Lab and Computer Builder now have **independent locally persisted workspaces**.
+Switching between them preserves the circuit layout and ROM programs in each. Analog
+Lab retains its own original workspace as before.
+
+For safety, the editor asks you to finish a block's draft before switching labs.
+Runtime register/RAM state is reset when changing workspaces; saved ROM contents,
+component/wire definitions and user-designed blocks remain intact. New users start
+Computer Builder with the CPU sample. Prior Signal Lab JSON data remains compatible.
+
+### Easier navigation and larger schematics
+
+- A single home screen with **only three lab choices**. The top navigation is
+  reduced to the application logo while you're on Home.
+- Use the global navigation when working in a lab to switch laboratories or
+  click the brand to return to Home.
+- Digital editors now **fit all components and wires into view on initial load**,
+  including tall multi-pin chips and the wide CPU sample.
+- The canvas toolbar's **⊡ FIT** button returns to an overview after panning or zooming.
+- Computer Builder opens selected components directly in **EDIT** for immediate
+  renaming, rotating, ROM programming, and deletion.
+- On narrow/mobile screens, the circuit canvas appears **before** the component
+  catalog, keeping the main task accessible without excessive scrolling.
+- Export means an actual downloaded \`.signal.json\` file. Browser autosave is
+  local to this device; it is **not** cloud synchronization.
+
+## Development
+
+\`\`\`bash
+git pull origin main
+npm install
+npm run dev
+npm test
+npm run build
+\`\`\`
+
+---
+
+## Earlier releases
+
 # CircuitBuilder v0.8 — Computer Foundations & CPU Home Screen
 
 CircuitBuilder is becoming a hardware design workbench. Alongside Analog Lab's DC/RLC electrical solver, Signal Lab can now simulate **combinational AND sequential digital circuits**, including small RAM, programmable ROM, registers, counters, and a 4-bit arithmetic/logic unit. The app opens to a new **retro neon home screen featuring a live CPU datapath**.

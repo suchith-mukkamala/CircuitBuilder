@@ -30,7 +30,7 @@ function downloadSignal(doc: DigitalDocument) {
   document.body.appendChild(link); link.click(); link.remove();
   URL.revokeObjectURL(url);
 }
-function SignalInspector({ result }: { result: ReturnType<typeof simulateLogic> }) {
+export function SignalInspector({ result }: { result: ReturnType<typeof simulateLogic> }) {
   const doc = useDigitalStore(s=>s.document);
   const selected = useDigitalStore(s=>s.selection);
   const selectedIds = useDigitalStore(s=>s.selectedIds);

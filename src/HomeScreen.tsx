@@ -1,176 +1,124 @@
-import { useMemo, useState } from 'react';
-import type { DigitalRuntime, LogicValue } from './digital/types';
-import { emptyDigitalRuntime } from './digital/types';
-import { stepCircuit } from './digital/computerEngine';
-import { cpuCoreDemo } from './digital/computerSamples';
-import { simulateLogic } from './digital/engine';
-
-const binary = (bits: LogicValue[]) => {
-  if(bits.some(b=>b!==0&&b!==1))return 'XXXX';
-  return [...bits].reverse().join('');
+type LabChoice = {
+  id:'analog'|'signal'|'computer';
+  number:string;
+  name:string;
+  description:string;
+  symbol:string;
+  action:()=>void;
 };
-const numeric = (bits: LogicValue[]):number|null => {
-  if(bits.some(b=>b!==0&&b!==1))return null;
-  return bits.reduce<number>((n,b,i)=>n+Number(b)*(1<<i),0);
-};
-const textValue=(word:number|null):string=>
-  word===null?'X':'0x'+word.toString(16).toUpperCase();
 
-function Chip({x,y,w,h,label,subtitle,accent='mint'}:{
-  x:number;y:number;w:number;h:number;label:string;subtitle:string;accent?:'mint'|'pink'|'blue'|'gold';
-}){
-  const colors={mint:'#79ffcf',pink:'#f3a6ff',blue:'#83cafb',gold:'#ffe09a'};
-  const color=colors[accent];
-  return <g className={'home-cpu-chip chip-'+accent}>
-    <rect x={x+5} y={y+6} width={w} height={h} rx="2" fill="#050b20" opacity=".8"/>
-    <rect x={x} y={y} width={w} height={h} fill="#191334" stroke={color} strokeWidth="2.6"/>
-    <rect x={x+8} y={y+8} width={w-16} height={h-16} fill="#151d3c"
-      stroke={color} strokeOpacity=".28" strokeWidth="1"/>
-    {[0,1,2,3].map(i=><g key={i} stroke={color} strokeWidth="2">
-      <line x1={x+17+i*(w-34)/3} y1={y-8} x2={x+17+i*(w-34)/3} y2={y}/>
-      <line x1={x+17+i*(w-34)/3} y1={y+h} x2={x+17+i*(w-34)/3} y2={y+h+8}/>
+function CpuCircuitArt() {
+  const trace = '#79d9c5';
+  const violet = '#a797ea';
+  return <svg className="landing-cpu-svg" viewBox="0 0 1040 400" role="img"
+    aria-label="Simple four-bit CPU circuit: program counter connects to ROM, ROM connects to an ALU, and the ALU connects to an accumulator register with a feedback loop">
+    <defs>
+      <pattern id="landing-grid" width="26" height="26" patternUnits="userSpaceOnUse">
+        <path d="M26 0H0V26" fill="none" stroke="#313b5c" strokeWidth=".7" opacity=".45"/>
+      </pattern>
+      <filter id="landing-glow" x="-30%" y="-30%" width="160%" height="160%">
+        <feGaussianBlur stdDeviation="5" result="blur"/>
+        <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+    </defs>
+    <rect width="1040" height="400" fill="url(#landing-grid)" opacity=".58"/>
+    <g stroke="#344367" strokeWidth="1" strokeDasharray="3 9" opacity=".7">
+      <path d="M26 54H1014M26 345H1014"/>
+    </g>
+    {/* Circuit trace, intentionally schematic rather than photorealistic. */}
+    <g fill="none" stroke={trace} strokeWidth="3" strokeLinecap="square"
+      strokeLinejoin="miter">
+      <path d="M239 181H318"/>
+      <path d="M481 181H559"/>
+      <path d="M727 181H805"/>
+      <path d="M897 245V315H643V262" stroke={violet}/>
+      <path d="M149 121V78H897V117" stroke="#477a85" strokeWidth="2"
+        strokeDasharray="6 8"/>
+      <path d="M95 262V314H149V245" stroke="#477a85" strokeWidth="2"/>
+    </g>
+    <g fill={trace} filter="url(#landing-glow)">
+      {[268,292,510,534,748,772].map(x=><rect key={x} x={x} y="178" width="5" height="6"/>)}
+      <rect x="890" y="311" width="6" height="6" fill={violet}/>
+    </g>
+    {[
+      {x:74,w:164,label:'COUNTER',sub:'PROGRAM / PC',stroke:'#80b9ff'},
+      {x:317,w:164,label:'ROM',sub:'16 × 4 MEMORY',stroke:'#9c9af1'},
+      {x:559,w:168,label:'ALU',sub:'4-BIT LOGIC',stroke:'#8cf2d3'},
+      {x:805,w:168,label:'REGISTER',sub:'ACCUMULATOR',stroke:'#d0a8ea'},
+    ].map(chip=><g key={chip.label}>
+      <rect x={chip.x+6} y="127" width={chip.w} height="118" fill="#060a18" opacity=".9"/>
+      <rect x={chip.x} y="121" width={chip.w} height="118" rx="2"
+        fill="#151a32" stroke={chip.stroke} strokeWidth="2.5"/>
+      <rect x={chip.x+9} y="130" width={chip.w-18} height="100"
+        fill="none" stroke={chip.stroke} strokeWidth=".8" opacity=".24"/>
+      {[0,1,2,3].map(i=><g key={i} stroke={chip.stroke} strokeWidth="2">
+        <path d={'M'+(chip.x+23+i*(chip.w-46)/3)+' 109v12'}/>
+        <path d={'M'+(chip.x+23+i*(chip.w-46)/3)+' 239v12'}/>
+      </g>)}
+      <text x={chip.x+chip.w/2} y="170" textAnchor="middle"
+        fill="#f1edff" fontSize="17" fontFamily="monospace" fontWeight="bold" letterSpacing="1.1">{chip.label}</text>
+      <text x={chip.x+chip.w/2} y="193" textAnchor="middle"
+        fill="#91a7c4" fontSize="10.5" fontFamily="monospace" letterSpacing=".6">{chip.sub}</text>
+      <g stroke={chip.stroke} strokeWidth="1.4" fill="none" opacity=".65">
+        <path d={'M'+(chip.x+23)+' 210h20m12 0h11'}/>
+      </g>
     </g>)}
-    <text x={x+w/2} y={y+h/2-3} fill={color} textAnchor="middle"
-      fontFamily="monospace" fontWeight="900" fontSize={w<110?13:16}>{label}</text>
-    <text x={x+w/2} y={y+h/2+17} fill="#aec7e9" textAnchor="middle"
-      fontFamily="monospace" fontSize="10">{subtitle}</text>
-  </g>;
+    <g fill="#819abb" fontFamily="monospace" fontSize="11">
+      <text x="278" y="161" textAnchor="middle">ADDR</text>
+      <text x="520" y="161" textAnchor="middle">DATA</text>
+      <text x="765" y="161" textAnchor="middle">RESULT</text>
+      <text x="757" y="306" textAnchor="middle">FEEDBACK</text>
+      <text x="95" y="286">CLK</text>
+    </g>
+    <g fill="none" stroke={trace} strokeWidth="1.6">
+      <path d="M310 176l7 5-7 5M552 176l7 5-7 5M798 176l7 5-7 5"/>
+    </g>
+    <g fill="#8bf8d6" opacity=".85">
+      <rect x="21" y="22" width="6" height="6"/>
+      <rect x="1012" y="373" width="6" height="6"/>
+    </g>
+    <text x="30" y="31" fill="#7098aa" fontSize="10" fontFamily="monospace"
+      letterSpacing="1.5">FOUR BIT ARCHITECTURE</text>
+    <text x="1009" y="378" textAnchor="end" fill="#7098aa" fontSize="10"
+      fontFamily="monospace" letterSpacing="1.5">SIGNAL FLOW / 01</text>
+  </svg>;
 }
-export function HomeScreen({onAnalog,onSignal,onCpu}:{
-  onAnalog:()=>void;onSignal:()=>void;onCpu:()=>void;
+
+export function HomeScreen({
+  onAnalog,onSignal,onComputer,
+}:{
+  onAnalog:()=>void;onSignal:()=>void;onComputer:()=>void;
 }) {
-  const demo=useMemo(()=>cpuCoreDemo(),[]);
-  const [runtime,setRuntime]=useState<DigitalRuntime>(emptyDigitalRuntime);
-  const result=useMemo(()=>simulateLogic(demo,runtime),[demo,runtime]);
-  const bits=(id:string)=>[0,1,2,3].map(i=>result.terminalValues[id+':q'+i]??'X');
-  const pcBits=bits('pc'),accBits=bits('acc'),romBits=bits('rom');
-  const pc=numeric(pcBits),acc=numeric(accBits),rom=numeric(romBits);
-  const step=()=>setRuntime(current=>stepCircuit(demo,current));
-  return <main className="home-root">
-    <div className="home-stars" aria-hidden="true"/>
-    <section className="home-hero">
-      <div className="home-intro">
-        <div className="home-microtag"><span className="home-led"/> CIRCUITBUILDER / COMPUTING WORKBENCH v0.8</div>
-        <h1>BUILD THE <span>COMPUTER.</span><br/>UNDERSTAND THE <span>BIT.</span></h1>
-        <p>From one transistor-inspired circuit to a clocked digital datapath.
-          Design logic, wire your own modules, and discover how a computer remembers and computes.</p>
-        <div className="home-actions">
-          <button className="home-primary" onClick={onCpu}>▶ OPEN THE 4-BIT CPU DEMO</button>
-          <button className="home-outline" onClick={onSignal}>▥ ENTER SIGNAL LAB</button>
-        </div>
-        <div className="home-mini-stats">
-          <span><strong>02</strong> LABORATORIES</span>
-          <span><strong>28</strong> DIGITAL PARTS</span>
-          <span><strong>04</strong> BIT DEMO CPU</span>
-        </div>
+  const labs:LabChoice[]=[
+    {id:'analog',number:'01',name:'ANALOG LAB',
+      description:'Voltage & circuits',symbol:'〰',action:onAnalog},
+    {id:'signal',number:'02',name:'SIGNAL LAB',
+      description:'Logic & signals',symbol:'⊕',action:onSignal},
+    {id:'computer',number:'03',name:'COMPUTER BUILDER',
+      description:'Memory & processors',symbol:'▣',action:onComputer},
+  ];
+  return <main className="landing-home">
+    <div className="landing-content">
+      <div className="landing-eyebrow"><span/> THE ELECTRONICS PLAYGROUND</div>
+      <h1>Build something <em>brilliant.</em></h1>
+      <p className="landing-subtitle">Start with a circuit. Build up to a computer.</p>
+      <div className="landing-art">
+        <CpuCircuitArt/>
       </div>
-      <div className="home-cpu-terminal">
-        <div className="home-terminal-header"><span>▣</span> LIVE DATAPATH / 4-BIT CORE
-          <span className="home-terminal-live"><i/> LIVE LOGIC</span></div>
-        <div className="home-terminal-display">
-          <svg viewBox="0 0 630 362" role="img"
-            aria-label="4-bit CPU datapath connecting a program counter to ROM, ALU and an accumulator register"
-            xmlns="http://www.w3.org/2000/svg">
-            <defs>
-              <pattern id="cpu-grid" width="20" height="20" patternUnits="userSpaceOnUse">
-                <path d="M20 0H0V20" fill="none" stroke="#2d3159" strokeWidth=".6"/>
-              </pattern>
-              <filter id="cpu-glow"><feGaussianBlur stdDeviation="3" result="blur"/>
-                <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-            </defs>
-            <rect width="630" height="362" fill="#090f28"/>
-            <rect width="630" height="362" fill="url(#cpu-grid)"/>
-            <g strokeWidth="3" fill="none" strokeLinejoin="bevel">
-              <path d="M143 128H172" stroke="#83cafb"/>
-              <path d="M291 128H325" stroke="#83cafb"/>
-              <path d="M441 128H463V204" stroke="#ffe09a"/>
-              <path d="M518 272V292H258V202H242" stroke="#79ffcf"/>
-              <path d="M115 272V211H103V169" stroke="#ee9eff" strokeDasharray="5 5"/>
-              <path d="M515 204V169" stroke="#79ffcf" strokeDasharray="5 6"/>
-              <path d="M68 211V192H64V169" stroke="#df91f4"/>
-            </g>
-            <g filter="url(#cpu-glow)" fill="#8fffe0">
-              {[190,213,236,259].map((x,i)=>
-                <rect key={i} x={x+(runtime.cycle%3)*7} y="125" width="5" height="6"
-                  opacity={.4+i*.13}/>)}
-              {[345,370,395,420].map((x,i)=>
-                <rect key={i} x={x+(runtime.cycle%4)*4} y="125" width="5" height="6"
-                  opacity={.3+i*.14}/>)}
-            </g>
-            <Chip x={30} y={88} w={114} h={80} label="PC" subtitle={textValue(pc)} accent="blue"/>
-            <Chip x={173} y={88} w={118} h={80} label="ROM" subtitle={textValue(rom)} accent="blue"/>
-            <Chip x={324} y={88} w={117} h={80} label="4-BIT ALU" subtitle="ADD" accent="gold"/>
-            <Chip x={463} y={204} w={125} h={69} label="ACC" subtitle={textValue(acc)} accent="mint"/>
-            <Chip x={30} y={210} w={140} h={65} label="CLOCK" subtitle={'CYCLE '+runtime.cycle} accent="pink"/>
-            <text x="158" y="116" fill="#adc1e4" fontFamily="monospace" fontSize="10">ADDR</text>
-            <text x="300" y="116" fill="#adc1e4" fontFamily="monospace" fontSize="10">DATA</text>
-            <text x="449" y="191" fill="#c8b5ce" fontFamily="monospace" fontSize="10">SUM</text>
-            <text x="346" y="283" fill="#a3f1de" fontFamily="monospace" fontSize="10">FEEDBACK (4 BITS)</text>
-            <text x="29" y="337" fill="#7c93bc" fontFamily="monospace" fontSize="10">
-              4-BIT ACCUMULATOR DATAPATH — INTERACTIVE CLOCK DEMO
-            </text>
-          </svg>
-        </div>
-        <div className="home-terminal-console">
-          <div className="home-cpu-readouts">
-            <div><small>PROGRAM COUNTER</small><strong>{binary(pcBits)}</strong></div>
-            <div><small>ROM VALUE</small><strong>{binary(romBits)}</strong></div>
-            <div><small>ACCUMULATOR</small><strong>{binary(accBits)}</strong></div>
-          </div>
-          <div className="home-clock-actions">
-            <button onClick={step}>↯ CLOCK STEP</button>
-            <button onClick={()=>setRuntime(current=>{
-              let next=current;
-              for(let i=0;i<8;i++)next=stepCircuit(demo,next);
-              return next;
-            })}>+8 CYCLES</button>
-            <button onClick={()=>setRuntime(emptyDigitalRuntime())}>↺ RESET</button>
-          </div>
-          <p>This preview runs the same digital engine as Signal Lab. Step the clock to watch the program counter and accumulator change.</p>
-        </div>
+      <div className="landing-choices" aria-label="Choose a laboratory">
+        {labs.map(lab=><button key={lab.id}
+          className={'landing-choice landing-choice-'+lab.id}
+          onClick={lab.action}>
+          <span className="landing-choice-icon" aria-hidden="true">{lab.symbol}</span>
+          <span className="landing-choice-text">
+            <span className="landing-choice-name">{lab.name}</span>
+            <span className="landing-choice-description">{lab.description}</span>
+          </span>
+          <span className="landing-choice-arrow" aria-hidden="true">↗</span>
+          <span className="landing-choice-number" aria-hidden="true">{lab.number}</span>
+        </button>)}
       </div>
-    </section>
-    <section className="home-labs">
-      <div className="home-section-heading"><span>▦</span><div>
-        <small>CHOOSE YOUR WORKSPACE</small>
-        <h2>THE LABORATORIES</h2>
-      </div></div>
-      <div className="home-lab-cards">
-        <button className="home-lab-card home-analog" onClick={onAnalog}>
-          <span className="home-card-number">LAB 01 / VOLTAGE & CURRENT</span>
-          <span className="home-card-art" aria-hidden="true">∿ ──▤── ⏚</span>
-          <strong>ANALOG LAB</strong>
-          <span>Resistors, sources, capacitors, inductors, DC and transient simulation.</span>
-          <b>ENTER ANALOG LAB <span>↗</span></b>
-        </button>
-        <button className="home-lab-card home-signal" onClick={onSignal}>
-          <span className="home-card-number">LAB 02 / DIGITAL COMPUTATION</span>
-          <span className="home-card-art" aria-hidden="true">01 ⊕ ▣ 10</span>
-          <strong>SIGNAL LAB</strong>
-          <span>Boolean gates, custom blocks, registers, memory, clock steps and CPU experiments.</span>
-          <b>ENTER SIGNAL LAB <span>↗</span></b>
-        </button>
-        <button className="home-lab-card home-cpu" onClick={onCpu}>
-          <span className="home-card-number">STARTER PROJECT / 4-BIT DATAPATH</span>
-          <span className="home-card-art" aria-hidden="true">▣ ALU ▣</span>
-          <strong>CPU STARTER</strong>
-          <span>Explore and rewire a live program counter, ROM, ALU, and accumulator.</span>
-          <b>OPEN STARTER CIRCUIT <span>↗</span></b>
-        </button>
-      </div>
-    </section>
-    <section className="home-roadmap">
-      <div className="home-section-heading"><span>⌘</span><div>
-        <small>FROM GATES TO COMPUTERS</small>
-        <h2>YOUR HARDWARE JOURNEY</h2>
-      </div></div>
-      <div className="home-roadmap-grid">
-        <div><strong>01 / LOGIC</strong><span>Gates, adders, multiplexers, and saved blocks.</span></div>
-        <div><strong>02 / STATE</strong><span>Clocked flip-flops, RAM, ROM, counters and registers.</span></div>
-        <div><strong>03 / DATAPATH</strong><span>Four-bit ALU, program counter, and interactive CPU example.</span></div>
-        <div className="home-future"><strong>04 / NEXT FRONTIER</strong><span>Instruction sets, control units, buses and larger memory systems.</span></div>
-      </div>
-    </section>
-    <footer className="home-footer">CIRCUITBUILDER // HARDWARE IS SOFTWARE YOU CAN TOUCH · EDUCATIONAL SIMULATOR</footer>
+      <div className="landing-bottom">CIRCUITBUILDER <span aria-hidden="true">·</span> DESIGN / CONNECT / DISCOVER</div>
+    </div>
   </main>;
 }
