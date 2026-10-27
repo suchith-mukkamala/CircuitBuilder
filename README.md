@@ -1,3 +1,70 @@
+# CircuitBuilder v0.11 — CASM: Our First Assembly Language
+
+CircuitBuilder now includes **CASM (Circuit Assembly)**, a real assembler and a wired, programmable four-bit teaching CPU.
+
+**Get started:** Open Lab 03 / Computer Builder. New projects open with the CASM programmable CPU starter; existing saved projects are preserved. To load it manually, choose **Project (⋮) → LOAD PROGRAMMABLE CASM CPU**. Open the **⌘ CODE** tab, edit the source, press **ASSEMBLE & LOAD**, then **STEP INSTRUCTION**.
+
+### Hello CASM
+
+    ; calculate 3 + 5
+    START:
+        LDI 3
+        ADD 5
+        OUT
+        HLT
+
+This compiles into machine-code bytes **13 25 C0 D0** in hexadecimal. The executed CPU output is **8**.
+
+### Instruction encoding
+
+Every instruction is one 8-bit byte (high nibble = opcode, low nibble = operand/address). The program ROM contains 16 bytes and CPU RAM contains sixteen four-bit words.
+
+| Hex opcode | Instruction | Behavior |
+|---|---|---|
+| 0 | NOP | No operation |
+| 1 | LDI n | Load n into accumulator |
+| 2 | ADD n | Add immediate modulo 16 |
+| 3 | SUB n | Subtract immediate modulo 16 |
+| 4 | AND n | Bitwise AND |
+| 5 | OR n | Bitwise OR |
+| 6 | XOR n | Bitwise XOR |
+| 7 | LOAD a | Read RAM address a |
+| 8 | STORE a | Write accumulator to RAM address a |
+| 9 | JMP a | Jump to address a |
+| A | JZ a | Jump if ZERO is 1 |
+| B | JNZ a | Jump if ZERO is 0 |
+| C | OUT | Latch accumulator to output port |
+| D | HLT | Halt execution |
+| E | INC | Increment accumulator |
+| F | Reserved | Fault on invalid opcode |
+
+Operands are integers 0–15, optionally written in hexadecimal (0xA) or binary (0b1010). Labels can precede an instruction and may be referenced before or after their declaration. Comments begin with semicolon, hash or two slashes. CASM reports line-specific syntax errors and does not replace a working ROM program when assembly fails.
+
+### Learn by running
+
+The **CODE** panel offers three ready-to-edit examples: addition, a countdown loop, and storing/loading RAM. The bytecode listing highlights the current instruction. Click an address to set a breakpoint. Run at 1–8 instructions per second, pause, step one instruction, reset, or examine the ACC/PC/OUT registers, flags, and all sixteen RAM words.
+
+The debugger shows the eight instruction bits **fetched through the actual electrical bus**. If you disconnect the ROM from the CPU, the CPU faults instead of executing from a hidden JavaScript program. Save a project as JSON to preserve both source text and the ROM bytecode. Undo/redo also applies to code loaded into the ROM.
+
+### CPU implementation and limits
+
+The starter schematic connects a **4-bit PC bus** to a **16×8 instruction ROM**, routes its eight output bits into the clocked CPU4 component, and routes the four output-port bits through a splitter to LEDs. A reset switch, clock generator, HALT/FAULT LEDs, named buses, and live circuit diagnostics are included.
+
+**Honest limitation:** the CPU4 component currently implements a *fixed internal instruction decoder and state registers*. Instruction fetch, ROM contents, buses and external signals are real editable circuit connections, and the simulator responds to them. The decoder is not yet decomposed into user-editable gates and the ISA isn't user-definable. Building an optional gate-level control unit, configurable opcodes, larger register files, and peripherals is next.
+
+The original clocked CPU datapath, Signal Lab, Analog Lab, saved blocks, JSON projects, and multi-bit net engine continue to work.
+
+### Run locally
+
+    git pull origin main
+    npm install
+    npm run dev
+    npm test
+    npm run build
+
+---
+
+## Previous releases
 # CircuitBuilder v0.10 — Digital Buses, Named Nets, Smart Wiring & Live Diagnostics
 
 This release focuses on **designing bigger digital computers without manually drawing dozens of one-bit connections**. Signal Lab and Computer Builder share a backwards-compatible electrical model and editor controls. Analog Lab is unchanged.
