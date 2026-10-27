@@ -1,4 +1,6 @@
 /* v0.9 · restrained arcade landing screen: CPU drawing, three destinations */
+.lab-switcher-home{background:transparent;border:0;padding:0;text-align:left;cursor:pointer}
+.lab-switcher-home:hover .lab-switcher-cube{box-shadow:0 0 17px #88ffe65c}
 .landing-home{
   position:relative;min-height:calc(100vh - 52px);display:flex;
   align-items:center;justify-content:center;overflow:hidden;
