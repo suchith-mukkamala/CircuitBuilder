@@ -218,7 +218,7 @@ export function ComputerBuilder(){
             key={id} role="tab" aria-selected={tab===id}
             className={tab===id?'active':''} onClick={()=>setTab(id)}>{label}</button>)}
         </div>
-        <div hidden={tab!=='code'}><CasmProgramPanel/></div>
+        <div hidden={tab!=='code'}><CasmProgramPanel active={tab==='code'}/></div>
         {tab==='code'?null:
           tab==='run'?<ComputerPanel doc={doc} result={result}/>:
           tab==='inspect'?<SignalInspector result={result}/>:
