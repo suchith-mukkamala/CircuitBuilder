@@ -52,7 +52,10 @@ export function evaluateComponent(
     case 'high': return {out:1};
     case 'low': return {out:0};
     case 'led':
-    case 'block': return {};
+    case 'block':
+    case 'splitter4':
+    case 'splitter8':
+    case 'splitter16': return {};
     case 'not':
     case 'buffer':
     case 'and': case 'or': case 'xor':
