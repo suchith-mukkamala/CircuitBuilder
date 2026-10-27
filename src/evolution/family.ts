@@ -12,6 +12,7 @@ import {
 } from './engine';
 import {appendLifeMoment,makeLifeRecord,personName} from './identity';
 import {initialMind} from './mind';
+import {divineFactor} from './divine';
 
 const clamp=(n:number,a:number,b:number)=>Math.min(b,Math.max(a,n));
 const round=(n:number)=>Math.round(n*1000)/1000;
@@ -131,7 +132,8 @@ export function growBonds(world:World,rand:()=>number):number{
     if(!a||!b){bond.stage='ended';bond.ended=world.year;continue;}
     const together=cheby(a,b)<=4;
     bond.strength=round(clamp(bond.strength+
-      (together?.12:-.018)*(a.genes.social+b.genes.social)/2,0,1));
+      (together?.12:-.018)*(a.genes.social*divineFactor(a,'social',world.year)+
+      b.genes.social*divineFactor(b,'social',world.year))/2,0,1));
     if(bond.stage==='courting'&&bond.strength>=.68){
       bond.stage='partner';a.partnerId=b.id;b.partnerId=a.id;partnerships++;
       appendLifeMoment(world,a.id,{year:world.year,kind:'partner',
@@ -152,13 +154,14 @@ export function growBonds(world:World,rand:()=>number):number{
   // Deterministic order by agent ID; movement itself is randomized each tick.
   const available=world.agents.filter(a=>!bonded.has(a.id)&&
     a.age>=traitProfile(a.ancestry).maturity&&
-    a.age<traitProfile(a.ancestry).lifespan*.76&&a.health>55&&a.energy>45)
+    a.age<traitProfile(a.ancestry).lifespan*
+      divineFactor(a,'lifespan',world.year)*.76&&a.health>55&&a.energy>45)
     .sort((a,b)=>a.id-b.id);
   const pos=new Map<number,Agent>();
   for(const a of available)pos.set(a.y*world.width+a.x,a);
   for(const a of available){
     if(bonded.has(a.id))continue;
-    if(rand()>.42*a.genes.social)continue;
+    if(rand()>.42*a.genes.social*divineFactor(a,'social',world.year))continue;
     const candidates:Agent[]=[];
     for(let y=a.y-2;y<=a.y+2;y++)for(let x=a.x-2;x<=a.x+2;x++){
       if(x<0||y<0||x>=world.width||y>=world.height)continue;
@@ -198,6 +201,8 @@ export function offspringFromBonds(
   findSpace:(parent:Agent,ancestry:Ancestry)=>{x:number;y:number}|null,
 ):Agent[]{
   const byId=new Map(world.agents.map(a=>[a.id,a]));
+  const populations={human:0,elf:0,dwarf:0,demon:0};
+  for(const a of world.agents)populations[a.species]++;
   const newborns:Agent[]=[];
   // At the global browser-safety cap, the order in which couples are visited
   // determines who gets the few available birth slots. Visiting oldest bonds
@@ -214,7 +219,8 @@ export function offspringFromBonds(
     if(!a||!b||cheby(a,b)>3)continue;
     const p=traitProfile(a.ancestry),q=traitProfile(b.ancestry);
     if(a.age<p.maturity||b.age<q.maturity||
-      a.age>=p.lifespan*.76||b.age>=q.lifespan*.76||
+      a.age>=p.lifespan*divineFactor(a,'lifespan',world.year)*.76||
+      b.age>=q.lifespan*divineFactor(b,'lifespan',world.year)*.76||
       a.health<52||b.health<52||a.energy<57||b.energy<57)continue;
     const comp=compatibility(a,b,world.settings.interbreeding);
     // Healthy families have recovery time between births. This is shorter
@@ -224,9 +230,17 @@ export function offspringFromBonds(
     if(bond.lastBirthYear!==undefined&&
       world.year-bond.lastBirthYear<spacing)continue;
     const fertility=(p.fertility+q.fertility)/2;
-    const chance=clamp(fertility*1.65*comp*
+    // A modest, census-responsive recovery bonus offsets the shorter
+    // generations of humans and the low food of demon homelands.
+    const minorityBoost=(a.species==='human'||a.species==='demon'||
+      b.species==='human'||b.species==='demon')&&
+      Math.min(populations[a.species],populations[b.species])<65?1.25:1;
+    const chance=clamp(fertility*1.65*comp*minorityBoost*
       Math.min(a.genes.fertility,b.genes.fertility)*
-      Math.min(a.energy,b.energy)/100*world.settings.resourceLevel,0,.65);
+      (divineFactor(a,'fertility',world.year)+
+        divineFactor(b,'fertility',world.year))/2*
+      (divineFactor(a,'luck',world.year)+divineFactor(b,'luck',world.year))/2*
+      Math.min(a.energy,b.energy)/100*world.settings.resourceLevel,0,.78);
     if(rand()>=chance)continue;
     const ancestry=mixAncestry(a.ancestry,b.ancestry);
     const site=findSpace(a,ancestry);

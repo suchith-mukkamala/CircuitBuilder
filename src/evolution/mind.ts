@@ -3,6 +3,7 @@
  * relationships and remembered experience, then chooses where to travel.
  */
 import type {Agent,Ancestry,Biome,World} from './engine';
+import {divineFactor,mortalWhisper} from './divine';
 
 export type MindGoal='forage'|'seek_safety'|'seek_family'|'seek_partner'|
   'stay_together'|'explore'|'venture'|'vocation';
@@ -113,11 +114,13 @@ export function planMind(w:World,a:Agent,occupied:Map<number,number>,
   const {maturity,lifespan}=traits(a.ancestry);
   const safe=suitability(a.ancestry,w.tiles[index(w,a.x,a.y)].biome);
   const adult=a.age>=maturity&&a.age<lifespan*.76;
+  const whisper=mortalWhisper(a,w.year);
   let goal:MindGoal='explore',reason='Healthy and curious about the surroundings.';
   let target:AgentMind['target'],targetPersonId:number|undefined;
   const expeditionReady=a.age>=maturity*.85&&a.age<lifespan*.76&&
     a.energy>77&&a.health>76&&
-    (a.development?.career==='scout'||a.genes.curiosity>1.08||
+    (a.development?.career==='scout'||
+      a.genes.curiosity*divineFactor(a,'courage',w.year)>1.08||
       (a.development?.values.discovery??0)>57);
   const continuing=expeditionReady&&prior?.goal==='venture'&&prior.target&&
     w.year-prior.since<18&&distance(a,prior.target)>2;
@@ -137,6 +140,16 @@ export function planMind(w:World,a:Agent,occupied:Map<number,number>,
   }else if(continuing){
     goal='venture';reason='Continuing a chosen expedition into unfamiliar land.';
     target={...prior!.target!};
+  }else if(whisper&&a.age>=maturity){
+    // A divine voice becomes an intention only if the mortal accepted it or
+    // reinterpreted it. Hunger, danger and dependent children still come first.
+    const theme=whisper.interpretedAs;
+    if(theme==='exploration'){
+      target=expedition(w,a);
+      goal=target?'venture':'explore';
+    }else goal='vocation';
+    reason=(whisper.response==='reinterpreted'?'Reimagining':'Choosing to follow')+
+      ' a divine whisper about '+theme+'.';
   }else if((a.partnerId||contacts.has(a.id))&&
     byId.has(a.partnerId??contacts.get(a.id)!)){
     const partner=byId.get(a.partnerId??contacts.get(a.id)!)!;

@@ -6,6 +6,8 @@ import {EvolutionHistory} from './EvolutionHistory';
 import {WorldFamily} from './WorldFamily';
 import {PeopleDirectory} from './PeopleDirectory';
 import {DivineCodex} from './DivineCodex';
+import {DivinePowers} from './DivinePowers';
+import {intervene,type DivineAction} from './divine';
 import {personName,isPersonFavorite,renamePerson,togglePersonFavorite,
   toggleSettlementFavorite,renameSettlement,knownSettlements} from './identity';
 import {hybridFraction,traitProfile,ancestryLabel} from './family';
@@ -29,7 +31,7 @@ function initialWorld():World{
   }
   return createWorld(DEFAULT_SETTINGS);
 }
-type Tab='world'|'creator'|'history'|'family'|'people'|'codex';
+type Tab='world'|'creator'|'history'|'family'|'people'|'codex'|'powers';
 const format=(n:number)=>n.toLocaleString('en-US');
 const brushValue=(b:Brush)=>b.kind==='inspect'?'inspect':
   b.kind==='food'?'food':b.kind==='spawn'?'spawn-'+b.species:'terrain-'+b.biome;
@@ -197,6 +199,15 @@ export function EvolutionLab(){
   const navigate=(next:Tab)=>{
     setPlaying(false);setTab(next);setNotice('');
   };
+  const applyDivine=(action:DivineAction)=>{
+    setPlaying(false);
+    try{
+      const updated=intervene(currentWorld.current,action);
+      setWorld(updated);
+      const last=updated.divine?.history.at(-1);
+      setNotice(last?'Divine intervention #'+last.id+': '+last.description:'Power applied.');
+    }catch(err){setNotice(err instanceof Error?err.message:'That power could not take effect.');}
+  };
   return <div className="evo-app">
     <header className="evo-lab-nav">
       <div className="evo-lab-brand">
@@ -222,6 +233,9 @@ export function EvolutionLab(){
         <button role="tab" aria-selected={tab==='codex'}
           className={tab==='codex'?'active':''} onClick={()=>navigate('codex')}>
           ✦ DIVINE CODEX</button>
+        <button role="tab" aria-selected={tab==='powers'}
+          className={tab==='powers'?'active':''} onClick={()=>navigate('powers')}>
+          ⚡ DIVINE POWERS</button>
       </nav>
       <div className="evo-nav-status"><span/> YEAR {world.year}</div>
     </header>
@@ -233,11 +247,16 @@ export function EvolutionLab(){
       onFavorite={favoritePerson} onRename={giveName}/>:
     tab==='people'?<PeopleDirectory world={world} selectedId={selectedAgentId}
       onOpen={focusPerson} onFavorite={favoritePerson}
-      onRename={giveName} onFindOnMap={findOnMap}/>:
+      onRename={giveName} onFindOnMap={findOnMap}
+      onInvoke={id=>{setSelectedAgentId(id);navigate('powers');}}/>:
     tab==='codex'?<DivineCodex world={world}
       onOpenPerson={focusPerson} onFavoritePerson={favoritePerson}
       onFavoriteSettlement={favoriteSettlement}
       onRenameSettlement={renamePlace} onFindSettlement={findSettlement}/>:
+    tab==='powers'?<><DivinePowers world={world} selectedId={selectedAgentId}
+      selectedTile={selected} onApply={applyDivine} onOpenPerson={openPerson}
+      onFindOnMap={findOnMap}/>
+      {notice&&<p className="evo-notice" role="status">{notice}</p>}</>:
     <main className="evo-playground">
       <header className="evo-playground-heading">
         <div>
@@ -376,6 +395,7 @@ export function EvolutionLab(){
                   <button onClick={()=>openPerson(agent.id)}>◉ PROFILE ↗</button>
                   <button className="evo-ancestry-open"
                     onClick={()=>focusPerson(agent.id)}>♡ FAMILY TREE ↗</button>
+                  <button onClick={()=>navigate('powers')}>⚡ DIVINE POWERS ↗</button>
                 </div>
                 <div className="evo-vitals">
                   <label>ENERGY <b>{Math.round(agent.energy)}%</b>
@@ -437,10 +457,10 @@ export function EvolutionLab(){
         </aside>
       </div>
       <div className="evo-future-note">
-        <strong>V0.5: LIVES SHAPED BY EXPERIENCE</strong>
-        <span>Children rely on caregivers and neighbors, learn skills and languages,
-          form friendships, remember hardship and support, and eventually choose their paths.
-          Explorers can venture into unfamiliar biomes.</span>
+        <strong>V0.6: THE HAND OF THE CREATOR</strong>
+        <span>Inspire or challenge mortal minds, bestow hereditary blessings and
+          family curses, or intervene directly. Track every divine act and the
+          decisions and descendants shaped by it.</span>
       </div>
     </main>}
   </div>;

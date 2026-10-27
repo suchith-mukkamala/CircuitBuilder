@@ -1,4 +1,62 @@
-# CircuitBuilder v0.17.0 — Evolution Lab v0.5: Childhood, Memory & Social Development
+# CircuitBuilder v0.18.0 — Evolution Lab v0.6: Divine Powers & Mortal Agency
+
+**The creator can intervene; mortals still make choices.** Evolution Lab 04 now
+has a **DIVINE POWERS** tab with unrestricted sandbox abilities in three groups:
+
+- **Influence:** whisper inspiration about exploration, leadership, learning,
+  cooperation, faith or personal goals. A target uses inherited temperament,
+  trust and learned values to accept, resist or reinterpret the message. Accepted
+  or reinterpreted whispers affect actual intentions and development for a
+  chosen number of years. Hunger, danger and dependent children take priority.
+- **Blessings & Debuffs:** modify health recovery, effective lifespan, fertility,
+  skill growth, intelligence, luck, courage and social behavior. Apply negative
+  or positive modifiers for a set number of years, permanently, or hereditarily.
+  Hereditary blessings and family curses propagate to descendants with a small
+  generational dilution. An individual can carry several effects simultaneously.
+- **Direct Intervention:** heal, punish, resurrect a deceased identity, summon a
+  member of any people or transform a chosen terrain tile. Actions have no
+  cooldowns or divine currency. Safety rules still protect world-file validity,
+  occupancy and the browser's 850-person cap.
+
+### Try v0.6
+
+1. Open **04 Evolution Lab → DIVINE POWERS**, choose a living person and give
+   them a hereditary fertility blessing. Advance time and open **PEOPLE** to
+   trace the inherited divine source IDs in children and grandchildren.
+2. Send two individuals a dream about exploration or leadership. Read each
+   person's response in the divine chronicle and watch their subsequent goals.
+   An individual can resist the suggestion; direct edits always take effect.
+3. Try heal, punishment, resurrection, summoning and terrain changes. Explore
+   different cultural readings of each event in **DIVINE INTERVENTION HISTORY**.
+4. Existing v0.1–v0.5 saves still import. Divine history starts at the first
+   actual intervention; the simulator does not invent earlier miracles.
+
+### Population balance
+
+Humans now have somewhat higher fertility, modestly longer lives and lower
+metabolic demand. Demons have a stronger fertility buff, lower metabolism and
+slightly longer lives to offset low-food volcanic and wasteland settlements.
+When either population falls below 65, paired families can receive a measured
+recovery bonus. **This is not a species guarantee:** famine, disasters of
+ordinary ecology, overcrowding and extinction remain possible. No race receives
+immunity or fabricated births; physical births still require real healthy
+partners and free terrain. The 850-person cap remains globally shared.
+
+### Limits and transparency
+
+- Minds use deterministic, explainable rules—not LLM calls or consciousness.
+  Faith and cultural interpretation are the groundwork for emergent religion,
+  not a full religious or political institution system yet.
+- Powers create documented effects. Resurrection renews a body but preserves the
+  person's original identity and earlier family chronology. Temporary effects
+  expire; permanent and hereditary ones survive saves and world ticks.
+- Sandbox has unrestricted *choice of powers*, with validation to keep saves
+  playable. Water cannot be created under a living occupant; resurrection and
+  summoning require free habitable space. Consequences follow the simulation.
+
+---
+
+## Previous: Evolution Lab v0.5 — Childhood, Memory & Social Development
 
 **It takes a village.** Children are no longer miniature adults with only smaller
 energy costs. Infants depend on nearby adult caregivers; children and adolescents

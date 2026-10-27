@@ -97,7 +97,7 @@ export function HomeScreen({
     {id:'computer',number:'03',name:'COMPUTER BUILDER',
       description:'Memory & processors',symbol:'▣',action:onComputer},
     {id:'evolution',number:'04',name:'EVOLUTION LAB',
-      description:'Living worlds & minds',symbol:'✦',action:onEvolution},
+      description:'Living worlds & divine powers',symbol:'✦',action:onEvolution},
   ];
   return <main className="landing-home">
     <div className="landing-content">
