@@ -10,6 +10,7 @@ import {
   SPECIES,SPECIES_INFO,type Agent,type Ancestry,type Bond,type Genes,
   type LineageRecord,type Species,type World,
 } from './engine';
+import {appendLifeMoment,makeLifeRecord,personName} from './identity';
 
 const clamp=(n:number,a:number,b:number)=>Math.min(b,Math.max(a,n));
 const round=(n:number)=>Math.round(n*1000)/1000;
@@ -103,6 +104,9 @@ export function finalizeDeaths(world:World,survivors:Agent[],year:number):void{
     if(!alive.has(bond.a)||!alive.has(bond.b)){
       bond.stage='ended';bond.ended=year;
       for(const id of [bond.a,bond.b]){
+        appendLifeMoment(world,id,{year,kind:'separation',
+          text:'Lost a partner after their death.',
+          relatedIds:[id===bond.a?bond.b:bond.a]});
         const rec=records.get(id);
         if(rec&&!rec.partnerIds.includes(id===bond.a?bond.b:bond.a))
           rec.partnerIds.push(id===bond.a?bond.b:bond.a);
@@ -129,6 +133,12 @@ export function growBonds(world:World,rand:()=>number):number{
       (together?.12:-.018)*(a.genes.social+b.genes.social)/2,0,1));
     if(bond.stage==='courting'&&bond.strength>=.68){
       bond.stage='partner';a.partnerId=b.id;b.partnerId=a.id;partnerships++;
+      appendLifeMoment(world,a.id,{year:world.year,kind:'partner',
+        text:'Became partners with '+personName(world,
+          lineageIndex.get(b.id)??b)+'.',relatedIds:[b.id]});
+      appendLifeMoment(world,b.id,{year:world.year,kind:'partner',
+        text:'Became partners with '+personName(world,
+          lineageIndex.get(a.id)??a)+'.',relatedIds:[a.id]});
     }else if(bond.strength<=.20){
       bond.stage='ended';bond.ended=world.year;
       if(a.partnerId===b.id)a.partnerId=undefined;
@@ -165,6 +175,12 @@ export function growBonds(world:World,rand:()=>number):number{
     const bond:Bond={id:world.nextBondId++,a:a.id,b:b.id,since:world.year,
       stage:'courting',strength:round(.41+score*.19),children:[]};
     world.bonds.push(bond);
+    appendLifeMoment(world,a.id,{year:world.year,kind:'courtship',
+      text:'Met '+personName(world,lineageIndex.get(b.id)??b)+
+        ' and began courting.',relatedIds:[b.id]});
+    appendLifeMoment(world,b.id,{year:world.year,kind:'courtship',
+      text:'Met '+personName(world,lineageIndex.get(a.id)??a)+
+        ' and began courting.',relatedIds:[a.id]});
     bonded.add(a.id);bonded.add(b.id);
   }
   if(world.bonds.length>6000){
@@ -213,11 +229,15 @@ export function offspringFromBonds(
     bond.lastBirthYear=world.year;
     a.energy=Math.max(1,Math.round((a.energy-9)*100)/100);
     b.energy=Math.max(1,Math.round((b.energy-9)*100)/100);
-    const record=livingRecord(baby);
+    const record=makeLifeRecord(world,baby);
     world.lineage.push(record);
+    const index=new Map(world.lineage.map(r=>[r.id,r]));
     for(const parent of [a,b]){
-      const parentRecord=world.lineage.find(r=>r.id===parent.id);
+      const parentRecord=index.get(parent.id);
       if(parentRecord)parentRecord.children.push(baby.id);
+      appendLifeMoment(world,parent.id,{year:world.year,kind:'parenthood',
+        text:'Welcomed '+personName(world,record)+' into the family.',
+        relatedIds:[baby.id]});
     }
   }
   // Leave references intact when trimming; the UI gracefully shows "unknown"
@@ -225,8 +245,18 @@ export function offspringFromBonds(
   if(world.lineage.length>14000){
     const live=new Set([...world.agents,...newborns].map(a=>a.id));
     const recentDead=world.lineage.filter(r=>!live.has(r.id));
-    const retain=new Set(recentDead.slice(-Math.max(0,14000-live.size)).map(r=>r.id));
-    world.lineage=world.lineage.filter(r=>live.has(r.id)||retain.has(r.id));
+    const pinned=new Set(world.codex?.favoritePeople??[]);
+    // Protect bookmarked people and immediate ancestors so a favorite's
+    // family tree doesn't vanish when the archive reaches its retention cap.
+    for(const id of [...pinned]){
+      const record=world.lineage.find(r=>r.id===id);
+      for(const p of record?.parents??[])pinned.add(p);
+    }
+    const keep=new Set([...live,...pinned]);
+    const capacity=Math.max(0,14000-keep.size);
+    for(const dead of recentDead.filter(r=>!keep.has(r.id)).slice(-capacity))
+      keep.add(dead.id);
+    world.lineage=world.lineage.filter(r=>keep.has(r.id));
   }
   return newborns;
 }

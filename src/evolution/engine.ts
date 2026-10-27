@@ -2,9 +2,11 @@
  *  Individuals forage, migrate, age, pair, produce mixed-ancestry offspring
  *  and form settlements. Wars, disasters and neural learning remain future work. */
 import {
-  pureAncestry,traitProfile,livingRecord,
+  pureAncestry,traitProfile,
   finalizeDeaths,growBonds,offspringFromBonds,hybridFraction,
 } from './family';
+import {makeLifeRecord,appendLifeMoment,registerSettlement,
+  registerSettlementCollapse} from './identity';
 export type Species='human'|'elf'|'dwarf'|'demon';
 export type Biome='plains'|'forest'|'mountain'|'cave'|'wasteland'|'volcanic'|'water';
 export type WorldSize='small'|'medium'|'large'|'vast';
@@ -20,9 +22,16 @@ export type Agent={id:number;species:Species;ancestry:Ancestry;generation:number
 export type Bond={id:number;a:number;b:number;since:number;
   stage:'courting'|'partner'|'ended';strength:number;ended?:number;
   lastBirthYear?:number;children:number[]};
+export type LifeMoment={year:number;
+  kind:'arrival'|'birth'|'courtship'|'partner'|'separation'|'parenthood'|
+    'death'|'founding'|'renamed';text:string;relatedIds?:number[]};
 export type LineageRecord={id:number;species:Species;ancestry:Ancestry;
-  genes:Genes;born:number;died?:number;generation:number;
-  parents?:[number,number];children:number[];partnerIds:number[]};
+  genes:Genes;born:number;died?:number;generation:number;name?:string;house?:string;
+  moments?:LifeMoment[];parents?:[number,number];children:number[];partnerIds:number[]};
+export type SettlementLegacy={id:number;species:Species;name:string;
+  x:number;y:number;founded:number;collapsed?:number;founderId?:number};
+export type WorldCodex={favoritePeople:number[];favoriteSettlements:number[];
+  settlements:SettlementLegacy[]};
 export type Tile={biome:Biome;food:number};
 export type Settlement={id:number;species:Species;name:string;x:number;y:number;
   founded:number;population:number;stores:number;emptyYears:number};
@@ -47,7 +56,7 @@ export type World={version:2;settings:WorldSettings;width:number;height:number;
   nextBondId:number;rngState:number;tiles:Tile[];agents:Agent[];
   settlements:Settlement[];bonds:Bond[];lineage:LineageRecord[];
   events:WorldEvent[];history:Sample[];totalBirths:number;totalDeaths:number;
-  demography?:Demography};
+  demography?:Demography;codex?:WorldCodex};
 export const SPECIES:Species[]=['human','elf','dwarf','demon'];
 export const BIOMES:Biome[]=['plains','forest','mountain','cave','wasteland','volcanic','water'];
 export const SPECIES_INFO:Record<Species,{name:string;symbol:string;color:string;
@@ -189,7 +198,8 @@ export function createWorld(input:Partial<WorldSettings>={}):World{
   const world:World={version:2,settings,width,height,year:0,rngState:state.n,
     nextAgentId:1,nextSettlementId:1,nextEventId:1,nextBondId:1,
     tiles,agents:[],settlements:[],bonds:[],lineage:[],
-    events:[],history:[],totalBirths:0,totalDeaths:0,demography:emptyDemography(0)};
+    events:[],history:[],totalBirths:0,totalDeaths:0,demography:emptyDemography(0),
+    codex:{favoritePeople:[],favoriteSettlements:[],settlements:[]}};
   const occupied=new Set<number>();
   for(const s of SPECIES){
     const info=SPECIES_INFO[s];
@@ -216,7 +226,7 @@ export function createWorld(input:Partial<WorldSettings>={}):World{
         x:point.x,y:point.y,age,energy:round(78+random(state)*19),
         health:round(84+random(state)*16),genes:genes(state),born:age===0?0:-age};
       world.agents.push(founder);
-      world.lineage.push(livingRecord(founder));
+      world.lineage.push(makeLifeRecord(world,founder));
     }
   }
   world.rngState=state.n;
@@ -251,12 +261,23 @@ export function stepWorld(previous:World):World{
     lineage:previous.lineage.map(r=>({...r,children:[...r.children],
       partnerIds:[...r.partnerIds]})),
     events:[...previous.events],history:[...previous.history],
+    codex:previous.codex?{
+      favoritePeople:[...previous.codex.favoritePeople],
+      favoriteSettlements:[...previous.codex.favoriteSettlements],
+      settlements:previous.codex.settlements.map(s=>({...s})),
+    }:{favoritePeople:[],favoriteSettlements:[],settlements:[]},
     demography:previous.demography?{
       sinceYear:previous.demography.sinceYear,
       bySpecies:Object.fromEntries(SPECIES.map(s=>[s,
         {...previous.demography!.bySpecies[s],
           causes:{...previous.demography!.bySpecies[s].causes}}])) as Record<Species,SpeciesVital>,
     }:emptyDemography(previous.year)};
+  for(const s of world.settlements){
+    if(!world.codex!.settlements.some(r=>r.id===s.id)){
+      world.codex!.settlements.push({id:s.id,species:s.species,name:s.name,
+        x:s.x,y:s.y,founded:s.founded});
+    }
+  }
   const state={n:prngState(previous.rngState)};
   const yearVitals=emptyVitalYear();
   const occupied=new Map<number,number>();
@@ -384,6 +405,8 @@ export function stepWorld(previous:World):World{
       const record=world.demography!.bySpecies[a.species];
       record.deaths++;record.causes[cause]++;
       record.ageAtDeathSum+=a.age;
+      appendLifeMoment(world,a.id,{year:world.year,kind:'death',
+        text:'Died at age '+a.age+' ('+DEATH_LABELS[cause].toLowerCase()+').'});
       if(juvenile)record.juvenileDeaths++;
     }else{
       a.health=round(clamp(a.health,0,100));survivors.push(a);
@@ -421,8 +444,10 @@ export function stepWorld(previous:World):World{
     const names=settlementNames[a.species];
     const n=world.settlements.filter(s=>s.species===a.species).length;
     const name=names[n%names.length]+(n>=names.length?' '+(1+Math.floor(n/names.length)):'');
-    world.settlements.push({id,species:a.species,name,x:a.x,y:a.y,
-      founded:world.year,population:nearby.length,stores:20,emptyYears:0});
+    const founded:Settlement={id,species:a.species,name,x:a.x,y:a.y,
+      founded:world.year,population:nearby.length,stores:20,emptyYears:0};
+    world.settlements.push(founded);
+    registerSettlement(world,founded,a.id);
     log(world,'settlement',info.name+' founded '+name+' in the '+
       BIOME_INFO[world.tiles[offset(world.width,a.x,a.y)].biome].name.toLowerCase()+'.');
   }
@@ -434,6 +459,7 @@ export function stepWorld(previous:World):World{
     s.emptyYears=residents===0?s.emptyYears+1:0;
     if(s.emptyYears>=5){
       log(world,'collapse',s.name+' was abandoned after its population disappeared.');
+      registerSettlementCollapse(world,s);
       return false;
     }
     return true;
@@ -478,7 +504,7 @@ export function editWorld(previous:World,x:number,y:number,brush:Brush):World{
       ancestry:pureAncestry(brush.species),generation:0,x,y,
       age,energy:88,health:95,genes:genes(state),born:world.year-age};
     world.agents.push(newcomer);
-    world.lineage.push(livingRecord(newcomer));
+    world.lineage.push(makeLifeRecord(world,newcomer));
     world.rngState=state.n;
     log(world,'world','A '+brush.species+' wanderer entered the world.');
   }else if(brush.kind==='food'){
@@ -528,7 +554,7 @@ export function isWorld(value:unknown):value is World{
     !Array.isArray(w.lineage)||w.lineage.length>14000||
     !Array.isArray(w.events)||w.events.length>90||
     !Array.isArray(w.history)||w.history.length>400||w.history.length===0)return false;
-  const width=w.width,height=w.height;
+  const width=w.width,height=w.height,year=w.year as number;
   if(!w.tiles.every(t=>t&&BIOMES.includes(t.biome)&&Number.isFinite(t.food)&&
     t.food>=0&&t.food<=20))return false;
   const ids=new Set<number>(),positions=new Set<number>();
@@ -590,6 +616,16 @@ export function isWorld(value:unknown):value is World{
       !checkAncestry(r.ancestry)||!Number.isInteger(r.generation)||r.generation<0||
       !Number.isInteger(r.born)||
       (r.died!==undefined&&(!Number.isInteger(r.died)||r.died<r.born))||
+      (r.name!==undefined&&(typeof r.name!=='string'||r.name.length>64))||
+      (r.house!==undefined&&(typeof r.house!=='string'||r.house.length>64))||
+      (r.moments!==undefined&&(!Array.isArray(r.moments)||r.moments.length>40||
+        !r.moments.every(m=>m&&Number.isInteger(m.year)&&m.year>=0&&
+          m.year<=year&&
+          ['arrival','birth','courtship','partner','separation','parenthood','death',
+            'founding','renamed'].includes(m.kind)&&
+          typeof m.text==='string'&&m.text.length<=220&&
+          (m.relatedIds===undefined||(Array.isArray(m.relatedIds)&&
+            m.relatedIds.length<=20&&m.relatedIds.every(id=>Number.isSafeInteger(id)&&id>0))))))||
       !Array.isArray(r.children)||!Array.isArray(r.partnerIds)||
       r.children.length>2000||r.partnerIds.length>200||
       ![...r.children,...r.partnerIds].every(id=>Number.isSafeInteger(id)&&id>0)||
@@ -613,6 +649,26 @@ export function isWorld(value:unknown):value is World{
           DEATH_CAUSES.every(c=>Number.isInteger(r.causes[c])&&r.causes[c]>=0)&&
           DEATH_CAUSES.reduce((n,c)=>n+r.causes[c],0)===r.deaths;
       }))return false;
+  }
+  if(w.codex!==undefined){
+    const c=w.codex;
+    if(!c||!Array.isArray(c.favoritePeople)||c.favoritePeople.length>100||
+      !Array.isArray(c.favoriteSettlements)||c.favoriteSettlements.length>100||
+      !Array.isArray(c.settlements)||c.settlements.length>1000||
+      !c.favoritePeople.every(id=>Number.isSafeInteger(id)&&records.has(id))||
+      new Set(c.favoritePeople).size!==c.favoritePeople.length||
+      !c.favoriteSettlements.every(id=>Number.isSafeInteger(id)&&id>0)||
+      new Set(c.favoriteSettlements).size!==c.favoriteSettlements.length||
+      !c.settlements.every(v=>v&&Number.isSafeInteger(v.id)&&v.id>0&&
+        SPECIES.includes(v.species)&&typeof v.name==='string'&&v.name.length<=100&&
+        Number.isInteger(v.x)&&Number.isInteger(v.y)&&
+        within(width,height,v.x,v.y)&&Number.isInteger(v.founded)&&
+        v.founded<=year&&
+        (v.collapsed===undefined||(Number.isInteger(v.collapsed)&&
+          v.collapsed>=v.founded&&v.collapsed<=year))&&
+        (v.founderId===undefined||Number.isSafeInteger(v.founderId)))||
+      new Set(c.settlements.map(v=>v.id)).size!==c.settlements.length)
+      return false;
   }
   if(!w.agents.every(a=>records.has(a.id)))return false;
   if(!w.history.every(p=>{

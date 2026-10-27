@@ -70,7 +70,8 @@ describe('Evolution Lab integration and first-time user experience',()=>{
     const world=advanceWorld(createWorld({seed:270}),12);
     const person=world.lineage.find(r=>r.children.length>0)??world.lineage[0];
     const html=renderToStaticMarkup(<WorldFamily world={world} focusId={person.id}
-      onChoose={()=>{}} onShowOnMap={()=>{}}/>);
+      onChoose={()=>{}} onShowOnMap={()=>{}}
+      onFavorite={()=>{}} onRename={()=>{}}/>);
     expect(html).toContain('Family Archives');
     expect(html).toContain('ANCESTRY');
     expect(html).toContain('PARTNERS');
