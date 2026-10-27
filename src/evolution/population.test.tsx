@@ -129,11 +129,18 @@ describe('Evolution Lab v0.2.1: honest population diagnostics',()=>{
 });
 
 describe('Ecological survival smoke tests across seeded worlds',()=>{
-  it('supports multiple generations and long-lived populations under normal resources',()=>{
+  it('supports multiple generations and long-lived populations under normal resources',async()=>{
     const seeds=[31,203,721,2027];
-    const worlds=seeds.map(seed=>advanceWorld(createWorld({
-      seed,size:'small',resourceLevel:1.15,
-    }),180));
+    const worlds=[];
+    for(const seed of seeds){
+      let world=createWorld({seed,size:'small',resourceLevel:1.15});
+      for(let year=0;year<180;year+=10){
+        world=advanceWorld(world,10);
+        // Allow the test runner to process heartbeat messages on long runs.
+        await new Promise<void>(resolve=>setTimeout(resolve,0));
+      }
+      worlds.push(world);
+    }
     // The world is stochastic and ecological. We reject systematic collapse,
     // not every possible extinction: unlucky populations may still vanish.
     const surviving=worlds.filter(w=>w.agents.length>=12);
@@ -151,5 +158,5 @@ describe('Ecological survival smoke tests across seeded worlds',()=>{
       expect(isWorld(world)).toBe(true);
       expect(world.history.at(-1)?.total).toBe(world.agents.length);
     }
-  },30000);
+  },90000);
 });

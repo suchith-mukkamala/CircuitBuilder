@@ -1,4 +1,49 @@
-# CircuitBuilder v0.16.0 — Evolution Lab v0.4: Mind Engine I
+# CircuitBuilder v0.17.0 — Evolution Lab v0.5: Childhood, Memory & Social Development
+
+**It takes a village.** Children are no longer miniature adults with only smaller
+energy costs. Infants depend on nearby adult caregivers; children and adolescents
+can receive care, mentorship and shelter from households and neighbors, including
+other species. Different childhood circumstances change learned skills, trust,
+resilience, relationships, languages and values without forcing a moral identity.
+
+## Try v0.5
+
+1. Open **04 Evolution Lab → PEOPLE**, follow a young person, and inspect the new
+   **Upbringing & Social World** section. It shows one of five species-scaled life
+   stages, caregivers, adoption, mentors, friends, the active household, skills,
+   personal values, emotional development, known languages and formative memories.
+2. Advance time and compare two children from the same species. Care, social
+   contact, instruction, discoveries and lack of support create different
+   opportunities, adult careers and memories. Individuals can leave their family
+   household after reaching maturity, without severing kinship records.
+3. Watch an explorer's **current intention** in the World Inspector. Healthy,
+   curious adults now plan expeditions to land-reachable waypoints beyond their
+   familiar biome; discoveries increase navigation experience. Travelers can
+   retreat to suitable terrain when health or energy becomes unsafe. Water still
+   blocks travel; bridges, ships and intercontinental routes are future work.
+4. Older v0.4/v0.3 world JSON files continue to load. Newly tracked social
+   experiences begin with the first advanced year: the simulation does not invent
+   earlier childhood memories, households or historical adoptions.
+
+### What is simulated (and what is not)
+
+- Five life stages scale to inherited maturity and lifespan. Adult care transfers
+  *real energy*; young dependents without nearby support face greater health
+  risks, while neighboring adults can help even without biological kinship.
+- Households are active family/care groups, **not yet placed buildings**. Shelter
+  reflects nearby communities and present household caregivers. Adoption is a
+  voluntary simulation choice influenced by social tendencies and circumstances.
+- Friendships, apprenticeship, profession choices, cultural exposure, languages,
+  skills, dispositions and values arise from events in the simulation. These are
+  rule-based, deterministic systems, not generated dialogue, conscious AI or
+  a learned neural model. No one is labeled a future villain or hero.
+- Careers establish focus and skill growth, not full employment markets, wages,
+  governments, schools, religion or warfare. Those can build on these records.
+- The browser's 850-person safety cap remains. Species extinction is still
+  possible, particularly in long-running worlds or harsh ecologies; v0.5 does
+  not guarantee eternal survival or treat cultural difference as biological fate.
+
+## Previous: Evolution Lab v0.4 — Mind Engine I
 
 **Autonomous intentions and a population-cap fairness fix.** In Lab 04,
 individuals now select goals from their actual conditions: search for food,
