@@ -54,6 +54,11 @@ export function PopulationDiagnostics({world}:{world:World}){
       <div><small>RECORDED DEATHS</small>
         <strong>{fmt(totalDeaths)}</strong></div>
     </div>
+    {world.agents.length>=840&&<p className="evo-pop-cap-note">
+      World near its 850-person performance limit. When it fills, births must
+      wait for openings; families compete in a seeded, randomized order rather
+      than favoring the oldest partnerships.
+    </p>}
     <div className="evo-diagnostic-columns">
       <div className="evo-diagnostic-species">
         <div className="evo-diagnostic-title">SPECIES VITALS</div>

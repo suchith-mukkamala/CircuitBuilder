@@ -11,6 +11,7 @@ import {
   type LineageRecord,type Species,type World,
 } from './engine';
 import {appendLifeMoment,makeLifeRecord,personName} from './identity';
+import {initialMind} from './mind';
 
 const clamp=(n:number,a:number,b:number)=>Math.min(b,Math.max(a,n));
 const round=(n:number)=>Math.round(n*1000)/1000;
@@ -198,7 +199,16 @@ export function offspringFromBonds(
 ):Agent[]{
   const byId=new Map(world.agents.map(a=>[a.id,a]));
   const newborns:Agent[]=[];
-  for(const bond of world.bonds){
+  // At the global browser-safety cap, the order in which couples are visited
+  // determines who gets the few available birth slots. Visiting oldest bonds
+  // first gave long-lived elves an accidental monopoly across generations.
+  // A reproducibly shuffled queue gives every eligible family a chance.
+  const candidates=world.bonds.filter(b=>b.stage==='partner');
+  for(let i=candidates.length-1;i>0;i--){
+    const j=Math.floor(rand()*(i+1));
+    [candidates[i],candidates[j]]=[candidates[j],candidates[i]];
+  }
+  for(const bond of candidates){
     if(bond.stage!=='partner'||world.agents.length+newborns.length>=850)continue;
     const a=byId.get(bond.a),b=byId.get(bond.b);
     if(!a||!b||cheby(a,b)>3)continue;
@@ -224,7 +234,8 @@ export function offspringFromBonds(
     const baby:Agent={id:world.nextAgentId++,species:dominantSpecies(ancestry),
       ancestry,x:site.x,y:site.y,age:0,born:world.year,
       energy:77,health:94,genes:inheritedGenes(a.genes,b.genes,rand),
-      generation:Math.max(a.generation,b.generation)+1,parents:[a.id,b.id]};
+      generation:Math.max(a.generation,b.generation)+1,parents:[a.id,b.id],
+      mind:initialMind(world.year)};
     newborns.push(baby);bond.children.push(baby.id);
     bond.lastBirthYear=world.year;
     a.energy=Math.max(1,Math.round((a.energy-9)*100)/100);
