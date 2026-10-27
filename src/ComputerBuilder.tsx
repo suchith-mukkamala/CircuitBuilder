@@ -74,6 +74,38 @@ export function ComputerBuilder(){
     catch(err){setSaveError(err instanceof Error?err.message:'Unable to save module.');}
   };
 
+  // Familiar editor shortcuts should work in Lab 03 as well as Signal Lab.
+  useEffect(()=>{
+    const shortcut=(event:KeyboardEvent)=>{
+      const target=event.target as HTMLElement|null;
+      if(target?.closest('input,textarea,select,button,a,[contenteditable="true"]'))return;
+      const store=useDigitalStore.getState();
+      const key=event.key.toLowerCase();
+      if(event.metaKey||event.ctrlKey){
+        if(key==='z'){event.preventDefault();event.shiftKey?store.redo():store.undo();}
+        else if(key==='y'){event.preventDefault();store.redo();}
+        else if(key==='c'){event.preventDefault();store.copy();}
+        else if(key==='v'){event.preventDefault();store.paste();}
+        else if(key==='d'){event.preventDefault();store.duplicate();}
+        else if(key==='a'){event.preventDefault();store.selectAll();}
+        else if(key==='s'){
+          event.preventDefault();
+          useDigitalStore.setState({message:'Project autosaved locally. Use Export JSON for a file backup.'});
+        }
+        return;
+      }
+      if(event.key==='Escape')store.cancelWire();
+      if(event.key==='Delete'||event.key==='Backspace')store.remove();
+      if(key==='r'&&store.selection?.type==='component')store.rotate(store.selection.id);
+      if(event.code==='Space'&&store.selection?.type==='component'){
+        const part=store.document.components.find(c=>c.id===store.selection?.id);
+        if(part?.kind==='input'){event.preventDefault();store.toggleInput(part.id);}
+      }
+    };
+    window.addEventListener('keydown',shortcut);
+    return ()=>window.removeEventListener('keydown',shortcut);
+  },[]);
+
   // User journey: clicking a component should reveal its editable properties
   // rather than forcing a hunt for the inspector tab.
   useEffect(()=>{
@@ -181,7 +213,8 @@ export function ComputerBuilder(){
           <strong>QUICK TIPS</strong>
           <p>Select a ROM chip to edit its program in <b>EDIT</b>. Use
             <b> FIT</b> on the canvas to view the whole design. Double-click
-            a custom block to edit its internals.</p>
+            a custom block to edit its internals. Ctrl/Cmd+Z undoes a change,
+            and Ctrl/Cmd+S confirms local autosave; Export JSON makes a backup.</p>
         </div>
       </aside>}
     </div>
