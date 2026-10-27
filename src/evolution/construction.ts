@@ -1,8 +1,10 @@
 /** Evolution Lab v0.7 — deterministic settlement construction.
  * Every change is driven by the world tick, not by map zoom or UI visibility.
  */
-import type {Agent,Biome,Settlement,Species,World} from './engine';
+import type {Agent,Settlement,Species,World} from './engine';
 import {traitProfile} from './family';
+import {harvestDeposit,type ResourceDeposit,
+  type ResourceKind} from './resources';
 
 export const BUILDING_TYPES=['shelter','house','farm','storage','well',
   'workshop','communal'] as const;
@@ -14,12 +16,15 @@ export const BUILDING_STAGES:BuildingStage[]=['foundation','frame','finishing',
 export type Material='wood'|'stone'|'clay';
 export const MATERIALS:Material[]=['wood','stone','clay'];
 export type MaterialStock=Record<Material,number>;
+export const ORES=['coal','copper','iron','gold'] as const;
+export type Ore=typeof ORES[number];
+export type OreStock=Record<Ore,number>;
 export type Building={id:number;type:BuildingType;x:number;y:number;
   culture:Species;stage:BuildingStage;progress:number;condition:number;
   started:number;finished?:number;abandoned?:number;
   spent:MaterialStock;labor:number;householdId?:number};
 export type SettlementInfrastructure={land:number[];buildings:Building[];
-  roads:number[];stock:MaterialStock;nextBuildingId:number;
+  roads:number[];stock:MaterialStock;oreStock?:OreStock;nextBuildingId:number;
   foundedWithResidents:number};
 export type RuinSite={id:number;name:string;species:Species;x:number;y:number;
   collapsed:number;buildings:Building[];roads:number[]};
@@ -53,15 +58,12 @@ const position=(w:World,x:number,y:number)=>y*w.width+x;
 const inWorld=(w:World,x:number,y:number)=>x>=0&&y>=0&&x<w.width&&y<w.height;
 const complete=(b:Building)=>b.stage==='complete';
 const stock=():MaterialStock=>({wood:0,stone:0,clay:0});
-const materialsFor=(biome:Biome):MaterialStock=>({
-  plains:{wood:.65,stone:.1,clay:.75},forest:{wood:1.5,stone:.1,clay:.5},
-  mountain:{wood:.12,stone:1.65,clay:.28},cave:{wood:.07,stone:1.55,clay:.15},
-  wasteland:{wood:.22,stone:.75,clay:.55},
-  volcanic:{wood:.04,stone:1.6,clay:.42},water:stock(),
-})[biome];
+const oreStock=():OreStock=>({coal:0,copper:0,iron:0,gold:0});
+const materialFor=(kind:ResourceKind):Material|Ore=>kind==='tree'?'wood':kind;
 
 export function cloneInfrastructure(i:SettlementInfrastructure):SettlementInfrastructure{
   return {...i,land:[...i.land],roads:[...i.roads],stock:{...i.stock},
+    oreStock:{...oreStock(),...i.oreStock},
     buildings:i.buildings.map(b=>({...b,spent:{...b.spent}}))};
 }
 export function settlementStage(s:Settlement):SettlementStage{
@@ -95,8 +97,9 @@ export function prepareInfrastructure(w:World):void{
   w.ruins??=[];w.trails??=[];
   for(const s of w.settlements){
     s.infrastructure??={land:landClaim(w,s,5),buildings:[],roads:[],
-      stock:{wood:8,stone:5,clay:6},nextBuildingId:1,
+      stock:{wood:8,stone:5,clay:6},oreStock:oreStock(),nextBuildingId:1,
       foundedWithResidents:s.population};
+    s.infrastructure.oreStock??=oreStock();
   }
 }
 
@@ -110,7 +113,7 @@ function willingBuilders(w:World,s:Settlement,residents:Agent[]):Agent[]{
 }
 
 /** Population needs and the preferences of actual residents select projects. */
-function chooseProject(w:World,s:Settlement,residents:Agent[]):BuildingType{
+function chooseProject(w:World,s:Settlement,residents:Agent[]):BuildingType|null{
   const buildings=s.infrastructure!.buildings.filter(b=>b.stage!=='ruin'&&
     b.stage!=='abandoned');
   const count=(type:BuildingType)=>buildings.filter(b=>b.type===type).length;
@@ -120,27 +123,33 @@ function chooseProject(w:World,s:Settlement,residents:Agent[]):BuildingType{
   const unhomed=[...families].filter(id=>!w.households?.find(h=>h.id===id)?.residence);
   const votes=residents.reduce((score,a)=>score+
     ((a.development?.values.community??50)-50)*.008,0);
-  const workshops=count('workshop');
+  const farmTarget=Math.max(1,Math.ceil(s.population/20));
+  const homeNeed=Math.max(0,unhomed.length);
   const unmet:Record<BuildingType,number>={
-    shelter:count('shelter')===0?22:0,
-    house:unhomed.length*3+Math.max(0,families.size-count('house'))*1.2,
-    farm:Math.max(0,12+s.population*.25-s.stores*.18-count('farm')*9),
-    storage:Math.max(0,7+s.population*.07-count('storage')*8),
-    well:count('well')===0?11:Math.max(0,s.population/23-count('well')*5),
-    workshop:workshops===0&&adultCount>=5?9:Math.max(0,adultCount/25-workshops*5),
-    communal:Math.max(0,3+votes-count('communal')*6),
+    shelter:count('shelter')+count('house')===0?18:0,
+    house:homeNeed?Math.min(22,6+homeNeed*2.1):0,
+    farm:count('farm')<farmTarget?
+      Math.min(16,5+(farmTarget-count('farm'))*2+(s.stores<25?3:0)):0,
+    storage:count('storage')<Math.max(1,Math.ceil(s.population/55))?8:0,
+    well:count('well')<Math.max(1,Math.ceil(s.population/35))?10:0,
+    workshop:adultCount>=5&&count('workshop')<Math.max(1,Math.ceil(adultCount/40))?9:0,
+    communal:residents.length>=6&&count('communal')<
+      Math.max(1,Math.ceil(s.population/45))?8+Math.max(-2,Math.min(2,votes)):0,
   };
   // A preference is a vote, not a player-placed blueprint.
   for(const a of residents){
     const d=a.development;
-    if(d?.career==='artisan')unmet.workshop+=.8;
-    if(d?.career==='forager')unmet.farm+=.45;
-    if(d?.career==='healer')unmet.well+=.6;
-    if(d?.career==='scholar')unmet.communal+=.35;
-    if((d?.values.tradition??0)>62)unmet.house+=.13;
+    if(unmet.workshop>0&&d?.career==='artisan')unmet.workshop+=.8;
+    if(unmet.farm>0&&d?.career==='forager')unmet.farm+=.45;
+    if(unmet.well>0&&d?.career==='healer')unmet.well+=.6;
+    if(unmet.communal>0&&d?.career==='scholar')unmet.communal+=.35;
+    if(homeNeed&&(d?.values.tradition??0)>62)unmet.house+=.13;
   }
-  return [...BUILDING_TYPES].sort((a,b)=>unmet[b]-unmet[a]||
-    BUILDING_TYPES.indexOf(a)-BUILDING_TYPES.indexOf(b))[0];
+  // No artificial building quota: a community may choose to wait when its
+  // real needs are met instead of endlessly constructing more farms.
+  const ranked=[...BUILDING_TYPES].sort((a,b)=>unmet[b]-unmet[a]||
+    BUILDING_TYPES.indexOf(a)-BUILDING_TYPES.indexOf(b));
+  return unmet[ranked[0]]>=2?ranked[0]:null;
 }
 
 /** Site selection is based on safety, biome suitability and real routes. */
@@ -176,7 +185,9 @@ function beginProject(w:World,s:Settlement,residents:Agent[]):void{
   if(underway.length>=2||live.length>=76||residents.length<3)return;
   // No automatic blueprint spam if too little community interest or material.
   if(i.stock.wood+i.stock.stone+i.stock.clay<3)return;
-  const type=chooseProject(w,s,residents),at=chooseLocation(w,s,type);
+  const type=chooseProject(w,s,residents);
+  if(!type)return;
+  const at=chooseLocation(w,s,type);
   if(!at)return;
   const b:Building={id:i.nextBuildingId++,type,x:at.x,y:at.y,
     culture:s.species,stage:'foundation',progress:0,condition:100,
@@ -188,48 +199,84 @@ function beginProject(w:World,s:Settlement,residents:Agent[]):void{
   }
 }
 
-function gather(w:World,s:Settlement,residents:Agent[]):void{
-  const i=s.infrastructure!,adults=residents.filter(a=>
-    a.age>=traitProfile(a.ancestry).maturity&&a.energy>45);
-  if(!adults.length)return;
-  const available=stock();
-  for(const id of i.land){
-    const biome=w.tiles[id].biome,yieldRate=materialsFor(biome);
-    for(const material of MATERIALS)available[material]+=yieldRate[material];
-  }
-  const workforce=Math.max(.6,Math.min(12,adults.length*.16));
-  const cap=Math.min(500,90+i.buildings.filter(b=>
+function gather(w:World,s:Settlement,residents:Agent[],
+  deposits:Map<number,ResourceDeposit>):void{
+  const i=s.infrastructure!;
+  const candidates=i.land.map(id=>deposits.get(id)).filter(
+    (d):d is ResourceDeposit=>!!d&&d.amount>.05);
+  if(!candidates.length)return;
+  const capacity=Math.min(500,90+i.buildings.filter(b=>
     complete(b)&&b.type==='storage').length*55);
-  for(const material of MATERIALS){
-    const rate=Math.min(available[material]/28,workforce*
-      (material==='wood'?.85:material==='stone'?.57:.65));
-    i.stock[material]=round(clamp(i.stock[material]+rate,0,cap));
+  const workers=residents.filter(a=>
+    a.age>=traitProfile(a.ancestry).maturity&&a.energy>=54&&
+    (['forager','scout','artisan'].includes(a.development?.career??'')||
+      (a.development?.values.community??50)>55&&
+        (a.id*11+w.year)%5===0))
+    .sort((a,b)=>((a.id+w.year*13)%997)-((b.id+w.year*13)%997))
+    .slice(0,Math.min(48,16+i.buildings.filter(b=>complete(b)&&
+      b.type==='storage').length*8));
+  for(const a of workers){
+    let best:ResourceDeposit|undefined,bestScore=-Infinity;
+    for(const d of candidates){
+      if(d.amount<=.05)continue;
+      const at={x:d.index%w.width,y:Math.floor(d.index/w.width)};
+      const proximity=distance(a,at);
+      if(proximity>5)continue;
+      const material=materialFor(d.kind);
+      const held=material==='wood'||material==='stone'||material==='clay'?
+        i.stock[material]:i.oreStock![material];
+      const limit=material==='wood'||material==='stone'||material==='clay'?
+        capacity:Math.min(140,40+i.buildings.filter(b=>complete(b)&&
+          b.type==='storage').length*20);
+      if(held>=limit-1)continue;
+      const desired={wood:31,stone:30,clay:24,coal:13,copper:12,iron:16,gold:7}[material];
+      const score=(desired-held)*.3+Math.min(3,d.amount)*.4-
+        proximity*.7+(a.development?.career==='artisan'&&
+          ['iron','copper','coal'].includes(material)?3:0);
+      if(score>bestScore){best=d;bestScore=score;}
+    }
+    if(!best)continue;
+    const kind=materialFor(best.kind);
+    const quota=kind==='wood'||kind==='stone'||kind==='clay'?capacity:140;
+    const available=kind==='wood'||kind==='stone'||kind==='clay'?
+      i.stock[kind]:i.oreStock![kind];
+    const yieldAmount=harvestDeposit(best,Math.min(quota-available,
+      1.05+(a.development?.skills.foraging??0)*.015));
+    if(kind==='wood'||kind==='stone'||kind==='clay')
+      i.stock[kind]=round(i.stock[kind]+yieldAmount);
+    else i.oreStock![kind]=round(i.oreStock![kind]+yieldAmount);
+    if(yieldAmount>0)a.energy=round(Math.max(1,a.energy-.45));
   }
 }
 
 function build(w:World,s:Settlement,residents:Agent[]):void{
   const i=s.infrastructure!,workers=willingBuilders(w,s,residents);
   const workshop=i.buildings.some(b=>b.type==='workshop'&&complete(b));
-  let laborPool=workers.reduce((total,a)=>total+
-    (a.mind?.goal==='build'?1.65:.7)+
-    (a.development?.skills.craft??0)*.018,0)*(workshop?1.3:1);
-  for(const worker of workers)
-    worker.energy=round(Math.max(1,worker.energy-
-      (worker.mind?.goal==='build'?1.1:.35)));
+  const employed=new Set<number>();
   for(const b of i.buildings){
     if(['ruin','abandoned','complete'].includes(b.stage))continue;
+    const crew=workers.filter(a=>!employed.has(a.id)&&distance(a,b)<=2);
+    if(!crew.length)continue; // Nobody builds remotely from the town center.
+    const laborPool=crew.reduce((total,a)=>total+
+      (a.mind?.goal==='build'?1.65:.7)+
+      (a.development?.skills.craft??0)*.018,0)*(workshop?1.3:1);
+    for(const worker of crew){
+      employed.add(worker.id);
+      worker.energy=round(Math.max(1,worker.energy-
+        (worker.mind?.goal==='build'?1.1:.35)));
+    }
     const cost=COSTS[b.type];
     for(const material of MATERIALS){
       const need=cost.materials[material]-b.spent[material];
       const take=round(Math.max(0,Math.min(need,i.stock[material],
-        Math.max(.5,workers.length*.45))));
+        Math.max(.5,crew.length*.7))));
       b.spent[material]=round(b.spent[material]+take);
       i.stock[material]=round(i.stock[material]-take);
     }
     const delivered=MATERIALS.every(m=>b.spent[m]>=cost.materials[m]-.01);
     if(delivered&&laborPool>0){
       const effort=Math.min(cost.labor-b.labor,laborPool);
-      b.labor=round(b.labor+effort);laborPool-=effort;
+      b.labor=round(b.labor+effort);
     }
     const costSum=MATERIALS.reduce((t,m)=>t+cost.materials[m],0);
     const paid=MATERIALS.reduce((t,m)=>t+b.spent[m],0);
@@ -332,6 +379,7 @@ export function archiveRuins(w:World,s:Settlement):void{
 /** Run exactly once per simulated year, regardless of UI, zoom, or open tab. */
 export function advanceConstruction(w:World,moved:number[]):void{
   prepareInfrastructure(w);
+  const deposits=new Map((w.deposits??[]).map(d=>[d.index,d]));
   for(const s of w.settlements){
     const i=s.infrastructure!;
     const residents=w.agents.filter(a=>distance(a,s)<=7);
@@ -340,7 +388,7 @@ export function advanceConstruction(w:World,moved:number[]):void{
       const additional=landClaim(w,s,targetRadius);
       i.land=[...new Set([...i.land,...additional])].slice(0,300);
     }
-    gather(w,s,residents);
+    gather(w,s,residents,deposits);
     if(residents.length>0){beginProject(w,s,residents);build(w,s,residents);}
     assignHomes(w,s,residents);maintain(w,s);applyBenefits(w,s);
   }
@@ -360,6 +408,8 @@ export function validConstruction(w:World):boolean{
     x>=0&&x<w.width&&y>=0&&y<w.height;
   const validStock=(s:MaterialStock)=>!!s&&MATERIALS.every(m=>
     Number.isFinite(s[m])&&s[m]>=0&&s[m]<=500);
+  const validOres=(s:OreStock)=>!!s&&ORES.every(m=>
+    Number.isFinite(s[m])&&s[m]>=0&&s[m]<=140);
   const validBuilding=(b:Building)=>!!b&&validId(b.id)&&
     BUILDING_TYPES.includes(b.type)&&validPlace(b.x,b.y)&&
     ['human','elf','dwarf','demon'].includes(b.culture)&&
@@ -382,6 +432,7 @@ export function validConstruction(w:World):boolean{
     const i=s.infrastructure;if(i===undefined)continue;
     if(!i||!validTileIds(i.land,300)||!validTileIds(i.roads,300)||
       !i.roads.every(n=>i.land.includes(n))||!validStock(i.stock)||
+      (i.oreStock!==undefined&&!validOres(i.oreStock))||
       !validId(i.nextBuildingId)||!Number.isInteger(i.foundedWithResidents)||
       i.foundedWithResidents<0||!validBuildings(i.buildings)||
       !i.buildings.every(b=>i.land.includes(position(w,b.x,b.y))))return false;

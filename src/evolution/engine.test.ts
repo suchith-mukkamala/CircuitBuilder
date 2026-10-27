@@ -106,7 +106,7 @@ describe('Evolution Lab v0.1: reproducible fantasy worlds',()=>{
   it('keeps all agents inside the world on habitable unique tiles over many years',()=>{
     const after=advanceWorld(createWorld({seed:1907,resourceLevel:1.4}),100);
     expect(after.year).toBe(100);
-    expect(after.agents.length).toBeLessThanOrEqual(850);
+    expect(after.agents.length).toBeLessThanOrEqual(after.tiles.length);
     const occupied=new Set<number>();
     for(const agent of after.agents){
       expect(agent.x).toBeGreaterThanOrEqual(0);
@@ -127,7 +127,7 @@ describe('Evolution Lab v0.1: reproducible fantasy worlds',()=>{
       expect(tile.food).toBeLessThanOrEqual(BIOME_INFO[tile.biome].food*1.4+.01);
     }
   });
-  it('caps history, events, population and years of bulk stepping',()=>{
+  it('bounds recent history, events and years of bulk stepping',()=>{
     const world=createWorld({seed:123,starting:{human:0,elf:0,dwarf:0,demon:0}});
     const after=advanceWorld(world,200);
     expect(after.year).toBe(200);

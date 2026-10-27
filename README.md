@@ -1,4 +1,51 @@
-# CircuitBuilder v0.19.0 — Evolution Lab v0.7: Living Settlements & Construction
+# CircuitBuilder v0.19.1 — Evolution Lab v0.7.1: Renewable Resources & Uncapped Worlds
+
+## v0.7.1 — Resources, Ecology & Reliability
+
+- The world now generates **actual tree groves, stone, clay, coal, copper,
+  iron and gold deposits**. Stone is the most common mineral; rarer ores
+  concentrate in rocky, cave and volcanic regions. Each deposit has finite
+  quantities and slowly renews, with forests regrowing faster than precious
+  metals. All deposits persist in saved worlds and show on the new **Trees &
+  ore deposits** world-map layer and local settlement maps. Terrain
+  transformations regenerate the appropriate deposit for the changed tile.
+- Residents with suitable careers and sufficient energy harvest nearby actual
+  deposits. Extraction depletes the source; construction uses the harvested
+  wood, stone and clay, while mined coal, copper, iron and gold enter the
+  settlement's separate mineral inventory for future crafts and industry.
+  Buildings require workers physically near the construction site before
+  materials or labor can advance.
+- Construction demand is now finite. Towns weigh unmet household housing,
+  agriculture, storage, clean water, workshops and gathering spaces. They
+  **stop starting projects** when their needs are met, instead of indefinitely
+  spawning farms. Settlement architecture and stage still reflect completed
+  structures, and zoom never changes the simulation.
+- Removed the hard 850-person population ceiling from reproduction, manual
+  spawning and divine interventions. Newborns still require free habitable
+  space, and overcrowding and available food constrain actual growth.
+  Mixed-ancestry offspring with exactly tied heritage use seeded tie breaking
+  rather than always being assigned the first species in the list.
+- **Autosaving continues during playback** with a ten-second checkpoint,
+  short pause-time saves and a pagehide attempt. IndexedDB is the primary
+  larger-world store, with localStorage fallback for small worlds. The
+  interface shows the most recently saved year. Exports remain portable JSON.
+  Older v0.7 world files without deposits upgrade deterministically after
+  their first simulated year.
+- Test renewable regeneration, genuine harvests, more than 850 residents,
+  legacy saves and fair mixed-ancestry classification with `npm test`.
+  Use `npm run test:long-evolution` for an opt-in 3,000-year persistence
+  regression and a 250-year high-population construction stress test.
+
+**Scalability note:** No artificial population ceiling remains, but worlds
+are still finite landscapes with one occupant per traversable tile. Thousands
+of fully simulated people can slow the main browser thread and enlarge saved
+files. Background worker simulation and more efficient large-city updates
+remain future performance milestones. Geological ore renewal is a deliberate
+gameplay abstraction, not a scientific estimate of mineral formation.
+
+---
+
+## Previous: Evolution Lab v0.7 — Living Settlements & Construction
 
 **Civilizations build themselves.** Lab 04's inhabitants now collect construction
 materials, discuss real settlement needs through their individual circumstances,

@@ -88,6 +88,31 @@ describe('Evolution Lab v0.7 — living settlements and construction',()=>{
     expect(isWorld(w)).toBe(true);
   });
 
+  it('requires builders at the actual worksite before materials or labor move',()=>{
+    const w=createWorld({seed:270,size:'small',starting:{human:1,elf:0,dwarf:0,demon:0}});
+    const worker=w.agents[0];worker.age=21;worker.born=-21;
+    worker.energy=100;worker.health=100;
+    worker.development!.career='artisan';
+    const s=placeAt(w,worker.x,worker.y);w.settlements.push(s);
+    prepareInfrastructure(w);
+    const i=s.infrastructure!;
+    const location=i.land.find(index=>Math.max(
+      Math.abs(index%w.width-worker.x),
+      Math.abs(Math.floor(index/w.width)-worker.y))>=4)!;
+    const house:Building={id:1,type:'house',x:location%w.width,
+      y:Math.floor(location/w.width),culture:'human',stage:'foundation',
+      progress:0,condition:100,started:0,spent:{wood:0,stone:0,clay:0},labor:0};
+    i.buildings.push(house);i.nextBuildingId=2;
+    i.stock={wood:30,stone:30,clay:30};
+    advanceConstruction(w,[]);
+    expect(house.progress).toBe(0);
+    expect(house.labor).toBe(0);
+    worker.x=house.x;worker.y=house.y;
+    advanceConstruction(w,[]);
+    expect(house.spent.wood).toBeGreaterThan(0);
+    expect(isWorld(w)).toBe(true);
+  });
+
   it('lets a willing artisan actually choose to work on an active project',()=>{
     const {w,settlement:s}=activeCommunity(405);
     const worker=w.agents.find(a=>a.species==='human'&&a.age>=16&&

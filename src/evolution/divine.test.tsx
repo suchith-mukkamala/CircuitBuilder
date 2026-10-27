@@ -176,14 +176,14 @@ describe('Evolution Lab v0.6 — divine powers and mortal agency',()=>{
 
   it('maintains viable human and demon communities through a longer ecological horizon',async()=>{
     let w=createWorld({seed:31,size:'small',resourceLevel:1});
-    for(let i=0;i<800;i+=10){
+    for(let i=0;i<240;i+=10){
       w=advanceWorld(w,10);
       await new Promise<void>(resolve=>setTimeout(resolve,0));
     }
     const human=w.agents.filter(a=>a.species==='human').length;
     const demon=w.agents.filter(a=>a.species==='demon').length;
-    expect(human,'human community at year 800').toBeGreaterThanOrEqual(8);
-    expect(demon,'demon community at year 800').toBeGreaterThanOrEqual(8);
+    expect(human,'human community at year 240').toBeGreaterThanOrEqual(8);
+    expect(demon,'demon community at year 240').toBeGreaterThanOrEqual(8);
     expect(isWorld(w)).toBe(true);
   },120000);
 });

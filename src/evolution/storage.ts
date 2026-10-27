@@ -11,8 +11,62 @@ import {livingRecord,pureAncestry} from './family';
  * validating the reconstructed world.
  */
 export const WORLD_STORAGE_KEY='circuitbuilder:evolution:v2';
+export const WORLD_STORAGE_TIME_KEY='circuitbuilder:evolution:saved-at';
 export const LEGACY_STORAGE_KEY='circuitbuilder:evolution:v1';
-export const MAX_WORLD_FILE_BYTES=12_000_000;
+export const MAX_WORLD_FILE_BYTES=64_000_000;
+const WORLD_DATABASE='circuitbuilder-evolution-worlds';
+const WORLD_RECORD='current-world';
+const WORLD_STORE='snapshots';
+function database():Promise<IDBDatabase>{
+  return new Promise((resolve,reject)=>{
+    if(typeof indexedDB==='undefined')return reject(Error('IndexedDB unavailable'));
+    const request=indexedDB.open(WORLD_DATABASE,1);
+    request.onupgradeneeded=()=>{
+      if(!request.result.objectStoreNames.contains(WORLD_STORE))
+        request.result.createObjectStore(WORLD_STORE);
+    };
+    request.onerror=()=>reject(request.error);
+    request.onsuccess=()=>resolve(request.result);
+  });
+}
+/** Large evolving worlds exceed localStorage quotas. Persist them in IndexedDB. */
+export async function loadDatabaseSnapshot():Promise<{world:World;savedAt:number}|null>{
+  const db=await database();
+  try{
+    const raw=await new Promise<unknown>((resolve,reject)=>{
+      const request=db.transaction(WORLD_STORE,'readonly')
+        .objectStore(WORLD_STORE).get(WORLD_RECORD);
+      request.onsuccess=()=>resolve(request.result);
+      request.onerror=()=>reject(request.error);
+    });
+    const payload=typeof raw==='string'?{raw,savedAt:0}:
+      raw&&typeof raw==='object'&&'raw' in raw&&'savedAt' in raw?
+        raw as {raw:unknown;savedAt:unknown}:null;
+    if(!payload||typeof payload.raw!=='string')return null;
+    const world=readSavedWorld(payload.raw);
+    return world?{world,savedAt:Number.isFinite(payload.savedAt)?
+      Number(payload.savedAt):0}:null;
+  }finally{db.close();}
+}
+let saveQueue=Promise.resolve();
+export function saveDatabaseWorld(raw:string,savedAt=Date.now()):Promise<void>{
+  const write=async()=>{
+    const db=await database();
+    try{
+      await new Promise<void>((resolve,reject)=>{
+        const transaction=db.transaction(WORLD_STORE,'readwrite');
+        transaction.objectStore(WORLD_STORE).put({raw,savedAt},WORLD_RECORD);
+        transaction.oncomplete=()=>resolve();
+        transaction.onerror=()=>reject(transaction.error);
+        transaction.onabort=()=>reject(transaction.error);
+      });
+    }finally{db.close();}
+  };
+  // Preserve save order if the user pauses during a background checkpoint.
+  const result=saveQueue.then(write);
+  saveQueue=result.catch(()=>{});
+  return result;
+}
 const ALPHABET='PFMCVWR'; // plains, forest, mountain, cave, volcanic, wasteland, water
 const TILE_BIOMES:Biome[]=['plains','forest','mountain','cave','volcanic','wasteland','water'];
 const packedBiome=(s:string)=>TILE_BIOMES[ALPHABET.indexOf(s)];
@@ -68,7 +122,7 @@ export function migrateLegacyWorld(input:unknown):World|null{
     !Number.isInteger(old.year)||Number(old.year)<0||Number(old.year)>9999||
     !Number.isInteger(old.rngState)||Number(old.rngState)<0||
     !Array.isArray(old.tiles)||old.tiles.length!==width*height||
-    !Array.isArray(old.agents)||old.agents.length>850||
+    !Array.isArray(old.agents)||old.agents.length>width*height||
     !Array.isArray(old.settlements)||old.settlements.length>54||
     !Array.isArray(old.history)||old.history.length<1||old.history.length>400||
     !Array.isArray(old.events)||old.events.length>90||

@@ -31,8 +31,13 @@ export function mixAncestry(a:Ancestry,b:Ancestry):Ancestry{
     demon:(a.demon+b.demon)/2,
   };
 }
-export const dominantSpecies=(a:Ancestry):Species=>
-  SPECIES.reduce((best,s)=>a[s]>a[best]?s:best,'human' as Species);
+export function dominantSpecies(a:Ancestry,roll=.5):Species{
+  const highest=Math.max(...SPECIES.map(s=>a[s]));
+  const tied=SPECIES.filter(s=>Math.abs(a[s]-highest)<1e-10);
+  // A 50/50 child is not automatically human (or whichever species happens
+  // to appear first in an enum). The tie is resolved by the seeded world RNG.
+  return tied[Math.min(tied.length-1,Math.floor(Math.max(0,roll)*tied.length))];
+}
 export const hybridFraction=(a:Ancestry)=>1-Math.max(...SPECIES.map(s=>a[s]));
 export function ancestryLabel(a:Ancestry):string{
   const parts=SPECIES.filter(s=>a[s]>.001).sort((x,y)=>a[y]-a[x]);
@@ -204,17 +209,15 @@ export function offspringFromBonds(
   const populations={human:0,elf:0,dwarf:0,demon:0};
   for(const a of world.agents)populations[a.species]++;
   const newborns:Agent[]=[];
-  // At the global browser-safety cap, the order in which couples are visited
-  // determines who gets the few available birth slots. Visiting oldest bonds
-  // first gave long-lived elves an accidental monopoly across generations.
-  // A reproducibly shuffled queue gives every eligible family a chance.
+  // Even without a numerical cap, fertile space can be scarce. A reproducibly
+  // shuffled queue prevents older families from monopolizing open birth sites.
   const candidates=world.bonds.filter(b=>b.stage==='partner');
   for(let i=candidates.length-1;i>0;i--){
     const j=Math.floor(rand()*(i+1));
     [candidates[i],candidates[j]]=[candidates[j],candidates[i]];
   }
   for(const bond of candidates){
-    if(bond.stage!=='partner'||world.agents.length+newborns.length>=850)continue;
+    if(bond.stage!=='partner')continue;
     const a=byId.get(bond.a),b=byId.get(bond.b);
     if(!a||!b||cheby(a,b)>3)continue;
     const p=traitProfile(a.ancestry),q=traitProfile(b.ancestry);
@@ -245,7 +248,7 @@ export function offspringFromBonds(
     const ancestry=mixAncestry(a.ancestry,b.ancestry);
     const site=findSpace(a,ancestry);
     if(!site)continue;
-    const baby:Agent={id:world.nextAgentId++,species:dominantSpecies(ancestry),
+    const baby:Agent={id:world.nextAgentId++,species:dominantSpecies(ancestry,rand()),
       ancestry,x:site.x,y:site.y,age:0,born:world.year,
       energy:77,health:94,genes:inheritedGenes(a.genes,b.genes,rand),
       generation:Math.max(a.generation,b.generation)+1,parents:[a.id,b.id],
@@ -267,7 +270,8 @@ export function offspringFromBonds(
   }
   // Leave references intact when trimming; the UI gracefully shows "unknown"
   // if an ancestor is older than the retained archive window.
-  if(world.lineage.length>14000){
+  const archiveLimit=14000+world.agents.length+newborns.length;
+  if(world.lineage.length>archiveLimit){
     const live=new Set([...world.agents,...newborns].map(a=>a.id));
     const recentDead=world.lineage.filter(r=>!live.has(r.id));
     const pinned=new Set(world.codex?.favoritePeople??[]);
@@ -278,8 +282,8 @@ export function offspringFromBonds(
       for(const p of record?.parents??[])pinned.add(p);
     }
     const keep=new Set([...live,...pinned]);
-    const capacity=Math.max(0,14000-keep.size);
-    for(const dead of recentDead.filter(r=>!keep.has(r.id)).slice(-capacity))
+    const capacity=Math.max(0,archiveLimit-keep.size);
+    for(const dead of (capacity?recentDead.filter(r=>!keep.has(r.id)).slice(-capacity):[]))
       keep.add(dead.id);
     world.lineage=world.lineage.filter(r=>keep.has(r.id));
   }
