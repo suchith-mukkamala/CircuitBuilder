@@ -54,10 +54,10 @@ export function PopulationDiagnostics({world}:{world:World}){
       <div><small>RECORDED DEATHS</small>
         <strong>{fmt(totalDeaths)}</strong></div>
     </div>
-    {world.agents.length>=840&&<p className="evo-pop-cap-note">
-      World near its 850-person performance limit. When it fills, births must
-      wait for openings; families compete in a seeded, randomized order rather
-      than favoring the oldest partnerships.
+    {world.agents.length>=1500&&<p className="evo-pop-cap-note">
+      The population has grown beyond 1,500 individuals. There is no artificial
+      birth ceiling; available habitat and resources constrain survival.
+      Large populations can slow the simulation and require bigger world saves.
     </p>}
     <div className="evo-diagnostic-columns">
       <div className="evo-diagnostic-species">

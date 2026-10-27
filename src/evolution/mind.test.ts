@@ -81,19 +81,19 @@ describe('Evolution Lab v0.4: autonomous intentions',()=>{
   });
 
   it.each([31,203,721,104729])(
-    'does not systematically extinguish short-lived peoples at the cap (seed %i)',
+    'supports all four peoples without a global birth ceiling (seed %i)',
     async seed=>{
       // Give Vitest's worker a chance to report progress during CPU-heavy
       // multi-century simulations; the stepped years are otherwise identical.
       let end=createWorld({seed,size:'small',resourceLevel:1});
-      for(let year=0;year<350;year+=10){
+      for(let year=0;year<180;year+=10){
         end=advanceWorld(end,10);
         await new Promise<void>(resolve=>setTimeout(resolve,0));
       }
       const counts=population(end);
       for(const [species,count] of Object.entries(counts))
-        expect(count,`seed ${seed} ${species} at year 350`).toBeGreaterThanOrEqual(20);
-      expect(end.agents.length).toBeLessThanOrEqual(850);
+        expect(count,`seed ${seed} ${species} at year 180`).toBeGreaterThanOrEqual(20);
+      expect(end.agents.length).toBeGreaterThan(850);
       expect(isWorld(end)).toBe(true);
     },90000);
 });

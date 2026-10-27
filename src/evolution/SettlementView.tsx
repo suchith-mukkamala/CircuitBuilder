@@ -1,7 +1,8 @@
 import {useEffect,useMemo,useState} from 'react';
 import {BIOME_INFO,SPECIES_INFO,type Settlement,type World} from './engine';
-import {ARCHITECTURE,BUILDING_LABELS,BUILDING_TYPES,COSTS,
+import {ARCHITECTURE,BUILDING_LABELS,BUILDING_TYPES,COSTS,ORES,
   settlementStage,type Building,type RuinSite} from './construction';
+import {RESOURCE_COLORS,RESOURCE_LABELS} from './resources';
 
 type Props={world:World;selectedId:number|null;onFindOnMap:(id:number)=>void;
   playing:boolean;onTogglePlay:()=>void;onAdvance:(years:number)=>void};
@@ -68,6 +69,7 @@ function LocalMap({world,settlement,ruin,onChoose,chosen,zoom}:{world:World;
   const buildings=settlement?.infrastructure?.buildings??ruin?.buildings??[];
   const roads=new Set(settlement?.infrastructure?.roads??ruin?.roads??[]);
   const land=new Set(settlement?.infrastructure?.land??[]);
+  const deposits=new Map((world.deposits??[]).map(d=>[d.index,d]));
   const originX=place.x-HALF,originY=place.y-HALF;
   const allTiles=[];
   for(let dy=0;dy<VIEW;dy++)for(let dx=0;dx<VIEW;dx++){
@@ -75,7 +77,8 @@ function LocalMap({world,settlement,ruin,onChoose,chosen,zoom}:{world:World;
     const tile=x>=0&&y>=0&&x<world.width&&y<world.height?
       world.tiles[y*world.width+x]:null;
     allTiles.push({id:dy*VIEW+dx,x:dx*CELL,y:dy*CELL,tile,
-      owner:tile&&land.has(y*world.width+x),route:tile&&roads.has(y*world.width+x)});
+      owner:tile&&land.has(y*world.width+x),route:tile&&roads.has(y*world.width+x),
+      deposit:tile?deposits.get(y*world.width+x):undefined});
   }
   return <div className="evo-city-map-scroll">
     <svg role="img" aria-label={'Local buildings and roads of '+place.name}
@@ -94,6 +97,8 @@ function LocalMap({world,settlement,ruin,onChoose,chosen,zoom}:{world:World;
           <rect x={p.x+10} y={p.y} width={6} height={CELL}
             fill="#af9d82" opacity={.64}/>
         </>}
+        {p.deposit&&p.deposit.amount>.1&&<circle cx={p.x+5} cy={p.y+5}
+          r={3.2} fill={RESOURCE_COLORS[p.deposit.kind]}/>} 
       </g>)}
       <rect x={HALF*CELL+5} y={HALF*CELL+5} width={CELL-10} height={CELL-10}
         fill="none" stroke="#ffe7ae" strokeWidth={1.5} strokeDasharray="3 2"/>
@@ -190,11 +195,15 @@ export function SettlementView({world,selectedId,onFindOnMap,playing,
             chosen={chosenBuilding} onChoose={setChosenBuilding} zoom={zoom}/>
           <div className="evo-city-legend"><span>▧ Owned land</span>
             <span>━ Worn paths</span><span>▤ Buildings</span>
-            <span>⚒ Scaffolding / progress</span></div>
+            <span>⚒ Scaffolding / progress</span><span>● Trees & minerals</span></div>
           {place?.infrastructure&&<div className="evo-city-stock">
-            <strong>COLLECTED MATERIALS</strong>
+            <strong>COLLECTED MATERIALS & ORES</strong>
             {(['wood','stone','clay'] as const).map(m=><span key={m}>
               {m.toUpperCase()} <b>{place.infrastructure!.stock[m].toFixed(1)}</b>
+            </span>)}
+            {ORES.map(m=><span key={m}>
+              {RESOURCE_LABELS[m].toUpperCase()} <b>
+                {(place.infrastructure!.oreStock?.[m]??0).toFixed(1)}</b>
             </span>)}
           </div>}
           <section className="evo-city-buildings">

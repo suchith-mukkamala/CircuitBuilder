@@ -2,6 +2,7 @@ import {useEffect,useRef} from 'react';
 import type {KeyboardEvent,MouseEvent} from 'react';
 import {BIOME_INFO,SPECIES_INFO,type Brush,type World} from './engine';
 import {ARCHITECTURE,settlementStage} from './construction';
+import {RESOURCE_COLORS} from './resources';
 
 export const WORLD_CELL_SIZE=6;
 const CELL=WORLD_CELL_SIZE;
@@ -10,7 +11,8 @@ const hex=(n:number)=>Math.abs(Math.imul(n,16807))>>>0;
 export function WorldCanvas({
   world,brush,overlay,selected,onSelect,onEdit,zoom=1,
 }:{
-  world:World;brush:Brush;overlay:'terrain'|'resources';selected:{x:number;y:number}|null;
+  world:World;brush:Brush;overlay:'terrain'|'resources'|'deposits';
+  selected:{x:number;y:number}|null;
   onSelect:(x:number,y:number)=>void;onEdit:(x:number,y:number)=>void;zoom?:number;
 }){
   const canvasRef=useRef<HTMLCanvasElement>(null);
@@ -45,6 +47,24 @@ export function WorldCanvas({
         ctx.fillStyle=fullness>.66?'rgba(117,255,176,.34)':
           fullness>.32?'rgba(233,202,99,.35)':'rgba(255,88,124,.45)';
         ctx.fillRect(px,py,CELL,CELL);
+      }
+    }
+    if(overlay==='deposits'||zoom>=2){
+      for(const d of world.deposits??[]){
+        const x=d.index%W,y=Math.floor(d.index/W),px=x*CELL,py=y*CELL;
+        if(d.amount<.1)continue;
+        ctx.fillStyle=RESOURCE_COLORS[d.kind];
+        if(d.kind==='tree'){
+          ctx.fillRect(px+2,py,2,5);ctx.fillRect(px+1,py+2,4,2);
+        }else{
+          ctx.fillRect(px+1,py+3,4,2);ctx.fillRect(px+2,py+1,2,2);
+        }
+        if(overlay==='deposits'){
+          ctx.fillStyle='rgba(8,14,27,.8)';
+          ctx.fillRect(px,py+5,6,1);
+          ctx.fillStyle=RESOURCE_COLORS[d.kind];
+          ctx.fillRect(px,py+5,6*d.amount/d.capacity,1);
+        }
       }
     }
     if(zoom>=2){

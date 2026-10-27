@@ -9,6 +9,7 @@ import {DivineCodex} from './DivineCodex';
 import {DivinePowers} from './DivinePowers';
 import {SettlementView} from './SettlementView';
 import {settlementStage} from './construction';
+import {RESOURCE_LABELS,RESOURCE_COLORS} from './resources';
 import {intervene,type DivineAction} from './divine';
 import {personName,isPersonFavorite,renamePerson,togglePersonFavorite,
   toggleSettlementFavorite,renameSettlement,knownSettlements} from './identity';
@@ -16,7 +17,8 @@ import {hybridFraction,traitProfile,ancestryLabel} from './family';
 import {lifeStage,CAREER_LABELS} from './development';
 import {GOAL_LABELS} from './mind';
 import {compactWorld,loadBrowserWorld,readSavedWorld,WORLD_STORAGE_KEY,
-  MAX_WORLD_FILE_BYTES} from './storage';
+  WORLD_STORAGE_TIME_KEY,MAX_WORLD_FILE_BYTES,loadDatabaseSnapshot,
+  saveDatabaseWorld} from './storage';
 export {readSavedWorld} from './storage';
 import {
   BIOME_INFO,BIOMES,DEFAULT_SETTINGS,SPECIES,SPECIES_INFO,
@@ -54,14 +56,40 @@ const downloadJson=(world:World)=>{
   document.body.appendChild(link);link.click();link.remove();
   URL.revokeObjectURL(url);
 };
+async function saveSnapshot(world:World):Promise<void>{
+  const raw=compactWorld(world);
+  const savedAt=Date.now();
+  // A small synchronous fallback survives reloads even if a pagehide event
+  // cannot finish its asynchronous IndexedDB transaction.
+  let localSaved=false;
+  if(raw.length<2_000_000){
+    try{
+      window.localStorage.setItem(WORLD_STORAGE_KEY,raw);
+      window.localStorage.setItem(WORLD_STORAGE_TIME_KEY,String(savedAt));
+      localSaved=true;
+    }
+    catch{/* IndexedDB is the primary save location. */}
+  }
+  try{await saveDatabaseWorld(raw,savedAt);}
+  catch(error){
+    if(localSaved)return;
+    try{
+      window.localStorage.setItem(WORLD_STORAGE_KEY,raw);
+      window.localStorage.setItem(WORLD_STORAGE_TIME_KEY,String(savedAt));
+    }
+    catch{throw error;}
+  }
+}
 
 export function EvolutionLab(){
   const [world,setWorld]=useState<World>(initialWorld);
+  // Server-rendered previews have no browser database to restore.
+  const [storageReady,setStorageReady]=useState(typeof window==='undefined');
   const [tab,setTab]=useState<Tab>('world');
   const [playing,setPlaying]=useState(false);
   const [speed,setSpeed]=useState(4);
   const [brush,setBrush]=useState<Brush>({kind:'inspect'});
-  const [overlay,setOverlay]=useState<'terrain'|'resources'>('terrain');
+  const [overlay,setOverlay]=useState<'terrain'|'resources'|'deposits'>('terrain');
   const [zoom,setZoom]=useState(1);
   const [selected,setSelected]=useState<{x:number;y:number}|null>(null);
   const [selectedAgentId,setSelectedAgentId]=useState<number|null>(null);
@@ -69,20 +97,44 @@ export function EvolutionLab(){
   const [mapFocus,setMapFocus]=useState<number|null>(null);
   const mapScrollRef=useRef<HTMLDivElement>(null);
   const [notice,setNotice]=useState('');
+  const [savedYear,setSavedYear]=useState<number|null>(null);
   const fileRef=useRef<HTMLInputElement>(null);
   const currentWorld=useRef(world);
   currentWorld.current=world;
   useEffect(()=>{
+    let active=true;
+    loadDatabaseSnapshot().then(restored=>{
+      let localTime=0;
+      try{localTime=Number(window.localStorage.getItem(WORLD_STORAGE_TIME_KEY)??0);}
+      catch{/* Private mode can disable localStorage independently of IndexedDB. */}
+      if(!Number.isFinite(localTime))localTime=0;
+      if(active&&restored&&restored.savedAt>=localTime)
+        setWorld(restored.world);
+    }).catch(()=>{/* localStorage / newly created world remains available. */})
+      .finally(()=>{if(active)setStorageReady(true);});
+    return ()=>{active=false;};
+  },[]);
+  // Playback may update the world 16 times/second. A debounce alone would
+  // *never* fire while playing, so retain periodic checkpoints as well.
+  useEffect(()=>{
+    if(!storageReady)return;
+    const save=()=>{
+      const current=currentWorld.current;
+      void saveSnapshot(current).then(()=>setSavedYear(current.year))
+        .catch(()=>setNotice('Autosave failed. Export World JSON to keep your progress.'));
+    };
+    const timer=window.setInterval(save,10000);
+    window.addEventListener('pagehide',save);
+    return ()=>{window.clearInterval(timer);window.removeEventListener('pagehide',save);save();};
+  },[storageReady]);
+  useEffect(()=>{
+    if(playing||!storageReady)return; // The periodic checkpoint handles play.
     const timer=window.setTimeout(()=>{
-      try{window.localStorage.setItem(WORLD_STORAGE_KEY,compactWorld(world));}
-      catch{setNotice('Browser storage is full. Export World JSON to keep this world.');}
+      void saveSnapshot(world).then(()=>setSavedYear(world.year))
+        .catch(()=>setNotice('Autosave failed. Export World JSON to keep your progress.'));
     },500);
     return ()=>window.clearTimeout(timer);
-  },[world]);
-  // Ensure the latest tick is retained even if the user switches to another lab
-  // before the debounced autosave fires.
-  useEffect(()=>()=>{try{window.localStorage.setItem(WORLD_STORAGE_KEY,
-    compactWorld(currentWorld.current));}catch{/* Storage may be unavailable. */}},[]);
+  },[world,playing,storageReady]);
   useEffect(()=>{if(tab!=='world'&&tab!=='settlements')setPlaying(false);},[tab]);
   useEffect(()=>{
     if(!playing||(tab!=='world'&&tab!=='settlements'))return;
@@ -102,6 +154,8 @@ export function EvolutionLab(){
     world.agents.find(a=>a.id===selectedAgentId)??null;
   const displayed=agent?{x:agent.x,y:agent.y}:selected;
   const tile=displayed?world.tiles[displayed.y*world.width+displayed.x]:null;
+  const resource=displayed?world.deposits?.find(d=>d.index===
+    displayed.y*world.width+displayed.x):undefined;
   const settlement=displayed?world.settlements.find(s=>(s.x===displayed.x&&
     s.y===displayed.y)||s.infrastructure?.buildings.some(b=>b.x===displayed.x&&
     b.y===displayed.y))??null:null;
@@ -189,7 +243,7 @@ export function EvolutionLab(){
     const file=event.currentTarget.files?.[0];event.currentTarget.value='';
     if(!file)return;
     if(file.size>MAX_WORLD_FILE_BYTES){
-      setNotice('World file exceeds the 12 MB safety limit.');return;
+      setNotice('World file exceeds the 64 MB safety limit.');return;
     }
     if(!window.confirm('Load '+file.name+'? This replaces the current world. '+
       'Export your world first if you want a backup.'))return;
@@ -217,6 +271,8 @@ export function EvolutionLab(){
       setNotice(last?'Divine intervention #'+last.id+': '+last.description:'Power applied.');
     }catch(err){setNotice(err instanceof Error?err.message:'That power could not take effect.');}
   };
+  if(!storageReady)return <div className="evo-app evo-loading-world" role="status">
+    Restoring your saved world…</div>;
   return <div className="evo-app">
     <header className="evo-lab-nav">
       <div className="evo-lab-brand">
@@ -249,7 +305,8 @@ export function EvolutionLab(){
           className={tab==='powers'?'active':''} onClick={()=>navigate('powers')}>
           ⚡ DIVINE POWERS</button>
       </nav>
-      <div className="evo-nav-status"><span/> YEAR {world.year}</div>
+      <div className="evo-nav-status"><span/> YEAR {world.year}
+        {savedYear!==null&&<small> · SAVED Y{savedYear}</small>}</div>
     </header>
     {tab==='creator'?<WorldCreator key={world.settings.seed+'-'+world.year}
       current={world.settings} onCreate={startWorld} onReturn={()=>navigate('world')}/>:
@@ -344,9 +401,10 @@ export function EvolutionLab(){
             </select>
             <label htmlFor="evo-overlay">MAP LAYER</label>
             <select id="evo-overlay" value={overlay}
-              onChange={e=>setOverlay(e.target.value as 'terrain'|'resources')}>
+              onChange={e=>setOverlay(e.target.value as 'terrain'|'resources'|'deposits')}>
               <option value="terrain">Biomes</option>
               <option value="resources">Food levels</option>
+              <option value="deposits">Trees & ore deposits</option>
             </select>
           </div>
           <div className="evo-map-scroll" ref={mapScrollRef}>
@@ -383,6 +441,13 @@ export function EvolutionLab(){
                 <div><strong>{BIOME_INFO[tile.biome].name}</strong>
                   <small>Food available: {tile.food.toFixed(1)} units</small></div>
               </div>
+              {resource&&<div className="evo-biome-info">
+                <span className="evo-biome-swatch" style={{background:
+                  RESOURCE_COLORS[resource.kind]}}/>
+                <div><strong>{RESOURCE_LABELS[resource.kind]}</strong>
+                  <small>{resource.amount.toFixed(1)} / {resource.capacity.toFixed(1)}
+                    {' units · renewable deposit'}</small></div>
+              </div>}
               {agent?<div className="evo-individual">
                 <div className="evo-individual-title">
                   <span className="evo-species-avatar"
@@ -477,10 +542,11 @@ export function EvolutionLab(){
         </aside>
       </div>
       <div className="evo-future-note">
-        <strong>V0.7: BUILT BY THE PEOPLE</strong>
-        <span>Households settle into real homes; neighbors gather materials,
-          raise farms and workshops, wear roads into the terrain, and leave
-          ruins behind. The simulation runs even when no city is being viewed.</span>
+        <strong>V0.7.1: RENEWABLE WORLDS</strong>
+        <span>Residents harvest renewable trees, stone and mineral ores, then
+          work at real building sites. Settlements grow according to community
+          needs, with no artificial population ceiling. Playback autosaves
+          even when no city is being viewed.</span>
       </div>
     </main>}
   </div>;

@@ -6,6 +6,7 @@ import type {Agent,Biome,Species,World} from './engine';
 import {appendLifeMoment,makeLifeRecord} from './identity';
 import {initialDevelopment} from './development';
 import {initialMind} from './mind';
+import {editDeposit} from './resources';
 
 export const DIVINE_ASPECTS=['health','lifespan','intelligence','fertility',
   'skill_growth','luck','courage','social'] as const;
@@ -119,7 +120,8 @@ export function intervene(previous:World,action:DivineAction):World{
     blessings:a.blessings?.map(e=>({...e})),whispers:a.whispers?.map(e=>({...e})),
     development:a.development?{...a.development,values:{...a.development.values}}:undefined})),
     lineage:previous.lineage.map(r=>({...r,moments:r.moments?.map(m=>({...m}))})),
-    tiles:[...previous.tiles],events:[...previous.events],history:[...previous.history],
+    tiles:[...previous.tiles],deposits:previous.deposits?.map(d=>({...d})),
+    events:[...previous.events],history:[...previous.history],
     divine:cloneDivine(previous.divine??divineState())};
   const id=w.divine!.nextId++;
   const person=('personId' in action)?w.agents.find(a=>a.id===action.personId):undefined;
@@ -172,8 +174,8 @@ export function intervene(previous:World,action:DivineAction):World{
     person.energy=round(Math.max(0,person.energy-damage));
     record(w,id,'punish','Divine punishment dealt '+Math.round(damage)+' harm.',person.id);
   }else if(action.kind==='summon'){
-    if(!['human','elf','dwarf','demon'].includes(action.species)||w.agents.length>=850)
-      throw Error('The population limit has been reached.');
+    if(!['human','elf','dwarf','demon'].includes(action.species))
+      throw Error('Choose a valid species.');
     const at=site(w,action.x,action.y);
     const profile={human:[16,74],elf:[36,245],dwarf:[27,166],demon:[23,137]}[action.species];
     const age=profile[0]+3,ancestry={human:0,elf:0,dwarf:0,demon:0};
@@ -187,7 +189,7 @@ export function intervene(previous:World,action:DivineAction):World{
     record(w,id,'summon','Summoned a '+action.species+' into the world.',agent.id);
   }else if(action.kind==='resurrect'){
     const past=w.lineage.find(r=>r.id===action.personId);
-    if(!past||past.died===undefined||w.agents.length>=850)
+    if(!past||past.died===undefined)
       throw Error('Choose a deceased person while there is space for them.');
     const nearby=w.agents.find(a=>a.parents?.includes(past.id));
     const desired={x:action.x??nearby?.x??Math.floor(w.width/2),
@@ -211,6 +213,7 @@ export function intervene(previous:World,action:DivineAction):World{
       wasteland:4.2,volcanic:3.7,water:0}[action.biome];
     if(food===undefined)throw Error('Unknown terrain type.');
     w.tiles[idx]={biome:action.biome,food:food*w.settings.resourceLevel};
+    editDeposit(w,idx);
     record(w,id,'terrain','Transformed terrain at '+action.x+', '+action.y+
       ' into '+action.biome+'.');
   }

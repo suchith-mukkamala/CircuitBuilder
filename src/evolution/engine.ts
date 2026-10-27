@@ -16,6 +16,8 @@ import {activeEffects,cloneDivine,divineFactor,divineState,inheritDivinity,
   validDivinity,type DivineEffect,type DivineWhisper,type DivineState} from './divine';
 import {advanceConstruction,archiveRuins,cloneInfrastructure,
   validConstruction,type SettlementInfrastructure,type RuinSite,type Trail} from './construction';
+import {createDeposits,editDeposit,regrowDeposits,validDeposits,
+  type ResourceDeposit} from './resources';
 export type Species='human'|'elf'|'dwarf'|'demon';
 export type Biome='plains'|'forest'|'mountain'|'cave'|'wasteland'|'volcanic'|'water';
 export type WorldSize='small'|'medium'|'large'|'vast';
@@ -71,7 +73,7 @@ export type World={version:2;settings:WorldSettings;width:number;height:number;
   events:WorldEvent[];history:Sample[];totalBirths:number;totalDeaths:number;
   demography?:Demography;codex?:WorldCodex;
   households?:Household[];nextHouseholdId?:number;divine?:DivineState;
-  ruins?:RuinSite[];trails?:Trail[]};
+  ruins?:RuinSite[];trails?:Trail[];deposits?:ResourceDeposit[]};
 export const SPECIES:Species[]=['human','elf','dwarf','demon'];
 export const BIOMES:Biome[]=['plains','forest','mountain','cave','wasteland','volcanic','water'];
 export const SPECIES_INFO:Record<Species,{name:string;symbol:string;color:string;
@@ -215,7 +217,8 @@ export function createWorld(input:Partial<WorldSettings>={}):World{
     tiles,agents:[],settlements:[],bonds:[],lineage:[],
     events:[],history:[],totalBirths:0,totalDeaths:0,demography:emptyDemography(0),
     codex:{favoritePeople:[],favoriteSettlements:[],settlements:[]},divine:divineState(),
-    ruins:[],trails:[]};
+    ruins:[],trails:[],deposits:[]};
+  world.deposits=createDeposits(world);
   const occupied=new Set<number>();
   for(const s of SPECIES){
     const info=SPECIES_INFO[s];
@@ -306,8 +309,10 @@ export function stepWorld(previous:World):World{
     divine:cloneDivine(previous.divine??divineState()),
     ruins:previous.ruins?.map(s=>({...s,roads:[...s.roads],
       buildings:s.buildings.map(b=>({...b,spent:{...b.spent}}))}))??[],
-    trails:previous.trails?.map(t=>({...t}))??[]};
+    trails:previous.trails?.map(t=>({...t}))??[],
+    deposits:previous.deposits?.map(d=>({...d}))};
   prepareDevelopment(world);
+  regrowDeposits(world);
   for(const s of world.settlements){
     if(!world.codex!.settlements.some(r=>r.id===s.id)){
       world.codex!.settlements.push({id:s.id,species:s.species,name:s.name,
@@ -488,14 +493,23 @@ export function stepWorld(previous:World):World{
   const hybrids=newborns.filter(a=>hybridFraction(a.ancestry)>.01).length;
   if(hybrids)log(world,'hybrid',hybrids+' mixed-ancestry child'+
     (hybrids===1?'':'ren')+' born this year.');
+  // Founders inspect the people actually nearby. Scanning every person for
+  // every candidate would become quadratic now that there is no 850 cap.
+  const communityPositions=new Map<number,Agent>();
+  for(const a of world.agents)communityPositions.set(offset(world.width,a.x,a.y),a);
   for(const a of world.agents){
     if(!adult(a)||world.settlements.length>=54)continue;
     const info=SPECIES_INFO[a.species];
     if(biomeSuitability(a.ancestry,world.tiles[offset(world.width,a.x,a.y)].biome)<.55)
       continue;
     if(world.settlements.some(s=>distance(s,a)<=7))continue;
-    const nearby=world.agents.filter(b=>b.species===a.species&&adult(b)&&
-      distance(a,b)<=4);
+    const nearby:Agent[]=[];
+    for(let dy=-4;dy<=4;dy++)for(let dx=-4;dx<=4;dx++){
+      const x=a.x+dx,y=a.y+dy;
+      if(!within(world.width,world.height,x,y))continue;
+      const b=communityPositions.get(offset(world.width,x,y));
+      if(b&&b.species===a.species&&adult(b))nearby.push(b);
+    }
     if(nearby.length<4)continue;
     const id=world.nextSettlementId++;
     const names=settlementNames[a.species];
@@ -550,13 +564,13 @@ export type Brush={kind:'inspect'}|{kind:'spawn';species:Species}|
 export function editWorld(previous:World,x:number,y:number,brush:Brush):World{
   if(!within(previous.width,previous.height,x,y)||brush.kind==='inspect')return previous;
   const index=offset(previous.width,x,y),tile=previous.tiles[index];
-  if(brush.kind==='spawn'&&(previous.agents.length>=850||tile.biome==='water'||
+  if(brush.kind==='spawn'&&(tile.biome==='water'||
     previous.agents.some(a=>a.x===x&&a.y===y)))return previous;
   if(brush.kind==='terrain'&&brush.biome==='water'&&
     previous.agents.some(a=>a.x===x&&a.y===y))return previous;
   const world:World={...previous,agents:[...previous.agents],
     tiles:[...previous.tiles],lineage:[...previous.lineage],
-    events:[...previous.events]};
+    events:[...previous.events],deposits:previous.deposits?.map(d=>({...d}))};
   if(brush.kind==='spawn'){
     const state={n:prngState(previous.rngState)},info=SPECIES_INFO[brush.species];
     const age=info.maturity+Math.floor(random(state)*info.lifespan*.16);
@@ -575,6 +589,7 @@ export function editWorld(previous:World,x:number,y:number,brush:Brush):World{
   }else{
     world.tiles[index]={biome:brush.biome,food:round(
       BIOME_INFO[brush.biome].food*world.settings.resourceLevel)};
+    editDeposit(world,index);
   }
   const last=previous.history.at(-1);
   world.history=[...previous.history.slice(0,-1),
@@ -610,10 +625,10 @@ export function isWorld(value:unknown):value is World{
     !Number.isInteger(w.totalBirths)||(w.totalBirths as number)<0||
     !Number.isInteger(w.totalDeaths)||(w.totalDeaths as number)<0||
     !Array.isArray(w.tiles)||w.tiles.length!==w.width*w.height||
-    !Array.isArray(w.agents)||w.agents.length>850||
+    !Array.isArray(w.agents)||w.agents.length>w.tiles.length||
     !Array.isArray(w.settlements)||w.settlements.length>54||
     !Array.isArray(w.bonds)||w.bonds.length>6000||
-    !Array.isArray(w.lineage)||w.lineage.length>14000||
+    !Array.isArray(w.lineage)||w.lineage.length>14000+w.tiles.length||
     !Array.isArray(w.events)||w.events.length>90||
     !Array.isArray(w.history)||w.history.length>400||w.history.length===0)return false;
   const width=w.width,height=w.height,year=w.year as number;
@@ -775,15 +790,15 @@ export function isWorld(value:unknown):value is World{
       return false;
   }
   if(w.households!==undefined){
-    if(!Array.isArray(w.households)||w.households.length>850||
+    if(!Array.isArray(w.households)||w.households.length>w.tiles.length||
       !Number.isSafeInteger(w.nextHouseholdId)||w.nextHouseholdId!<1)return false;
     const householdIds=new Set<number>();
     for(const h of w.households){
       if(!h||!Number.isSafeInteger(h.id)||h.id<1||
         householdIds.has(h.id)||!Number.isInteger(h.formed)||
         h.formed<0||h.formed>year||!checkPlace(h.home)||
-        !SPECIES.includes(h.culture)||!validIds(h.members,850)||
-        !validIds(h.caregivers,850)||
+        !SPECIES.includes(h.culture)||!validIds(h.members,w.tiles.length)||
+        !validIds(h.caregivers,w.tiles.length)||
         !h.caregivers.every(id=>h.members.includes(id)))return false;
       householdIds.add(h.id);
     }
@@ -791,7 +806,7 @@ export function isWorld(value:unknown):value is World{
       householdIds.has(a.development.householdId)))return false;
   }
   if(!w.agents.every(a=>records.has(a.id))||!validDivinity(w as World)||
-    !validConstruction(w as World))return false;
+    !validConstruction(w as World)||!validDeposits(w as World))return false;
   if(!w.history.every(p=>{
     const valid=Number.isInteger(p.year)&&p.year>=0&&
       Number.isInteger(p.total)&&p.total>=0&&

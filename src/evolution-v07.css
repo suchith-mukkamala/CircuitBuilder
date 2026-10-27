@@ -64,3 +64,6 @@
   .evo-city-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
   .evo-city-building-list,.evo-city-list-scroll{grid-template-columns:1fr}
   .evo-city-intro{flex-wrap:wrap}.evo-city-intro button{margin-left:0}}
+.evo-loading-world{display:grid;place-items:center;min-height:55vh;
+  color:#d9c99d;font:13px 'Space Mono',monospace;letter-spacing:.08em}
+.evo-nav-status small{font-size:10px;color:#9ddab9;letter-spacing:0}
