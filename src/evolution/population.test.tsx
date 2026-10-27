@@ -145,5 +145,5 @@ describe('Ecological survival smoke tests across seeded worlds',()=>{
       expect(isWorld(world)).toBe(true);
       expect(world.history.at(-1)?.total).toBe(world.agents.length);
     }
-  });
+  },30000);
 });

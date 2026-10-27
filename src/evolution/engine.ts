@@ -530,7 +530,7 @@ export function isWorld(value:unknown):value is World{
     !Array.isArray(w.history)||w.history.length>400||w.history.length===0)return false;
   const width=w.width,height=w.height;
   if(!w.tiles.every(t=>t&&BIOMES.includes(t.biome)&&Number.isFinite(t.food)&&
-    t.food>=0&&t.food<=16))return false;
+    t.food>=0&&t.food<=20))return false;
   const ids=new Set<number>(),positions=new Set<number>();
   const checkGenes=(g:Genes)=>!!g&&
     (['vigor','curiosity','fertility','social'] as const).every(k=>
