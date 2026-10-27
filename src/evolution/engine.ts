@@ -117,8 +117,7 @@ export function population(world:Pick<World,'agents'>):Record<Species,number>{
 export function emptyDemography(sinceYear:number):Demography{
   return {sinceYear,bySpecies:Object.fromEntries(SPECIES.map(species=>
     [species,{births:0,deaths:0,juvenileDeaths:0,ageAtDeathSum:0,
-      causes:Object.fromEntries(DEATH_CAUSES.map(c=>[c,0]))}]))
-    as Record<Species,SpeciesVital>};
+      causes:Object.fromEntries(DEATH_CAUSES.map(c=>[c,0]))}])) as Record<Species,SpeciesVital>};
 }
 function emptyVitalYear():YearVital{
   return {births:Object.fromEntries(SPECIES.map(s=>[s,0])) as Record<Species,number>,
@@ -256,8 +255,7 @@ export function stepWorld(previous:World):World{
       sinceYear:previous.demography.sinceYear,
       bySpecies:Object.fromEntries(SPECIES.map(s=>[s,
         {...previous.demography!.bySpecies[s],
-          causes:{...previous.demography!.bySpecies[s].causes}}]))
-        as Record<Species,SpeciesVital>,
+          causes:{...previous.demography!.bySpecies[s].causes}}])) as Record<Species,SpeciesVital>,
     }:emptyDemography(previous.year)};
   const state={n:prngState(previous.rngState)};
   const yearVitals=emptyVitalYear();

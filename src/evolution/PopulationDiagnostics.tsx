@@ -36,8 +36,7 @@ export function PopulationDiagnostics({world}:{world:World}){
   const recorded=world.demography;
   const totalDeaths=populations.reduce((n,p)=>n+(p.ledger?.deaths??0),0);
   const causes=Object.fromEntries(DEATH_CAUSES.map(c=>[c,
-    populations.reduce((n,p)=>n+(p.ledger?.causes[c]??0),0)]))
-    as Record<(typeof DEATH_CAUSES)[number],number>;
+    populations.reduce((n,p)=>n+(p.ledger?.causes[c]??0),0)])) as Record<(typeof DEATH_CAUSES)[number],number>;
   const reportedYears=world.year-(recorded?.sinceYear??world.year);
   return <section className="evo-section-card evo-pop-diagnostics"
     aria-label="Population and mortality diagnostics">
