@@ -3,7 +3,8 @@ import {renderToStaticMarkup} from 'react-dom/server';
 import {HomeScreen} from '../HomeScreen';
 import {ComputerBuilder} from '../ComputerBuilder';
 import {cpuCoreDemo,counterDemo} from './computerSamples';
-import {initialDigitalCircuit} from './types';
+import {initialDigitalCircuit,pinAt,pinsOf} from './types';
+import {aluWorkshop} from '../bridges/aluWorkshop';
 import {useDigitalStore,workspaceTransition,persistedDigitalState} from './useDigitalStore';
 import {fitDigitalCircuit} from './canvasViewport';
 
@@ -95,6 +96,14 @@ describe('independent lab navigation workspaces',()=>{
 });
 
 describe('first-time user viewport and navigation',()=>{
+  it('fits all ALU workshop pins in a phone canvas',()=>{
+    const doc=aluWorkshop(),size={width:338,height:500},view=fitDigitalCircuit(doc,size);
+    for(const part of doc.components)for(const pin of pinsOf(part)){
+      const point=pinAt(part,pin),x=point.x*view.zoom+view.x,y=point.y*view.zoom+view.y;
+      expect(x).toBeGreaterThan(0);expect(x).toBeLessThan(size.width);
+      expect(y).toBeGreaterThan(0);expect(y).toBeLessThan(size.height);
+    }
+  });
   it('fits the large CPU example in an editor viewport',()=>{
     const doc=cpuCoreDemo();
     const view=fitDigitalCircuit(doc,{width:850,height:560});

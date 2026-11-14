@@ -168,7 +168,7 @@ export function ComputerBuilder(){
     }
   },[selection?.type,selection?.id,view]);
   useEffect(()=>{
-    if(view==='hardware'&&focusTarget){
+    if(view==='hardware'&&focusTarget&&!focusTarget.fit){
       setPanelOpen(true);setTab('inspect');
     }
   },[focusTarget?.nonce,view]);

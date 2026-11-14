@@ -1,4 +1,4 @@
-# CircuitBuilder v0.22.0 — The Electronics Playground
+# CircuitBuilder v0.23.0 — The Electronics Playground
 
 Build, simulate and experiment with analog circuits, digital signals, programmable computers, and microcontroller projects in four laboratories.
 
@@ -8,6 +8,17 @@ Build, simulate and experiment with analog circuits, digital signals, programmab
 - **Lab 04 — Robotics:** a programmable virtual controller, live sensor inputs, LEDs, and a servo. Start with a traffic light, automatic door, or obstacle detector.
 
 ## What's new
+
+### v0.23 — Connected labs and Studio graphics
+
+- **Parts Exchange** publishes independent module snapshots from Signals or Computer Builder. Try input bits in the module test bench, add a copy to either digital workspace, or import/export a self-contained package with its nested dependencies.
+- **ALU workshop:** build a four-bit ADD/AND/OR/XOR circuit from full adders, gates, and multiplexers, then use that actual module as the ALU in a PC/ROM/accumulator datapath.
+- **Signals → Robotics:** attach a combinational module, map its inputs to bench sensors and its outputs to LEDs or the servo, then upload and run the circuit. Mapping changes require another upload; MicroScript source stays available.
+- **Analog → Signals:** compare a solved point voltage with an explicit threshold and add its HIGH/LOW sample to the digital workspace. The sample is fixed until you transfer another reading.
+- **Studio graphics** add recognizable logic symbols, resistor color codes, shaded components, live chip readouts, and capacitor voltage fill. Classic graphics remain available in **Display**.
+- Bounded signal-change and clock highlights, current-flow cues, LED transitions, and servo movement follow actual simulation values. Display preferences persist locally, and system reduced motion disables animation.
+
+See [Parts Exchange and graphics](docs/PARTS_EXCHANGE.md) for connected projects, supported adapters, and animation behavior.
 
 ### v0.22 — Measure, learn, and keep your experiments
 

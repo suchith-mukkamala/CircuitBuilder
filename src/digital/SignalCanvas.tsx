@@ -13,10 +13,13 @@ import {
 } from './network';
 import { useDigitalStore } from './useDigitalStore';
 import { paletteCategories,partByKind } from './catalog';
-import { fitDigitalCircuit } from './canvasViewport';
+import { fitDigitalCircuit,minimumDigitalZoom } from './canvasViewport';
 import { diagnoseDigitalCircuit, type CircuitIssue } from './diagnostics';
 import {SignalReadout,targetNet,type SignalTarget} from './SignalReadout';
 import {useCompactCanvas} from '../workbench/useCompactCanvas';
+import {useScenePreferences} from '../visuals/preferences';
+import {drawStudioDigital} from '../visuals/studioDigital';
+import {recordActivity,activityOpacity,type Activity} from '../visuals/activity';
 
 type Camera = { x: number; y: number; zoom: number };
 type Drag = {
@@ -79,7 +82,12 @@ function nearestOnTrace(p: DigitalPoint, path: DigitalPoint[]): {
 function drawPixelPart(
   ctx: CanvasRenderingContext2D, c: DigitalComponent,
   doc: DigitalDocument, result: LogicResult, selected: boolean,
+  style:'studio'|'neon',
 ) {
+  if(style==='studio'){
+    ctx.save();ctx.translate(c.x,c.y);ctx.rotate(c.rotation*Math.PI/180);ctx.textAlign='center';ctx.textBaseline='middle';
+    drawStudioDigital(ctx,c,doc,result,selected);ctx.restore();return;
+  }
   const name = digitalLabel(c, doc.components);
   const source = c.kind === 'input' || c.kind === 'high' || c.kind === 'low';
   const led = c.kind === 'led', block = c.kind === 'block';
@@ -217,6 +225,7 @@ function drawSignalCanvas(
   wirePaths:Map<string,DigitalPoint[]>,busPaths:Map<string,DigitalPoint[]>,
   inspectNet?:string,
   inspectBus?:string,
+  style:'studio'|'neon'='studio',activity:Activity=new Map(),
 ) {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
@@ -227,18 +236,18 @@ function drawSignalCanvas(
   ctx.fillStyle = ink.bg; ctx.fillRect(0, 0, width, height);
   const gradient = ctx.createRadialGradient(
     width * .6, height * .34, 0, width * .6, height * .34, Math.max(width, height));
-  gradient.addColorStop(0, '#201447'); gradient.addColorStop(1, '#080c1c');
+  gradient.addColorStop(0,style==='studio'?'#142c3c':'#201447'); gradient.addColorStop(1,style==='studio'?'#0b1828':'#080c1c');
   ctx.fillStyle = gradient; ctx.fillRect(0, 0, width, height);
   ctx.save(); ctx.translate(view.x, view.y); ctx.scale(view.zoom, view.zoom);
   const minX = -view.x / view.zoom, minY = -view.y / view.zoom;
   const maxX = (width-view.x)/view.zoom, maxY = (height-view.y)/view.zoom;
   ctx.lineWidth = 1 / view.zoom;
   for (let x = Math.floor(minX / 24) - 1; x <= Math.ceil(maxX / 24) + 1; x++) {
-    ctx.strokeStyle = x%5 === 0 ? ink.major : ink.grid;
+    ctx.strokeStyle = style==='studio'?(x%5===0?'#36506666':'#2b405333'):x%5 === 0 ? ink.major : ink.grid;
     ctx.beginPath(); ctx.moveTo(x*24, minY); ctx.lineTo(x*24, maxY); ctx.stroke();
   }
   for (let y = Math.floor(minY / 24) - 1; y <= Math.ceil(maxY / 24) + 1; y++) {
-    ctx.strokeStyle = y%5 === 0 ? ink.major : ink.grid;
+    ctx.strokeStyle = style==='studio'?(y%5===0?'#36506666':'#2b405333'):y%5 === 0 ? ink.major : ink.grid;
     ctx.beginPath(); ctx.moveTo(minX,y*24); ctx.lineTo(maxX,y*24); ctx.stroke();
   }
   const selectedPart = selected?.type==='component'
@@ -259,35 +268,17 @@ function drawSignalCanvas(
     ctx.lineWidth = highlighted || isSelected ? 5 : 3;
     ctx.strokeStyle = highlighted ? ink.pink : tint;
     ctx.shadowColor = highlighted ? ink.pink : tint;
-    ctx.shadowBlur = active === 1 ? 20 : highlighted ? 16 : 7;
+    ctx.shadowBlur = style==='studio'?(highlighted?7:active===1?4:0):active === 1 ? 20 : highlighted ? 16 : 7;
     ctx.lineJoin = 'bevel'; ctx.beginPath(); ctx.moveTo(points[0].x, points[0].y);
     for (const p of points.slice(1)) ctx.lineTo(p.x, p.y);
     ctx.stroke(); ctx.shadowBlur = 0;
     if (active === 1) {
       ctx.strokeStyle = '#ddfff8'; ctx.lineWidth = 1.1; ctx.stroke();
     }
-    if (motion && active === 1) {
-      // Traveling illuminated blocks indicate a propagating logical HIGH.
-      // This is a visual propagation cue, not analog charge/current velocity.
-      const spans: number[] = [];
-      let total = 0;
-      for (let i = 1; i < points.length; i++) {
-        const len = Math.hypot(points[i].x - points[i-1].x, points[i].y - points[i-1].y);
-        spans.push(len); total += len;
-      }
-      ctx.fillStyle = '#effff9'; ctx.shadowColor = '#91ffdd'; ctx.shadowBlur = 11;
-      for (let i = 0; total > 0 && i < Math.min(9, Math.max(1, Math.floor(total / 55))); i++) {
-        let position = (i * 65 + frameTime * 60) % total;
-        for (let j = 0; j < spans.length; j++) {
-          if (position <= spans[j]) {
-            const t = spans[j] ? position / spans[j] : 0;
-            const x = points[j].x + (points[j+1].x - points[j].x) * t;
-            const y = points[j].y + (points[j+1].y - points[j].y) * t;
-            ctx.fillRect(x-2, y-2, 5, 5); break;
-          }
-          position -= spans[j];
-        }
-      }
+    const flash=motion?activityOpacity(activity.get('wire:'+wire.id),frameTime*1000):0;
+    if(flash){
+      ctx.save();ctx.globalAlpha=flash*.85;ctx.strokeStyle='#d5fff0';ctx.lineWidth=7;
+      ctx.shadowColor='#a8f5d9';ctx.shadowBlur=12;ctx.stroke();ctx.restore();
     }
     ctx.restore();
     if(wire.label){
@@ -314,11 +305,13 @@ function drawSignalCanvas(
     const selectedBus=inspectBus===bus.id||selected?.type==='bus'&&selected.id===bus.id;
     const tint=bits.some(v=>v==='X')?'#ff9aca':bits.some(v=>v===1)?'#86e9d1':'#789dcb';
     ctx.save();ctx.strokeStyle=selectedBus?'#fff1a6':tint;
-    ctx.lineWidth=selectedBus?12:9;ctx.lineJoin='bevel';ctx.shadowColor=tint;ctx.shadowBlur=13;
+    ctx.lineWidth=selectedBus?12:9;ctx.lineJoin='round';ctx.shadowColor=tint;ctx.shadowBlur=style==='studio'?3:13;
     ctx.beginPath();ctx.moveTo(path[0].x,path[0].y);
     for(const point of path.slice(1))ctx.lineTo(point.x,point.y);
     ctx.stroke();ctx.shadowBlur=0;
     ctx.strokeStyle='#18283c';ctx.lineWidth=3;ctx.stroke();
+    const flash=motion?activityOpacity(activity.get('bus:'+bus.id),frameTime*1000):0;
+    if(flash){ctx.globalAlpha=flash;ctx.strokeStyle='#d2fff0';ctx.lineWidth=2;ctx.stroke();ctx.globalAlpha=1;}
     const middle=path[Math.floor(path.length/2)];
     const label=(bus.label?bus.label+' ':'')+'['+(bus.width-1)+':0]';
     ctx.font='bold 12px monospace';ctx.textAlign='center';
@@ -336,7 +329,11 @@ function drawSignalCanvas(
   }
   for (const c of doc.components) {
     drawPixelPart(ctx, c, doc, result,
-      selectedIds.includes(c.id) || selected?.type === 'component' && selected.id === c.id);
+      selectedIds.includes(c.id) || selected?.type === 'component' && selected.id === c.id,style);
+    const flash=motion?activityOpacity(activity.get('part:'+c.id),frameTime*1000):0;
+    if(flash){const width=c.kind==='block'?134:isWidePart(c)?104:76,height=partHeight(c)+18;
+      ctx.save();ctx.globalAlpha=flash*.8;ctx.strokeStyle=c.kind==='clock'?'#ffdc9d':'#b9f5df';ctx.lineWidth=2/view.zoom;
+      ctx.translate(c.x,c.y);ctx.rotate(c.rotation*Math.PI/180);ctx.beginPath();ctx.roundRect(-width/2,-height/2,width,height,8);ctx.stroke();ctx.restore();}
     for (const pin of pinsOf(c)) {
       const point = pinAt(c, pin);
       const key = c.id + ':' + pin, value = result.terminalValues[key] ?? 'Z';
@@ -385,6 +382,7 @@ function drawSignalCanvas(
 
 export function SignalCanvas({ result, onProbe }: { result: LogicResult; onProbe?: () => void }) {
   const compact=useCompactCanvas();
+  const scene=useScenePreferences(),reducedMotion=!scene.motionAllowed;
   const canvas = useRef<HTMLCanvasElement>(null);
   const wrapper = useRef<HTMLDivElement>(null);
   const dragging = useRef<Drag | null>(null);
@@ -401,9 +399,10 @@ export function SignalCanvas({ result, onProbe }: { result: LogicResult; onProbe
   const [menu, setMenu] = useState<Popup | null>(null);
   const [mode,setMode]=useState<'edit'|'inspect'>('edit');
   const [inspecting,setInspecting]=useState<SignalTarget|null>(null);
-  const [reducedMotion, setReducedMotion] = useState(false);
   const [animate, setAnimate] = useState(true);
   const doc = useDigitalStore(s => s.document);
+  const cycle=useDigitalStore(s=>s.runtime.cycle);
+  const previousVisual=useRef<Record<string,string|number>|null>(null),activity=useRef<Activity>(new Map());
   const selection = useDigitalStore(s => s.selection);
   const selectedIds = useDigitalStore(s => s.selectedIds);
   const pending = useDigitalStore(s => s.pending);
@@ -459,6 +458,7 @@ export function SignalCanvas({ result, onProbe }: { result: LogicResult; onProbe
   },[size.width,size.height,doc]);
   useEffect(()=>{
     if(!focusTarget||!size.width||!size.height)return;
+    if(focusTarget.fit){setView(fitDigitalCircuit(doc,size));return;}
     let point:DigitalPoint|null=null;
     const part=doc.components.find(c=>c.id===focusTarget.id);
     if(part)point={x:part.x,y:part.y};
@@ -470,27 +470,28 @@ export function SignalCanvas({ result, onProbe }: { result: LogicResult; onProbe
       y:size.height/2-point.y*v.zoom}));
   },[focusTarget?.nonce,size.width,size.height]);
 
-  useEffect(() => {
-    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const change = () => setReducedMotion(media.matches);
-    change(); media.addEventListener('change', change);
-    return () => media.removeEventListener('change', change);
-  }, []);
-
   const junctions = useMemo(() => intentionalJunctions(doc), [doc]);
+  const visualSnapshot=useMemo(()=>Object.fromEntries([
+    ...Object.entries(result.wireValues).map(([id,value])=>['wire:'+id,value]),
+    ...(doc.buses??[]).map(bus=>['bus:'+bus.id,bus.from.pins.map(pin=>result.terminalValues[bus.from.componentId+':'+pin]??'Z').join('')]),
+    ...doc.components.map(part=>['part:'+part.id,pinsOf(part).map(pin=>result.terminalValues[part.id+':'+pin]??'Z').join('')+(part.kind==='clock'?':'+cycle:'')]),
+  ]) as Record<string,string|number>,[doc,result,cycle]);
   useEffect(() => {
     let raf = 0;
-    const moving = animate && !reducedMotion &&
-      Object.values(result.wireValues).some(v => v === 1);
+    const now=performance.now();
+    activity.current=animate&&!reducedMotion?recordActivity(previousVisual.current,visualSnapshot,now,activity.current):new Map();
+    previousVisual.current=visualSnapshot;
     const draw = (ms: number) => {
+      const moving=animate&&!reducedMotion&&[...activity.current.values()].some(start=>activityOpacity(start,ms)>0);
+      if(canvas.current)canvas.current.dataset.animation=moving?'active':'idle';
       if (canvas.current) drawSignalCanvas(canvas.current, doc, view, result, selection,
-        selectedIds,pending,hover,ms/1000,moving,pendingBus,issues,wirePaths,busPaths,targetNet(doc,result,inspecting),inspecting?.kind==='bus'?inspecting.id:undefined);
+        selectedIds,pending,hover,ms/1000,moving,pendingBus,issues,wirePaths,busPaths,targetNet(doc,result,inspecting),inspecting?.kind==='bus'?inspecting.id:undefined,scene.style,activity.current);
       if (moving) raf = window.requestAnimationFrame(draw);
     };
-    draw(0);
+    draw(now);
     return () => window.cancelAnimationFrame(raf);
   }, [doc, view, result, selection, selectedIds, pending, hover, size,
-    animate,reducedMotion,junctions,pendingBus,issues,wirePaths,busPaths,inspecting]);
+    animate,reducedMotion,junctions,pendingBus,issues,wirePaths,busPaths,inspecting,scene.style,visualSnapshot]);
   useEffect(()=>{
     const escape=(event:KeyboardEvent)=>{if(event.key==='Escape'){setMenu(null);setInspecting(null);}};
     window.addEventListener('keydown',escape);return ()=>window.removeEventListener('keydown',escape);
@@ -669,7 +670,7 @@ export function SignalCanvas({ result, onProbe }: { result: LogicResult; onProbe
   };
   const wheel = (e: WheelEvent<HTMLCanvasElement>) => {
     const screen = localPoint(e);
-    const zoom = Math.max(.3, Math.min(2.5, view.zoom * (e.deltaY < 0 ? 1.1 : 1/1.1)));
+    const zoom = Math.max(minimumDigitalZoom, Math.min(2.5, view.zoom * (e.deltaY < 0 ? 1.1 : 1/1.1)));
     setView({ zoom, x: screen.x-(screen.x-view.x)*zoom/view.zoom,
       y: screen.y-(screen.y-view.y)*zoom/view.zoom });
   };
@@ -736,11 +737,11 @@ export function SignalCanvas({ result, onProbe }: { result: LogicResult; onProbe
       <div className="signal-canvas-controls">
         <button className={animate && !reducedMotion ? 'is-active' : ''}
           aria-pressed={animate && !reducedMotion}
-          title={reducedMotion ? 'Motion disabled by system accessibility settings' : 'Toggle signal propagation glow'}
+          title={reducedMotion ? 'Motion is disabled in Display or system settings' : 'Animate signal and clock changes (visual cues only)'}
           disabled={reducedMotion} onClick={() => setAnimate(v=>!v)}>
-          {animate && !reducedMotion ? '◉ PULSE' : '○ PULSE'}
+          {animate && !reducedMotion ? '◉ MOTION' : '○ MOTION'}
         </button>
-        <button title="Zoom out" onClick={() => setView(v=>({...v,zoom:Math.max(.3,v.zoom/1.2)}))}>−</button>
+        <button title="Zoom out" onClick={() => setView(v=>({...v,zoom:Math.max(minimumDigitalZoom,v.zoom/1.2)}))}>−</button>
         <span>{Math.round(view.zoom*100)}%</span>
         <button title="Zoom in" onClick={() => setView(v=>({...v,zoom:Math.min(2.5,v.zoom*1.2)}))}>+</button>
         <button title="Fit all circuit components into view" onClick={() =>

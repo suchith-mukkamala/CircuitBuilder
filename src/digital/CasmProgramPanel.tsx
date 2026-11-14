@@ -381,7 +381,7 @@ export function CasmProgramPanel({
             </section>
             <div className="cpu-datapath" aria-label="Live CPU datapath">
               <div className="cpu-datapath-heading">Live values · blocks used by the last instruction are highlighted</div>
-              <div className="cpu-datapath-blocks">{[
+              <div className="cpu-datapath-blocks" key={runtime.cycle}>{[
                 ['PC',cpuState?String(cpuState.pc):'—'],['ROM',fetched===null?'X / Z':hex(fetched)],
                 ['ALU',explanation?.blocks.includes('ALU')?explanation.title.split(' ')[0]:'Idle'],
                 ['ACC',cpuState?String(cpuState.acc):'—'],['RAM','16 × 4'],['OUT',cpuState?String(cpuState.out):'—'],

@@ -207,7 +207,7 @@ export function App() {
             <div><span className="titlebar-indicator" /> WORKBENCH
               <small> / {circuit.name.toUpperCase()}</small>
             </div>
-            <div className="editor-tags"><span>GRID · 12 PX SNAP</span><span>NEON ANALOG</span></div>
+            <div className="editor-tags"><span>GRID · 12 PX SNAP</span><span>ANALOG CIRCUIT</span></div>
           </div>
           <CircuitCanvas onMeasure={setProbeTarget}/>
           <div className="editor-foot">

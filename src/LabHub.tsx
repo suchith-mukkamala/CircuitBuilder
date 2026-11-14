@@ -4,8 +4,11 @@ import { SignalLab } from './digital/SignalLab';
 import { ComputerBuilder } from './ComputerBuilder';
 import { HomeScreen } from './HomeScreen';
 import { useDigitalStore } from './digital/useDigitalStore';
+import {DisplayControls} from './visuals/DisplayControls';
+import {useScenePreferences} from './visuals/preferences';
 import type { DigitalWorkspace } from './digital/useDigitalStore';
 const RoboticsLab=lazy(()=>import('./robotics/RoboticsLab').then(module=>({default:module.RoboticsLab})));
+const PartsExchange=lazy(()=>import('./bridges/PartsExchange').then(module=>({default:module.PartsExchange})));
 
 type Destination = 'home'|'analog'|'signal'|'computer'|'robotics';
 const destinations = [
@@ -17,6 +20,8 @@ const destinations = [
 
 export function LabHub(){
   const [page,setPage]=useState<Destination>('home');
+  const [exchangeOpen,setExchangeOpen]=useState(false);
+  const scene=useScenePreferences();
   useEffect(()=>{
     const sync=()=>{
     const hash=window.location.hash.slice(1);
@@ -44,7 +49,7 @@ export function LabHub(){
     return ()=>window.removeEventListener('hashchange',sync);
   },[page]);
   const choose=(destination:Destination)=>{window.location.hash=destination;};
-  return <div className="lab-hub-shell">
+  return <div className="lab-hub-shell" data-graphics={scene.style} data-motion={scene.motionAllowed?'on':'off'}>
     <a className="skip-link" href="#lab-content" onClick={event=>{
       event.preventDefault();document.getElementById('lab-content')?.focus();
     }}>Skip to workspace</a>
@@ -62,8 +67,10 @@ export function LabHub(){
             <span className="lab-nav-number">{lab.number}</span><strong>{lab.name}</strong>
           </button>)}
         </div>
-        <div className="lab-switcher-status"><span/> LOCAL WORKSPACE</div>
+        <button className="exchange-open" onClick={()=>setExchangeOpen(true)}>↗ Parts Exchange</button>
+        <DisplayControls/>
     </nav>
+    {exchangeOpen&&<Suspense fallback={<p className="lab-loading" role="status">Opening Parts Exchange…</p>}><PartsExchange page={page} onNavigate={choose} onClose={()=>setExchangeOpen(false)}/></Suspense>}
     <div id="lab-content" tabIndex={-1}>
     <Suspense fallback={<p className="lab-loading" role="status">Opening lab…</p>}>
     {page==='home'?

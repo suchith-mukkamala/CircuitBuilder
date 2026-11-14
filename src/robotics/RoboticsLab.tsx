@@ -5,6 +5,9 @@ import {compile,advanceController,initialController,type Program} from './engine
 import {devices,digitalPins,analogPins,defaultInputs,parseProject,wiringErrors,readInput,
   type Inputs,type Pin,type RoboticsProject} from './model';
 import {lessons,starterProject} from './projects';
+import {advanceLogicController,logicWiringErrors,validateLogicController,type LogicController} from '../bridges/logicController';
+import {useExchangeState} from '../bridges/exchangeState';
+import {LogicControllerEditor} from './LogicControllerEditor';
 
 const storageKey='circuitbuilder-robotics-v1';
 function restore(){
@@ -21,6 +24,8 @@ export function RoboticsLab(){
   const [inputs,setInputs]=useState<Inputs>({...defaultInputs});
   const inputsRef=useRef(inputs);inputsRef.current=inputs;
   const [program,setProgram]=useState<Program|null>(null);
+  const [uploadedLogic,setUploadedLogic]=useState<LogicController|null>(null);
+  const pendingController=useExchangeState(s=>s.pendingController);
   const [uploadedSource,setUploadedSource]=useState('');
   const [state,setState]=useState(initialController);
   const [running,setRunning]=useState(false);
@@ -31,21 +36,23 @@ export function RoboticsLab(){
   const editor=useRef<HTMLTextAreaElement>(null);
   const gutter=useRef<HTMLDivElement>(null);
   const build=useMemo(()=>compile(project.source,project.wiring),[project.source,project.wiring]);
-  const conflicts=useMemo(()=>wiringErrors(project.wiring),[project.wiring]);
+  const conflicts=useMemo(()=>[...wiringErrors(project.wiring),...(project.controller==='logic'&&project.logic?logicWiringErrors(project.logic,project.wiring):[])],[project.wiring,project.logic,project.controller]);
   const lesson=lessons.find(item=>item.id===project.lesson);
   const isDraft=program!==null&&project.source!==uploadedSource;
-  const canUpload=build.program!==null&&conflicts.length===0;
+  const logicMode=project.controller==='logic';
+  const hasProgram=!!(program||uploadedLogic);
+  const canUpload=(logicMode?validateLogicController(project.logic):build.program!==null)&&conflicts.length===0;
 
   useEffect(()=>{
     try{localStorage.setItem(storageKey,JSON.stringify(project));setStorageError(false);}
     catch{setStorageError(true);}
   },[project]);
   useEffect(()=>{
-    if(!running||!program)return;
+    if(!running||!hasProgram)return;
     // Deliberate fixed virtual ticks: background tabs slow playback, never skip simulation.
-    const timer=window.setInterval(()=>setState(old=>advanceController(program,old,50,inputsRef.current,project.wiring)),50);
+    const timer=window.setInterval(()=>setState(old=>uploadedLogic?advanceLogicController(uploadedLogic,old,50,inputsRef.current,project.wiring):advanceController(program!,old,50,inputsRef.current,project.wiring)),50);
     return ()=>window.clearInterval(timer);
-  },[running,program,project.wiring]);
+  },[running,program,uploadedLogic,project.wiring]);
   useEffect(()=>{if(state.error)setRunning(false);},[state.error]);
   useEffect(()=>{
     const key=(event:KeyboardEvent)=>{
@@ -58,18 +65,25 @@ export function RoboticsLab(){
   });
 
   const upload=()=>{
+    if(logicMode){
+      if(!canUpload||!project.logic){setNotice('Check the sensor/actuator mapping, thresholds, and pin conflicts before uploading.');return;}
+      const controller=JSON.parse(JSON.stringify(project.logic)) as LogicController;
+      setProgram(null);setUploadedLogic(controller);setUploadedSource('');
+      const next=advanceLogicController(controller,initialController(),0,inputsRef.current,project.wiring);
+      setState(next);setRunning(!next.error);setNotice('Logic module uploaded. Its outputs now drive the bench.');return;
+    }
     if(!canUpload||!build.program){setNotice('Fix the program errors and pin conflicts before uploading.');return;}
     setRunning(false);
-    setProgram(build.program);setUploadedSource(project.source);
+    setProgram(build.program);setUploadedLogic(null);setUploadedSource(project.source);
     setState(advanceController(build.program,initialController(),0,inputsRef.current,project.wiring));
     setRunning(true);setNotice('Program uploaded. The controller repeats it from top to bottom.');
   };
   const reset=()=>{setRunning(false);setState(initialController());setNotice('Controller reset. Your code and connections are kept.');};
-  const stopProgram=()=>{setRunning(false);setProgram(null);setUploadedSource('');setState(initialController());};
+  const stopProgram=()=>{setRunning(false);setProgram(null);setUploadedLogic(null);setUploadedSource('');setState(initialController());};
   const replace=(next:RoboticsProject)=>{stopProgram();setProject(next);setInputs({...defaultInputs});setNotice('Project ready. Upload the program to start.');};
   const confirmReplace=()=>{
     const original=starterProject(project.lesson);
-    return (project.source===original.source&&project.name===original.name&&
+    return (!project.logic&&project.source===original.source&&project.name===original.name&&
       JSON.stringify(project.wiring)===JSON.stringify(original.wiring))||
       window.confirm('Replace this Robotics Lab project? Export JSON first to keep a separate backup.');
   };
@@ -83,7 +97,7 @@ export function RoboticsLab(){
     const file=event.currentTarget.files?.[0];event.currentTarget.value='';
     if(!file)return;
     try{
-      if(file.size>64000)throw new Error('Choose a Robotics Lab JSON file smaller than 64 KB.');
+      if(file.size>1000000)throw new Error('Choose a Robotics Lab JSON file smaller than 1 MB.');
       const next=parseProject(JSON.parse(await file.text()));
       if(confirmReplace())replace(next);
     }catch(error){setNotice(error instanceof Error?error.message:'Could not import this project.');}
@@ -114,8 +128,8 @@ export function RoboticsLab(){
       </div>
       <div className="robotics-run-controls" aria-label="Controller controls">
         <button className="robotics-upload" onClick={upload} disabled={!canUpload} title="Upload and run (Ctrl/Cmd+Enter)">↥ Upload & run</button>
-        <button disabled={!program||!!state.error} aria-pressed={running} onClick={()=>setRunning(old=>!old)}>{running?'Ⅱ Pause':'▶ Resume'}</button>
-        <button disabled={!program||running||!!state.error} onClick={()=>setState(old=>advanceController(program!,old,100,inputsRef.current,project.wiring))}>↯ Step 100 ms</button>
+        <button disabled={!hasProgram||!!state.error} aria-pressed={running} onClick={()=>setRunning(old=>!old)}>{running?'Ⅱ Pause':'▶ Resume'}</button>
+        <button disabled={!hasProgram||running||!!state.error} onClick={()=>setState(old=>uploadedLogic?advanceLogicController(uploadedLogic,old,100,inputsRef.current,project.wiring):advanceController(program!,old,100,inputsRef.current,project.wiring))}>↯ Step 100 ms</button>
         <button onClick={reset} title="Pause and reset the controller outputs and clock">↺ Reset</button>
       </div>
       <div className="robotics-file-controls">
@@ -124,6 +138,9 @@ export function RoboticsLab(){
       </div>
     </header>
     <main className="robotics-content">
+      {pendingController&&<section className="logic-controller-offer" aria-label="Incoming logic module"><div><span>FROM PARTS EXCHANGE</span><h3>{pendingController.name}</h3><p>Attach this module to map the bench sensors and actuators. Your MicroScript source is kept.</p></div>
+        <button onClick={()=>{stopProgram();setProject(old=>({...old,controller:'logic',logic:pendingController,name:pendingController.name,lesson:'custom'}));useExchangeState.getState().offer(null);setNotice('Module attached. Review its mappings, then upload.');}}>Attach module</button>
+        <button onClick={()=>useExchangeState.getState().offer(null)}>Dismiss</button></section>}
       <section className="robotics-project-intro" aria-label="Current project">
         <div><span className="robotics-eyebrow">SENSE → THINK → ACT</span>
           <input aria-label="Robotics project name" value={project.name} maxLength={90}
@@ -135,7 +152,7 @@ export function RoboticsLab(){
         <div className="robotics-bench-column">
           <section className="robotics-card" aria-label="Virtual workbench">
             <div className="robotics-card-heading"><h2>Virtual workbench</h2>
-              <div className={'robotics-runtime-state'+(running?' is-running':'')}><i/>{state.error?'FAULT':running?'RUNNING':program?'PAUSED':'READY'}<span>{timeLabel(state.time)}</span></div></div>
+              <div className={'robotics-runtime-state'+(running?' is-running':'')}><i/>{state.error?'FAULT':running?'RUNNING':hasProgram?'PAUSED':'READY'}<span>{timeLabel(state.time)}</span></div></div>
             <ControllerBench wiring={project.wiring} inputs={inputs} state={state}/>
             <div className="robotics-inputs" aria-label="Simulated inputs">
               <div className="robotics-button-input"><label>BUTTON <small>{project.wiring.button??'UNCONNECTED'}</small></label>
@@ -155,7 +172,7 @@ export function RoboticsLab(){
             <div className="robotics-card-heading"><div className="robotics-monitor-tabs" role="tablist" aria-label="Controller monitor views">
               <button role="tab" aria-selected={monitor==='pins'} onClick={()=>setMonitor('pins')}>Live pins</button>
               <button role="tab" aria-selected={monitor==='events'} onClick={()=>setMonitor('events')}>Event log <span>{state.trace.length}</span></button>
-            </div><span className="robotics-monitor-hint">{state.steps} instructions</span></div>
+            </div><span className="robotics-monitor-hint">{state.steps} {logicMode?'evaluations':'instructions'}</span></div>
             {monitor==='pins'?<div role="tabpanel" aria-label="Live pin values" className="robotics-pin-monitor">
               {[...digitalPins,...analogPins].map(pin=><div key={pin} className={readInput(pin,inputs,project.wiring,state.pins)?'pin-high':''}>
                 <span>{pin}</span><strong>{project.wiring.servo===pin?state.servos[pin as typeof digitalPins[number]]+'°':
@@ -183,6 +200,14 @@ export function RoboticsLab(){
           </details>
         </div>
         <div className="robotics-code-column">
+          <label className="robotics-controller-choice">Controller<select aria-label="Controller type" value={logicMode?'logic':'micro'} onChange={event=>{stopProgram();setProject(old=>({...old,controller:event.target.value as 'micro'|'logic'}));}}>
+            <option value="micro">MicroScript program</option><option value="logic" disabled={!project.logic}>Shared logic module</option></select></label>
+          {logicMode&&project.logic?<>
+            <LogicControllerEditor controller={project.logic} onChange={logic=>{stopProgram();setProject(old=>({...old,logic}));setNotice('Mapping changed. Upload the module again to apply it.');}}
+              onDetach={()=>{stopProgram();setProject(old=>({...old,controller:'micro',logic:undefined}));setNotice('Module detached. Your MicroScript source is ready.');}}/>
+            {!canUpload&&<p className="robotics-runtime-error" role="alert">Check the thresholds, pin conflicts, and output mappings. Each actuator needs its own output.</p>}
+            {state.error&&<p className="robotics-runtime-error" role="alert">{state.error}</p>}
+          </>:<>
           <section className="robotics-card robotics-code-card" aria-label="Controller program">
             <div className="robotics-card-heading"><h2>Controller program</h2><span className="robotics-language">MicroScript</span></div>
             <div className="robotics-code-toolbar"><span>main.micro</span>
@@ -224,6 +249,7 @@ export function RoboticsLab(){
             </dl>
             <p><code>#</code> starts a comment. One instruction per line. MicroScript is a small teaching language; Arduino/C++ code needs to be rewritten using these commands.</p>
           </details>
+          </>}
         </div>
       </div>
       <div className="robotics-status" role="status" aria-label="Robotics project status"><span>{notice||'Choose a starter project and upload its program.'}</span>

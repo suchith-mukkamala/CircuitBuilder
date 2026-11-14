@@ -64,8 +64,20 @@ Bring the sensor below 35 cm: the servo moves to 90° and the indicator turns on
 - A pure interpreter advances in 50 ms virtual ticks during playback. Paused stepping advances 100 ms. Wait boundaries execute at their exact virtual time, independently of how ticks are grouped.
 - Background tab throttling slows playback rather than skipping time. Leaving the lab clears its timer.
 - Runtime execution is bounded. A path that loops without waiting stops with an actionable fault. Event history retains the latest 80 output changes.
-- The bench models ideal logical connections with power and ground provided. It does not calculate electrical currents, PWM pulses, motor torque, or mechanical collisions. The servo changes its commanded angle immediately.
-- The controller is currently independent of the Analog and Signal engines. Existing schematics are not automatically imported or co-simulated.
+- The bench models ideal logical connections with power and ground provided. It does not calculate electrical currents, PWM pulses, motor torque, or mechanical collisions. The commanded servo angle updates immediately; its visual movement is a presentation effect.
+- The MicroScript interpreter is separate from the Analog and Signal engines. A shared logic controller can evaluate a Signals circuit against the bench inputs using the adapter described below.
+
+## Drive the bench with a Signals module
+
+In **Parts Exchange → Connected projects**, open the enable-gate project in Signals. Publish a module, choose **Use in Robotics**, and click **Attach module** on the bench. The incoming proposal does not replace anything until attached; attaching keeps the current MicroScript source and pin map.
+
+Map each input switch to the button, distance-below-threshold, or dial-at-or-above-threshold signal. Map outputs to separate LEDs or the servo (LOW = 0°, HIGH = 90°); leave unused outputs unmapped. Each driven output needs its own pin. Upload the module and experiment with the real bench inputs. Pause and step use the same virtual-time controls as MicroScript.
+
+The adapter supports combinational circuits with up to 200 expanded primitives. Clocked components are rejected; unknown or floating mapped outputs fault visibly. Unconnected sensors read LOW. Editing a mapping, threshold, or pin stops and resets the uploaded controller until another upload. JSON exports include the circuit snapshot and mappings, and reloads require another upload.
+
+Use **Edit circuit in Signals** to open an independent working copy. Publish and attach a revision when ready. Editing a copy never silently changes the running controller. Switch **Controller** back to MicroScript or detach the module to use the retained source.
+
+See [Parts Exchange](PARTS_EXCHANGE.md) for the complete workflow.
 
 The next substantial milestone is a moving robot arena driven by these controller inputs and outputs. Hardware emulation, full Arduino support, and physical sensor models are separate future work.
 

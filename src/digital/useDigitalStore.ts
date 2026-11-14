@@ -14,6 +14,8 @@ import {cpuCoreDemo,programmableCpuDemo} from './computerSamples';
 import {assembleCasm,DEFAULT_CASM_SOURCE} from './casm';
 import {digitalBusPath,digitalWirePath,endpointPoint} from './network';
 import { applyInputVector, captureBlock, placeBlock, reviseBlockDefinition, updatedBlockCatalog } from './blocks';
+import {forkModule,moduleWorkingCopy,nextModulePosition,packageCurrentCircuit,packageModule,parseModulePackage,thresholdSample} from '../bridges/modulePackages';
+import {computerWithModuleAlu} from '../bridges/aluWorkshop';
 
 type Clip = {components:DigitalComponent[];wires:DigitalWire[];buses?:DigitalBus[]};
 export type DigitalWorkspace = 'signal' | 'computer';
@@ -63,7 +65,7 @@ export type DigitalStore = {
   selectedIds: string[];
   pending: DigitalEndpoint | null;
   pendingBus: BusGroup | null;
-  focusTarget: {id:string;nonce:number}|null;
+  focusTarget: {id:string;nonce:number;fit?:boolean}|null;
   focusIssue: (selection:{type:'component'|'wire'|'bus';id:string})=>void;
   past: DigitalDocument[];
   future: DigitalDocument[];
@@ -92,6 +94,12 @@ export type DigitalStore = {
   probes: SignalProbe[];
   trace: SignalSample[];
   captureAsBlock: (name: string) => void;
+  publishModule:(name:string)=>string;
+  importModule:(value:unknown)=>string;
+  useModuleInLab:(id:string,destination:DigitalWorkspace)=>void;
+  openModuleCopy:(id:string)=>void;
+  buildModuleComputer:(id:string)=>void;
+  useVoltageSample:(voltage:number,threshold:number,label:string)=>void;
   addSavedBlock: (id: string, at: DigitalPoint) => void;
   applyVector: (vector: string) => void;
   addProbe: (kind: SignalProbe['kind'], key: string, label: string) => void;
@@ -369,6 +377,51 @@ export const useDigitalStore = create<DigitalStore>()(persist((set, get) => ({
       selectedIds: [condensed.components.find(c=>c.kind==='block')!.id], pending:null,
       probes: [], message: 'Captured ' + definition.name + ' as a reusable circuit block.',
     }));
+  },
+  publishModule:name=>{
+    const state=get();if(state.editStack.length)throw new Error('Save or Cancel the open block before publishing.');
+    const bundle=packageCurrentCircuit(state.document,name);
+    if(state.blockLibrary.length+bundle.definitions.length>80)throw new Error('The shared library holds up to 80 module definitions. Export a package before clearing older modules.');
+    set({blockLibrary:[...state.blockLibrary,...bundle.definitions],message:'Published '+name+' to Parts Exchange. The working circuit is unchanged.'});
+    return bundle.rootId;
+  },
+  importModule:value=>{
+    const state=get();if(state.editStack.length)throw new Error('Finish the block edit before importing.');
+    const bundle=forkModule(parseModulePackage(value));
+    if(state.blockLibrary.length+bundle.definitions.length>80)throw new Error('The shared library is full (80 definitions).');
+    set({blockLibrary:[...state.blockLibrary,...bundle.definitions],message:'Module package imported as an independent copy.'});
+    return bundle.rootId;
+  },
+  useModuleInLab:(id,destination)=>{
+    const state=get();if(state.editStack.length)throw new Error('Finish the block edit before changing labs.');
+    const bundle=forkModule(packageModule(state.blockLibrary,id));
+    const target=state.activeWorkspace===destination?state.document:destination==='signal'?state.signalDocument:state.computerDocument;
+    const placed=placeBlock(target,bundle.definitions,bundle.rootId,nextModulePosition(target));
+    simulateLogic(placed); // Validate the entire expanded circuit before switching or changing either project.
+    get().switchWorkspace(destination);
+    const instance=placed.components.at(-1)!;
+    set(current=>patch(current,placed,{selection:{type:'component',id:instance.id},selectedIds:[instance.id],
+      focusTarget:{id:instance.id,nonce:(current.focusTarget?.nonce??0)+1},message:'Module copy added from Parts Exchange. Connect its named pins.'}));
+  },
+  openModuleCopy:id=>{
+    const state=get();if(state.editStack.length)throw new Error('Finish the block edit first.');
+    const working=moduleWorkingCopy(packageModule(state.blockLibrary,id));simulateLogic(working);
+    get().switchWorkspace('signal');get().load(working);
+  },
+  buildModuleComputer:id=>{
+    const state=get();if(state.editStack.length)throw new Error('Finish the block edit first.');
+    const computer=computerWithModuleAlu(packageModule(state.blockLibrary,id));simulateLogic(computer);
+    get().switchWorkspace('computer');get().load(computer);
+  },
+  useVoltageSample:(voltage,threshold,label)=>{
+    const bit=thresholdSample(voltage,threshold),state=get();
+    if(state.editStack.length)throw new Error('Finish the open block edit first.');
+    const target=state.activeWorkspace==='signal'?state.document:state.signalDocument;
+    const part:DigitalComponent={id:digitalId(),kind:bit?'high':'low',name:(label+' · sample').slice(0,80),rotation:0,...nextModulePosition(target)};
+    const next={...target,components:[...target.components,part]};simulateLogic(next);
+    get().switchWorkspace('signal');
+    set(current=>patch(current,next,{selection:{type:'component',id:part.id},selectedIds:[part.id],
+      message:'Analog sample '+voltage+' V at threshold '+threshold+' V → '+(bit?'HIGH':'LOW')+'. This is a fixed snapshot.'}));
   },
   addSavedBlock: (id, at) => {
     const state = get();
@@ -722,6 +775,7 @@ export const useDigitalStore = create<DigitalStore>()(persist((set, get) => ({
     simulateLogic(input);
     set(state => patch(state, input, {
       selection: null, selectedIds: [], pending: null, probes:[],casmDrafts:{},
+      focusTarget:{id:'',fit:true,nonce:(state.focusTarget?.nonce??0)+1},
       blockLibrary: [...new Map([...state.blockLibrary, ...(input.blocks ?? [])]
         .map(d => [d.id, d])).values()],
       message: 'Signal schematic loaded.',

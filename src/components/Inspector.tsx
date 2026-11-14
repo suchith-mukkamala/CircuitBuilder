@@ -141,7 +141,7 @@ export function Inspector() {
         <div className="inspector-empty">
           <span className="empty-glyph">⌖</span>
           <strong>NO SIGNAL SELECTED</strong>
-          <p>Click a neon component or wire to reveal its properties.</p>
+          <p>Click a component or wire to reveal its properties.</p>
         </div>
       )}
     </div>

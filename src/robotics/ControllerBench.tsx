@@ -36,8 +36,10 @@ export function ControllerBench({wiring,inputs,state}:{wiring:Wiring;inputs:Inpu
     {endpoints.map(endpoint=>{
       const pin=wiring[endpoint.id];if(!pin)return null;
       const target=pinPosition[pin];
-      return <path key={endpoint.id} d={`M${endpoint.x} ${endpoint.y} H${endpoint.x<270?218:548} V${target.y} H${target.x}`}
-        fill="none" stroke={endpoint.color} opacity=".5" strokeWidth="2" strokeLinejoin="round"/>;
+      const path=`M${endpoint.x} ${endpoint.y} H${endpoint.x<270?218:548} V${target.y} H${target.x}`;
+      const value=endpoint.id==='button'?inputs.button:endpoint.id==='distance'?inputs.distance:endpoint.id==='knob'?inputs.knob:endpoint.id==='servo'?servo:state.pins[pin as typeof digitalPins[number]];
+      return <g key={endpoint.id}><path d={path} fill="none" stroke={endpoint.color} opacity=".5" strokeWidth="2" strokeLinejoin="round"/>
+        <path key={pin+':'+value} className="bench-signal-change" d={path} fill="none" stroke={endpoint.color} strokeWidth="4" strokeLinejoin="round"/></g>;
     })}
     <rect x="274" y="87" width="220" height="270" rx="12" fill="#000" opacity=".35"/>
     <rect x="270" y="81" width="220" height="270" rx="12" fill="#153d3b" stroke="#427d72" strokeWidth="2"/>
@@ -79,14 +81,14 @@ export function ControllerBench({wiring,inputs,state}:{wiring:Wiring;inputs:Inpu
       return <g key={id}>
         <rect x="600" y={y-25} width="112" height="50" rx="5" fill="#1a2a40" stroke="#354e68"/>
         {on&&<circle cx="627" cy={y} r="16" fill={color} opacity=".5" filter="url(#led-glow)"/>}
-        <circle cx="627" cy={y} r="11" fill={on?color:'#202d40'} stroke={color} strokeWidth="1.5"/>
+        <circle className="bench-led-lens" cx="627" cy={y} r="11" fill={on?color:'#202d40'} stroke={color} strokeWidth="1.5"/>
         <text x="648" y={y-3} fill="#b9cce1" fontFamily="monospace" fontSize="9">{id.toUpperCase()}</text>
         <text x="648" y={y+12} fill={on?color:'#7791aa'} fontFamily="monospace" fontSize="8">{on?'ON':'OFF'}</text>
       </g>;
     })}
     <g transform="translate(650 353)">
       <rect x="-50" y="-26" width="100" height="58" rx="5" fill="#233e64" stroke="#719dd2"/>
-      <g transform={`rotate(${-servo})`}><rect x="-7" y="-7" width="49" height="14" rx="7" fill="#d2dded"/><circle r="4" fill="#637eaa"/></g>
+      <g className="servo-horn" style={{transform:`rotate(${-servo}deg)`}}><rect x="-7" y="-7" width="49" height="14" rx="7" fill="#d2dded"/><circle r="4" fill="#637eaa"/></g>
       <text y="55" textAnchor="middle" fill="#9bc0ff" fontFamily="monospace" fontSize="10">SERVO / {servo}°</text>
     </g>
     <text x="380" y="408" textAnchor="middle" fill="#7896af" fontFamily="monospace" fontSize="9">IDEAL SIGNAL CONNECTIONS · POWER & GROUND PROVIDED</text>

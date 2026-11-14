@@ -89,7 +89,7 @@ export function SignalInspector({ result }: { result: ReturnType<typeof simulate
           <button className={part.bit===1?'high':'low'} onClick={()=>toggle(part.id)}>
             {part.bit===1?'● HIGH / 1':'○ LOW / 0'}
           </button>
-          <small>Click this button or the pixel switch on canvas.</small>
+          <small>Click this button or the input switch on canvas.</small>
         </div>}
         {part.kind==='block'&&<div className="signal-block-inspect">
           <strong>▣ REUSABLE MODULE</strong>
@@ -259,7 +259,7 @@ export function SignalLab() {
     setTools:setPanelOpen,focused,toggleFocus}=useWorkbenchLayout('signal');
   const [tab,setTab] = useState<'inspect'|'truth'|'scope'|'vector'|'computer'|'check'>('inspect');
   useEffect(()=>{
-    if(focusTarget){setPanelOpen(true);setTab('inspect');}
+    if(focusTarget&&!focusTarget.fit){setPanelOpen(true);setTab('inspect');}
   },[focusTarget?.nonce]);
   const result = useMemo(()=>simulateLogic(doc,runtime),[doc,runtime]);
   useEffect(()=>{

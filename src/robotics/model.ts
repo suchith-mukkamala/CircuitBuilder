@@ -14,7 +14,9 @@ export const devices=[
 export type Device=typeof devices[number]['id'];
 export type Wiring=Record<Device,Pin|null>;
 export type Inputs={button:number;distance:number;knob:number};
-export type RoboticsProject={version:1;lab:'robotics';name:string;lesson:string;source:string;wiring:Wiring};
+import {validateLogicController,type LogicController} from '../bridges/logicController';
+export type RoboticsProject={version:1;lab:'robotics';name:string;lesson:string;source:string;wiring:Wiring;
+  controller?:'micro'|'logic';logic?:LogicController};
 export const defaultWiring:Wiring={button:'D0',distance:'A0',knob:'A1',red:'D2',amber:'D3',green:'D4',servo:'D5'};
 export const defaultInputs:Inputs={button:0,distance:150,knob:512};
 
@@ -44,13 +46,17 @@ export function parseProject(value:unknown):RoboticsProject{
     typeof p.source!=='string'||p.source.length>16000||typeof p.lesson!=='string'||p.lesson.length>80||
     !p.wiring||typeof p.wiring!=='object')throw new Error('Invalid Robotics Lab project or unsupported version.');
   const wiring={} as Wiring;
+  if(p.controller!==undefined&&!['micro','logic'].includes(p.controller))throw new Error('Unknown controller type.');
+  if(p.logic!==undefined&&!validateLogicController(p.logic))throw new Error('Invalid or unsupported logic controller.');
+  if(p.controller==='logic'&&!p.logic)throw new Error('The logic controller is missing.');
   for(const device of devices){
     const pin=p.wiring[device.id];
     const allowed:readonly string[]=device.kind==='analog'?analogPins:digitalPins;
     if(pin!==null&&(typeof pin!=='string'||!allowed.includes(pin)))throw new Error('Invalid connection for '+device.name+'.');
     wiring[device.id]=pin;
   }
-  return {version:1,lab:'robotics',name:p.name.trim()?p.name:'Untitled robotics project',lesson:p.lesson,source:p.source,wiring};
+  return {version:1,lab:'robotics',name:p.name.trim()?p.name:'Untitled robotics project',lesson:p.lesson,source:p.source,wiring,
+    ...(p.controller?{controller:p.controller}:{}),...(p.logic?{logic:p.logic}:{})};
 }
 
 /** Unconnected inputs read zero. Digital output pins are also readable. */
