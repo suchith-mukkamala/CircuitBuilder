@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
-  base: '/',
+  base: './',
   test: {
     include: ['src/**/*.test.{ts,tsx}'],
     // Keep tests predictable across shared CI runners.
