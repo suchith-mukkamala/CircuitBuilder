@@ -1,10 +1,21 @@
-# CircuitBuilder v0.20.0 — Pixel Electronics Playground
+# CircuitBuilder v0.21.0 — The Electronics Playground
 
-Build, simulate and experiment with analog circuits, digital signals, and programmable computers in three interconnected labs.
+Build, simulate and experiment with analog circuits, digital signals, programmable computers, and microcontroller projects in four laboratories.
 
 - **Lab 01 — Analog:** interactive circuit editing and DC/transient simulation.
 - **Lab 02 — Signals:** digital logic, reusable blocks and debugging.
 - **Lab 03 — Computer:** hardware workbench, programmable CPU and CASM Code Studio.
+- **Lab 04 — Robotics:** a programmable virtual controller, live sensor inputs, LEDs, and a servo. Start with a traffic light, automatic door, or obstacle detector.
+
+## What's new
+
+- Shared navigation, direct lab links (`#analog`, `#signal`, `#computer`, `#robotics`), quick-start guidance, and a responsive workbench layout.
+- More readable component lists and controls, per-lab panel preferences, and Focus mode. Narrow screens start with the canvas; Parts and Panel reopen the tools.
+- Signal Lab instruments live in a single Tools menu. Computer Builder retains separate hardware and code workspaces with an editable project name.
+- Robotics Lab includes a bounded **MicroScript** interpreter, editable pin connections, exact virtual waits, pause/step/reset, pin monitoring, and an event log. Draft code is separate from the uploaded program; wiring changes require another upload.
+- Robotics drafts save locally and round-trip through validated JSON files. Existing analog/digital project formats are unchanged.
+
+See [Robotics Lab and MicroScript](docs/ROBOTICS_LAB.md) for commands, units, examples, and the scope of this first milestone.
 
 The former Lab 04 fantasy civilization simulator is now its own project: **[WorldForge](https://github.com/suchith-mukkamala/WorldForge)**. Its history remains in Git, but the simulation and all related source files have moved out of this repository.
 
@@ -13,11 +24,16 @@ The former Lab 04 fantasy civilization simulator is now its own project: **[Worl
 Requires Node.js 22 or newer.
 
 ```bash
-npm install
+npm ci
 npm run dev
 npm run build
 npm test
+# Browser workflow checks (desktop and phone):
+npx playwright install chromium
+npm run test:browser
 ```
+
+If using an existing Chromium installation, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to its executable path. The browser suite starts Vite automatically when needed.
 
 ## Previous electronics releases
 

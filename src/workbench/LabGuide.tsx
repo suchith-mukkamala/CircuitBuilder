@@ -1,7 +1,8 @@
+import type {ReactNode} from 'react';
 type Step={title:string;detail:string};
 
 export function LabGuide({number,title,description,steps,children}:{
-  number:string;title:string;description:string;steps:Step[];children?:React.ReactNode;
+  number:string;title:string;description:string;steps:Step[];children?:ReactNode;
 }){
   return <section className="lab-guide" aria-label={title+' introduction'}>
     <div className="lab-guide-heading">

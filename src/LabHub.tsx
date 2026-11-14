@@ -1,16 +1,18 @@
-import { useEffect,useState } from 'react';
+import { lazy,Suspense,useEffect,useState } from 'react';
 import { App as AnalogLab } from './App';
 import { SignalLab } from './digital/SignalLab';
 import { ComputerBuilder } from './ComputerBuilder';
 import { HomeScreen } from './HomeScreen';
 import { useDigitalStore } from './digital/useDigitalStore';
 import type { DigitalWorkspace } from './digital/useDigitalStore';
+const RoboticsLab=lazy(()=>import('./robotics/RoboticsLab').then(module=>({default:module.RoboticsLab})));
 
-type Destination = 'home'|'analog'|'signal'|'computer';
+type Destination = 'home'|'analog'|'signal'|'computer'|'robotics';
 const destinations = [
   {id:'analog',number:'01',name:'Analog',symbol:'〰'},
   {id:'signal',number:'02',name:'Signals',symbol:'⊕'},
   {id:'computer',number:'03',name:'Computer',symbol:'▣'},
+  {id:'robotics',number:'04',name:'Robotics',symbol:'⌘'},
 ] as const;
 
 export function LabHub(){
@@ -65,9 +67,10 @@ export function LabHub(){
     <div id="lab-content" tabIndex={-1}>
     {page==='home'?
       <HomeScreen onAnalog={()=>choose('analog')}
-        onSignal={()=>choose('signal')} onComputer={()=>choose('computer')}/>:
+        onSignal={()=>choose('signal')} onComputer={()=>choose('computer')} onRobotics={()=>choose('robotics')}/>:
       page==='analog'?<AnalogLab/>:
-      page==='signal'?<SignalLab/>:<ComputerBuilder/>}
+      page==='signal'?<SignalLab/>:page==='computer'?<ComputerBuilder/>:
+      <Suspense fallback={<p className="lab-loading" role="status">Opening Robotics Lab…</p>}><RoboticsLab/></Suspense>}
     </div>
   </div>;
 }

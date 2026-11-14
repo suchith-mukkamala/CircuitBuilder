@@ -5,6 +5,7 @@ export default defineConfig({
   plugins: [react()],
   base: '/',
   test: {
+    include: ['src/**/*.test.{ts,tsx}'],
     // Keep tests predictable across shared CI runners.
     testTimeout: 45000,
     maxWorkers: 2,

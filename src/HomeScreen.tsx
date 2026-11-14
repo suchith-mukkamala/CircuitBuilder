@@ -1,5 +1,5 @@
 type LabChoice = {
-  id:'analog'|'signal'|'computer';
+  id:'analog'|'signal'|'computer'|'robotics';
   number:string;
   name:string;
   description:string;
@@ -87,9 +87,9 @@ function CpuCircuitArt() {
 }
 
 export function HomeScreen({
-  onAnalog,onSignal,onComputer,
+  onAnalog,onSignal,onComputer,onRobotics,
 }:{
-  onAnalog:()=>void;onSignal:()=>void;onComputer:()=>void;
+  onAnalog:()=>void;onSignal:()=>void;onComputer:()=>void;onRobotics:()=>void;
 }) {
   const labs:LabChoice[]=[
     {id:'analog',number:'01',name:'ANALOG LAB',
@@ -101,6 +101,9 @@ export function HomeScreen({
     {id:'computer',number:'03',name:'COMPUTER BUILDER',
       description:'Memory & processors',detail:'Wire a processor, write assembly, and follow every instruction through your machine.',
       topics:'CPU design · Code Studio',symbol:'▣',action:onComputer},
+    {id:'robotics',number:'04',name:'ROBOTICS LAB',
+      description:'Sensors & actuators',detail:'Program a controller, test your inputs, and bring LEDs and a servo to life.',
+      topics:'Microcontrollers · MicroScript',symbol:'⌘',action:onRobotics},
   ];
   return <main className="landing-home">
     <div className="landing-content">

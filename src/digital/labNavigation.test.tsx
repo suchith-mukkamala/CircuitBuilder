@@ -22,7 +22,7 @@ beforeEach(()=>{
   useDigitalStore.getState().resetClock();
 });
 
-describe('three independent lab navigation workspaces',()=>{
+describe('independent lab navigation workspaces',()=>{
   it('starts Computer Builder with a functioning starter, not an empty editor',()=>{
     expect(useDigitalStore.getState().switchWorkspace('computer')).toBe(true);
     const state=useDigitalStore.getState();
@@ -119,13 +119,14 @@ describe('first-time user viewport and navigation',()=>{
     expect(fitDigitalCircuit({version:1,lab:'signal',name:'New',components:[],wires:[]},
       {width:0,height:0})).toEqual({x:80,y:70,zoom:1});
   });
-  it('home screen has exactly three electronics destinations and the original CPU schematic',()=>{
+  it('home screen has four electronics destinations and the original CPU schematic',()=>{
     const html=renderToStaticMarkup(<HomeScreen onAnalog={()=>{}}
-      onSignal={()=>{}} onComputer={()=>{}}/>);
-    expect((html.match(/<button\b/g)||[])).toHaveLength(3);
+      onSignal={()=>{}} onComputer={()=>{}} onRobotics={()=>{}}/>);
+    expect((html.match(/<button\b/g)||[])).toHaveLength(4);
     expect(html).toContain('ANALOG LAB');
     expect(html).toContain('SIGNAL LAB');
     expect(html).toContain('COMPUTER BUILDER');
+    expect(html).toContain('ROBOTICS LAB');
     expect(html).not.toContain('EVOLUTION LAB');
     expect(html).toContain('PROGRAM');
     expect(html).toContain('ALU');

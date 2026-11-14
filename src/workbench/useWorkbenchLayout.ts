@@ -20,7 +20,7 @@ export function useWorkbenchLayout(lab:string,defaults={parts:true,tools:true}){
     tools:typeof next==='function'?next(old.tools):next}));
   const focused=!layout.parts&&!layout.tools;
   const toggleFocus=()=>{
-    if(focused)setLayout(previous.current.parts||previous.current.tools?previous.current:defaults);
+    if(focused)setLayout(previous.current.parts||previous.current.tools?previous.current:{parts:true,tools:true});
     else{previous.current=layout;setLayout({parts:false,tools:false});}
   };
   return {partsOpen:layout.parts,toolsOpen:layout.tools,setParts,setTools,focused,toggleFocus};
