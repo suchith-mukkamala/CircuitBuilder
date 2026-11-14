@@ -12,11 +12,22 @@ import {cpuCoreDemo,counterDemo,flipFlopDemo,programmableCpuDemo} from './digita
 import {simulateLogic} from './digital/engine';
 import type {DigitalDocument} from './digital/types';
 import {useDigitalStore} from './digital/useDigitalStore';
+import {LabGuide} from './workbench/LabGuide';
+import {useWorkbenchLayout} from './workbench/useWorkbenchLayout';
+import {ProjectShelf} from './workbench/ProjectShelf';
+import {GuidedProject} from './workbench/GuidedProject';
+import {PanelResizer,usePanelWidths} from './workbench/PanelResizer';
+import {readCpuState} from './digital/cpuCore';
+import {assembleCasm,DEFAULT_CASM_SOURCE} from './digital/casm';
+import {SaveIndicator} from './workbench/SaveIndicator';
 
 type ComputerView='hardware'|'code';
 type HardwareTool='run'|'inspect'|'scope'|'inputs'|'check';
 
 export function ComputerBuilder(){
+  const panelWidths=usePanelWidths('computer');
+  const [lessonStarted,setLessonStarted]=useState(false);
+  const [lessonSteps,setLessonSteps]=useState<number[]>([]);
   const doc=useDigitalStore(s=>s.document);
   const runtime=useDigitalStore(s=>s.runtime);
   const drafts=useDigitalStore(s=>s.casmDrafts);
@@ -37,13 +48,23 @@ export function ComputerBuilder(){
   const cancelBlock=useDigitalStore(s=>s.cancelBlockEdit);
   const focus=useDigitalStore(s=>s.focusIssue);
   const [view,setView]=useState<ComputerView>('hardware');
-  const [paletteOpen,setPaletteOpen]=useState(false);
-  const [panelOpen,setPanelOpen]=useState(false);
+  const {partsOpen:paletteOpen,toolsOpen:panelOpen,setParts:setPaletteOpen,
+    setTools:setPanelOpen,focused,toggleFocus}=useWorkbenchLayout('computer',{parts:false,tools:false});
   const [tab,setTab]=useState<HardwareTool>('inspect');
   const [saveError,setSaveError]=useState('');
   const fileRef=useRef<HTMLInputElement>(null);
   const actionsRef=useRef<HTMLDetailsElement>(null);
   const result=useMemo(()=>simulateLogic(doc,runtime),[doc,runtime]);
+  useEffect(()=>{
+    if(!lessonStarted)return;
+    const cpu=doc.components.find(c=>c.kind==='cpu4');
+    const rom=doc.components.find(c=>c.kind==='rom16x8');
+    const expected=assembleCasm(DEFAULT_CASM_SOURCE).bytes;
+    if(!cpu||!rom||!rom.program?.every((byte,i)=>byte===expected[i]))return;
+    const state=readCpuState(runtime,'top/'+cpu.id);
+    const reached=state.halt?4:state.out===8?3:state.acc===8?2:state.acc===3?1:0;
+    if(reached)setLessonSteps(old=>old.includes(reached)?old:[...old,reached]);
+  },[runtime,doc,lessonStarted]);
   const issues=useMemo(()=>diagnoseDigitalCircuit(doc),[doc]);
   const inBlock=editStack.length>0;
   const hasDraft=doc.components.some(c=>c.kind==='rom16x8'&&
@@ -114,7 +135,7 @@ export function ComputerBuilder(){
     if(view!=='hardware')return;
     const shortcut=(event:KeyboardEvent)=>{
       const target=event.target as HTMLElement|null;
-      if(target?.closest('input,textarea,select,button,a,[contenteditable="true"]'))return;
+      if(target?.closest('input,textarea,select,button,a,summary,[contenteditable="true"]'))return;
       const store=useDigitalStore.getState();
       const key=event.key.toLowerCase();
       if(event.metaKey||event.ctrlKey){
@@ -147,12 +168,28 @@ export function ComputerBuilder(){
     }
   },[selection?.type,selection?.id,view]);
   useEffect(()=>{
-    if(view==='hardware'&&focusTarget){
+    if(view==='hardware'&&focusTarget&&!focusTarget.fit){
       setPanelOpen(true);setTab('inspect');
     }
   },[focusTarget?.nonce,view]);
 
   return <div className={'signal-lab-shell computer-builder-shell computer-v12-shell view-'+view}>
+    <LabGuide number="03" title="Build a computer" description="Connect the hardware. Write the program. Watch it execute."
+      steps={[
+        {title:'Explore the hardware',detail:'The starter datapath connects a counter, ROM, ALU, and register. Open Parts to extend it.'},
+        {title:'Program a CPU',detail:'Load the programmable CASM CPU from Project actions, then open Code Studio.'},
+        {title:'Inject and debug',detail:'Assemble your draft into the ROM. Step instructions and inspect registers, flags, and RAM.'},
+      ]}/>
+    <GuidedProject title="Follow your first program" description="Execute 3 + 5 on the real programmable circuit. Follow each instruction from ROM through the CPU to the output."
+      onStart={()=>{if(inBlock||!confirmReplace())return false;
+        load(programmableCpuDemo());reset();setView('code');setLessonStarted(true);setLessonSteps([]);return true;}}
+      steps={[
+        {title:'Load 3',detail:'Step one instruction. LDI 3 places 3 in the accumulator (ACC). The program counter advances.',complete:lessonSteps.includes(1)},
+        {title:'Add 5',detail:'Step again. ADD 5 changes ACC from 3 to 8. Check the explanation and highlighted datapath in Code Studio.',complete:lessonSteps.includes(2)},
+        {title:'Write the output',detail:'OUT copies ACC to the output register. The output bits now read 1000.',complete:lessonSteps.includes(3)},
+        {title:'Halt and experiment',detail:'HLT stops execution. Reset to try again, or edit the source and inject your own program.',complete:lessonSteps.includes(4),
+          action:()=>{setView('code');clock();},actionLabel:'Step instruction'},
+      ]}/>
     <header className="signal-workbench-header computer-builder-header">
       <div className="signal-lab-brand">
         <span className="signal-lab-glyph">▣</span>
@@ -184,7 +221,15 @@ export function ComputerBuilder(){
           onClick={()=>setPanelOpen(v=>!v)} title="Show or hide circuit inspector/tools">
           ◈ <span>TOOLS</span>
         </button>
+        <button aria-pressed={focused} onClick={toggleFocus} title="Hide or restore the side panels">⊡ <span>FOCUS</span></button>
       </nav>}
+      <ProjectShelf lab="computer" disabled={inBlock} getSnapshot={()=>{
+        const state=useDigitalStore.getState();return {document:state.document,drafts:state.casmDrafts};
+      }} onLoad={snapshot=>{
+        load(snapshot.document);for(const [id,source] of Object.entries(snapshot.drafts??{}))useDigitalStore.getState().setCasmDraft(id,source);
+        setView('hardware');
+      }}/>
+      <SaveIndicator storageKey="circuitbuilder-signal-v01" value={{document:doc,casmDrafts:drafts}} revision={message} draft={inBlock}/>
       <details className="signal-file-menu computer-project-menu" ref={actionsRef}>
         <summary title="Project actions and example circuits" aria-label="Project actions">⋮</summary>
         <div>
@@ -230,15 +275,18 @@ export function ComputerBuilder(){
       </section>:
       <section role="tabpanel" aria-label="Hardware design page" className="computer-hardware-page">
         <div className="computer-contextbar">
-          <span><b>HARDWARE</b> / {doc.name}</span>
+          <label className="computer-project-name"><b>PROJECT</b>
+            <input aria-label="Computer circuit name" value={doc.name} maxLength={90}
+              onChange={event=>rename(event.target.value)}/></label>
           <span className="computer-context-tip">Click a chip to inspect · Right-click for wiring ·
             use ⊡ FIT to center the circuit</span>
           {hasDraft&&<button title="Saved CASM draft has not been injected"
             onClick={()=>switchView('code')}>● CODE DRAFT NOT INJECTED</button>}
-          <span className="computer-local-save">● SAVED LOCALLY</span>
         </div>
         <div className={'signal-workspace computer-workspace'+
-          (!paletteOpen?' signal-no-palette':'')+(!panelOpen?' signal-no-panel':'')}>
+          (!paletteOpen?' signal-no-palette':'')+(!panelOpen?' signal-no-panel':'')} style={panelWidths.style}>
+          {paletteOpen&&<PanelResizer side="parts" value={panelWidths.widths.parts} onChange={value=>panelWidths.resize('parts',value)}/>}
+          {panelOpen&&<PanelResizer side="tools" value={panelWidths.widths.tools} onChange={value=>panelWidths.resize('tools',value)}/>}
           {paletteOpen&&<SignalPalette focus="computer"/>}
           <main className="signal-editor computer-editor">
             <div className="signal-editor-heading">

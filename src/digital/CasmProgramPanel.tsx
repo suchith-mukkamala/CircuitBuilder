@@ -6,6 +6,8 @@ import {
   disassembleCasm,EMPTY_PROGRAM,
 } from './casm';
 import {readCpuState} from './cpuCore';
+import {explainCpuStep,type CpuExplanation} from './explainCpu';
+import type {CpuState4} from './cpuCore';
 import {simulateLogic} from './engine';
 import type {DigitalComponent,LogicValue} from './types';
 
@@ -68,6 +70,19 @@ export function CasmProgramPanel({
   const result=useMemo(()=>simulateLogic(doc,runtime),[doc,runtime]);
   const fetched=cpu?readByte(result.terminalValues,cpu.id):null;
   const ram=cpu?cpuRam(cpu.id,runtime.memories):Array(16).fill(0);
+  const previous=useRef<{cycle:number;cpu:string;program:unknown;state:CpuState4}|null>(null);
+  const [explanation,setExplanation]=useState<CpuExplanation|null>(null);
+  useEffect(()=>{
+    const before=previous.current;
+    if(!cpu||!cpuState){previous.current=null;setExplanation(null);return;}
+    if(!before||before.cpu!==cpu.id||before.program!==rom?.program||runtime.cycle<=before.cycle)setExplanation(null);
+    else{
+      const step=explainCpuStep(before.state,cpuState,ram);
+      setExplanation(runtime.cycle-before.cycle===1?step:{...step,
+        detail:'Advanced '+(runtime.cycle-before.cycle)+' clock edges. Last opcode: '+step.title+'. Live register values are shown below.'});
+    }
+    previous.current={cycle:runtime.cycle,cpu:cpu.id,program:rom?.program,state:cpuState};
+  },[runtime,cpu?.id,rom?.program]);
   const romListing=useMemo(()=>{
     if(!rom)return [];
     const bytes=rom.program??EMPTY_PROGRAM();
@@ -79,6 +94,8 @@ export function CasmProgramPanel({
   const listing=showListing==='rom'?romListing:compiled.ok?compiled.listing:[];
   const instructionCount=compiled.listing.length;
   const editedLines=source.split('\n');
+  const nextSourceLine=!dirty&&!cpuState?.halt&&compiled.ok&&rom&&compiled.bytes.every((byte,i)=>byte===rom.program?.[i])
+    ?compiled.listing.find(row=>row.address===cpuState?.pc)?.line:undefined;
 
   useEffect(()=>{setRunning(false);setFeedback('');setBreakpoints([]);},
     [rom?.id,cpu?.id]);
@@ -234,8 +251,8 @@ export function CasmProgramPanel({
             onChange={importFile}/>
           <div className="casm-editor-surface">
             <div className="casm-line-gutter" ref={gutterRef} aria-hidden="true">
-              {editedLines.map((_,i)=><div key={i} className={compiled.issues.some(e=>e.line===i+1)?
-                'has-error':''}>{String(i+1).padStart(2,'0')}</div>)}
+              {editedLines.map((_,i)=><div key={i} className={(compiled.issues.some(e=>e.line===i+1)?
+                'has-error':'')+(nextSourceLine===i+1?' is-next-instruction':'')}>{String(i+1).padStart(2,'0')}</div>)}
             </div>
             <textarea ref={codeRef} className="casm-studio-code" aria-label="CASM assembly source"
               value={source} onChange={event=>change(event.target.value)}
@@ -357,6 +374,20 @@ export function CasmProgramPanel({
             <span>LAST EXECUTED <strong>{cpuState?hex(cpuState.ir):'—'}</strong></span>
             <span>OUTPUT BITS <strong>{cpuState?bits(cpuState.out):'----'}</strong></span>
           </div>
+            <section className="cpu-explanation" aria-label="Instruction explanation" aria-live="polite">
+              <span>{explanation?'LAST INSTRUCTION':'READY TO EXECUTE'}</span>
+              <strong>{explanation?.title??(fetched===null?'Check instruction wiring':romListing.find(row=>row.address===cpuState?.pc)?.source??'Select a CPU')}</strong>
+              <p>{explanation?.detail??'Step an instruction to see which registers change and why.'}</p>
+            </section>
+            <div className="cpu-datapath" aria-label="Live CPU datapath">
+              <div className="cpu-datapath-heading">Live values · blocks used by the last instruction are highlighted</div>
+              <div className="cpu-datapath-blocks" key={runtime.cycle}>{[
+                ['PC',cpuState?String(cpuState.pc):'—'],['ROM',fetched===null?'X / Z':hex(fetched)],
+                ['ALU',explanation?.blocks.includes('ALU')?explanation.title.split(' ')[0]:'Idle'],
+                ['ACC',cpuState?String(cpuState.acc):'—'],['RAM','16 × 4'],['OUT',cpuState?String(cpuState.out):'—'],
+              ].map(([name,value])=><div key={name} className={explanation?.blocks.includes(name)?'is-used':''}><span>{name}</span><strong>{value}</strong></div>)}</div>
+              <p>The ROM value is the instruction at the current PC. One CPU4 instruction executes per rising clock edge.</p>
+            </div>
           <div className="casm-run-row casm-studio-run">
             <button className="casm-primary" disabled={!cpu}
               onClick={()=>{setRunning(false);if(cpu)clock();}}>↯ STEP INSTRUCTION</button>

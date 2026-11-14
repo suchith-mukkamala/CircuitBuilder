@@ -4,6 +4,7 @@ import { digitalWirePath, digitalBusPath } from './network';
 
 export type CircuitCamera = {x:number;y:number;zoom:number};
 export type Viewport = {width:number;height:number};
+export const minimumDigitalZoom=.1;
 
 /**
  * Determine a sensible view for a complete schematic. Existing designs may
@@ -34,7 +35,7 @@ export function fitDigitalCircuit(
   const width=Math.max(80,maxX-minX),height=Math.max(80,maxY-minY);
   const usableW=Math.max(80,viewport.width-padding*2);
   const usableH=Math.max(80,viewport.height-padding*2);
-  const zoom=Math.max(.3,Math.min(1.65,usableW/width,usableH/height));
+  const zoom=Math.max(minimumDigitalZoom,Math.min(1.65,usableW/width,usableH/height));
   return {
     zoom,
     x:viewport.width/2-(minX+maxX)/2*zoom,

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { createJSONStorage,persist } from 'zustand/middleware';
+import {browserStorage} from '../workbench/browserStorage';
 import { starterCircuit } from '../circuit/sample';
 import {
   CircuitDocument, CircuitComponent, ComponentKind, Selection, Rotation, Point,
@@ -417,6 +418,7 @@ export const useCircuitStore = create<CircuitStore>()(persist((set, get) => ({
   save: () => set({ message: 'Autosaved locally. EXPORT to make a JSON backup.' }),
 }), {
   name: 'pixel-circuits-v01',
+  storage:createJSONStorage(()=>browserStorage),
   partialize: state => ({
     document: state.document,
     transientDuration: state.transientDuration,

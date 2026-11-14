@@ -1,10 +1,45 @@
-# CircuitBuilder v0.20.0 — Pixel Electronics Playground
+# CircuitBuilder v0.23.0 — The Electronics Playground
 
-Build, simulate and experiment with analog circuits, digital signals, and programmable computers in three interconnected labs.
+Build, simulate and experiment with analog circuits, digital signals, programmable computers, and microcontroller projects in four laboratories.
 
 - **Lab 01 — Analog:** interactive circuit editing and DC/transient simulation.
 - **Lab 02 — Signals:** digital logic, reusable blocks and debugging.
 - **Lab 03 — Computer:** hardware workbench, programmable CPU and CASM Code Studio.
+- **Lab 04 — Robotics:** a programmable virtual controller, live sensor inputs, LEDs, and a servo. Start with a traffic light, automatic door, or obstacle detector.
+
+## What's new
+
+### v0.23 — Connected labs and Studio graphics
+
+- **Parts Exchange** publishes independent module snapshots from Signals or Computer Builder. Try input bits in the module test bench, add a copy to either digital workspace, or import/export a self-contained package with its nested dependencies.
+- **ALU workshop:** build a four-bit ADD/AND/OR/XOR circuit from full adders, gates, and multiplexers, then use that actual module as the ALU in a PC/ROM/accumulator datapath.
+- **Signals → Robotics:** attach a combinational module, map its inputs to bench sensors and its outputs to LEDs or the servo, then upload and run the circuit. Mapping changes require another upload; MicroScript source stays available.
+- **Analog → Signals:** compare a solved point voltage with an explicit threshold and add its HIGH/LOW sample to the digital workspace. The sample is fixed until you transfer another reading.
+- **Studio graphics** add recognizable logic symbols, resistor color codes, shaded components, live chip readouts, and capacitor voltage fill. Classic graphics remain available in **Display**.
+- Bounded signal-change and clock highlights, current-flow cues, LED transitions, and servo movement follow actual simulation values. Display preferences persist locally, and system reduced motion disables animation.
+
+See [Parts Exchange and graphics](docs/PARTS_EXCHANGE.md) for connected projects, supported adapters, and animation behavior.
+
+### v0.22 — Measure, learn, and keep your experiments
+
+- Click a wire or component for readings, or choose **Inspect points** to click a terminal without starting a wire. Analog points show voltage to ground or a chosen reference; components show signed voltage, current, and power. Digital pins show HIGH/LOW/X/Z, and buses show bits and unsigned values. Phone readouts dock below the canvas.
+- Guided projects use real simulation results: a voltage divider, half-adder, and 3 + 5 CPU program.
+- Transient graphs compare two component traces with labeled axes, automatic or manual vertical scales, a draggable time cursor, and an expanded graph. Canvas point measurements follow that same time cursor.
+- Code Studio explains the last instruction, highlights the blocks it used, and marks the next source line when the editor matches ROM.
+- **Projects** keeps up to 12 named copies per existing lab with schematic thumbnails. Computer copies retain un-injected CASM drafts. Save indicators verify the browser's persisted copy; storage failures keep the working circuit in memory.
+- Resize desktop side panels with the dividers (or arrow keys while focused). Canvas hit targets are larger, terminals use the nearest target, and analog circuits can fit the viewport.
+
+See [measurement and learning guide](docs/MEASUREMENTS_AND_LEARNING.md) for workflows and measurement limits.
+
+### v0.21 — Shared workbenches and Robotics Lab
+
+- Shared navigation, direct lab links (`#analog`, `#signal`, `#computer`, `#robotics`), quick-start guidance, and a responsive workbench layout.
+- More readable component lists and controls, per-lab panel preferences, and Focus mode. Narrow screens start with the canvas; Parts and Panel reopen the tools.
+- Signal Lab instruments live in a single Tools menu. Computer Builder retains separate hardware and code workspaces with an editable project name.
+- Robotics Lab includes a bounded **MicroScript** interpreter, editable pin connections, exact virtual waits, pause/step/reset, pin monitoring, and an event log. Draft code is separate from the uploaded program; wiring changes require another upload.
+- Robotics drafts save locally and round-trip through validated JSON files. Existing analog/digital project formats are unchanged.
+
+See [Robotics Lab and MicroScript](docs/ROBOTICS_LAB.md) for commands, units, examples, and the scope of this first milestone.
 
 The former Lab 04 fantasy civilization simulator is now its own project: **[WorldForge](https://github.com/suchith-mukkamala/WorldForge)**. Its history remains in Git, but the simulation and all related source files have moved out of this repository.
 
@@ -13,11 +48,16 @@ The former Lab 04 fantasy civilization simulator is now its own project: **[Worl
 Requires Node.js 22 or newer.
 
 ```bash
-npm install
+npm ci
 npm run dev
 npm run build
 npm test
+# Browser workflow checks (desktop and phone):
+npx playwright install chromium
+npm run test:browser
 ```
+
+If using an existing Chromium installation, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to its executable path. The browser suite starts Vite automatically when needed.
 
 ## Previous electronics releases
 

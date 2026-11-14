@@ -8,6 +8,13 @@ import { wirePath, endpointPosition } from '../circuit/geometry';
 import { circuitNodes } from '../circuit/connectivity';
 import { junctionPoints, unbranchedWireCurrents, voltageTint } from '../editor/wireVisuals';
 import { parseEngineering } from '../editor/units';
+import {PointReadout} from './PointReadout';
+import {analogMeasurement,type AnalogTarget} from '../editor/measurements';
+import {fitAnalogCircuit} from '../editor/viewport';
+import {useCompactCanvas} from '../workbench/useCompactCanvas';
+import {useScenePreferences} from '../visuals/preferences';
+import {drawStudioAnalog} from '../visuals/studioAnalog';
+import {recordActivity,activityOpacity,type Activity} from '../visuals/activity';
 
 type View = { x: number; y: number; zoom: number };
 type Drag = { type: 'component'; id: string; x: number; y: number; at: Point } |
@@ -178,6 +185,7 @@ type CanvasVisuals = {
   junctions: Point[];
   focusedNet?: string;
   showFlow: boolean;
+  style:'studio'|'neon';activity:Activity;
 };
 
 /** Render directional particles only when conventional current is unambiguous. */
@@ -233,7 +241,7 @@ function drawCanvas(
   ctx.fillStyle = colors.bg; ctx.fillRect(0, 0, width, height);
   // Subtle neon stage light behind the central drawing area.
   const wash = ctx.createRadialGradient(width * .55, height * .48, 0, width * .55, height * .48, Math.max(width, height) * .8);
-  wash.addColorStop(0, '#141632'); wash.addColorStop(1, 'rgba(8,14,28,0)');
+  wash.addColorStop(0,visuals.style==='studio'?'#172f3c':'#141632'); wash.addColorStop(1, 'rgba(8,14,28,0)');
   ctx.fillStyle = wash; ctx.fillRect(0, 0, width, height);
   ctx.save();
   ctx.translate(view.x, view.y);
@@ -245,11 +253,11 @@ function drawCanvas(
   const minGridY = Math.floor(minY / 24) - 1, maxGridY = Math.ceil(maxY / 24) + 1;
   ctx.lineWidth = 1 / view.zoom;
   for (let x = minGridX; x <= maxGridX; x++) {
-    ctx.strokeStyle = x % 5 === 0 ? colors.major : colors.fine;
+    ctx.strokeStyle = visuals.style==='studio'?(x%5===0?'#36506666':'#2b405333'):x % 5 === 0 ? colors.major : colors.fine;
     ctx.beginPath(); ctx.moveTo(x * 24, minY); ctx.lineTo(x * 24, maxY); ctx.stroke();
   }
   for (let y = minGridY; y <= maxGridY; y++) {
-    ctx.strokeStyle = y % 5 === 0 ? colors.major : colors.fine;
+    ctx.strokeStyle = visuals.style==='studio'?(y%5===0?'#36506666':'#2b405333'):y % 5 === 0 ? colors.major : colors.fine;
     ctx.beginPath(); ctx.moveTo(minX, y * 24); ctx.lineTo(maxX, y * 24); ctx.stroke();
   }
 
@@ -265,12 +273,14 @@ function drawCanvas(
     ctx.globalAlpha = visuals.focusedNet && !focused ? .24 : 1;
     ctx.strokeStyle = focused || selectedWire ? '#ff88e8' : tint;
     ctx.shadowColor = focused || selectedWire ? '#ff78e1' : tint;
-    ctx.shadowBlur = focused || selectedWire ? 26 : (simulation ? 17 : 11);
+    ctx.shadowBlur = visuals.style==='studio'?(focused||selectedWire?6:1):focused || selectedWire ? 26 : (simulation ? 17 : 11);
     ctx.lineWidth = selectedWire ? 5 : 3;
     ctx.lineJoin = 'bevel';
     ctx.beginPath(); ctx.moveTo(points[0].x, points[0].y);
     for (const p of points.slice(1)) ctx.lineTo(p.x, p.y);
     ctx.stroke();
+    const flash=activityOpacity(visuals.activity.get('wire:'+wire.id),seconds*1000);
+    if(flash){ctx.save();ctx.globalAlpha=flash*.75;ctx.strokeStyle='#c6f6e6';ctx.lineWidth=6;ctx.stroke();ctx.restore();}
     ctx.shadowBlur = 0; ctx.lineWidth = 1;
     ctx.strokeStyle = selectedWire || focused ? '#fff0fc' : '#d0fffb';
     ctx.stroke();
@@ -304,10 +314,14 @@ function drawCanvas(
     ctx.restore();
   }
 
+  const voltageScale=doc.components.reduce((scale,c)=>c.kind==='voltage_source'?Math.max(scale,Math.abs(c.value)):scale,1);
   for (const c of doc.components) {
     const isSelected = selectedIds.includes(c.id) ||
       (selection?.type === 'component' && selection.id === c.id);
-    drawComponent(ctx, c, isSelected);
+    if(visuals.style==='studio')drawStudioAnalog(ctx,c,isSelected,simulation?.readings[c.id],voltageScale);
+    else drawComponent(ctx, c, isSelected);
+    const flash=activityOpacity(visuals.activity.get('part:'+c.id),seconds*1000);
+    if(flash){ctx.save();ctx.globalAlpha=flash*.7;ctx.strokeStyle='#a9e9d4';ctx.lineWidth=2/view.zoom;ctx.beginPath();ctx.roundRect(c.x-43,c.y-38,86,76,9);ctx.stroke();ctx.restore();}
     ctx.font = 'bold 13px monospace';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = isSelected ? colors.yellow : colors.text;
@@ -389,17 +403,30 @@ const snapEnd = (p: Point): Point => ({
   y: Math.round(p.y / HALF_GRID) * HALF_GRID,
 });
 
-export function CircuitCanvas() {
+export function CircuitCanvas({onMeasure}:{onMeasure?:(target:AnalogTarget|null)=>void}={}) {
+  const compact=useCompactCanvas();
+  const scene=useScenePreferences(),reducedMotion=!scene.motionAllowed;
   const canvas = useRef<HTMLCanvasElement>(null);
   const wrapper = useRef<HTMLDivElement>(null);
   const dragging = useRef<Drag | null>(null);
+  const didFit=useRef(false);
+  useEffect(()=>{
+    const element=canvas.current;
+    const prevent=(event:globalThis.WheelEvent)=>event.preventDefault();
+    element?.addEventListener('wheel',prevent,{passive:false});
+    return ()=>element?.removeEventListener('wheel',prevent);
+  },[]);
   const [view, setView] = useState<View>({ x: 60, y: 42, zoom: 1 });
   const [hover, setHover] = useState<Point | null>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [menu, setMenu] = useState<Menu | null>(null);
+  const [mode,setMode]=useState<'edit'|'inspect'>('edit');
+  const [measuring,setMeasuring]=useState<AnalogTarget|null>(null);
+  const [reference,setReference]=useState<AnalogTarget|null>(null);
+  useEffect(()=>{onMeasure?.(measuring);},[measuring,onMeasure]);
   const [quickValue, setQuickValue] = useState('');
   const [quickError, setQuickError] = useState(false);
-  const [reducedMotion, setReducedMotion] = useState(false);
+  const previousVisual=useRef<Record<string,string|number>|null>(null),activity=useRef<Activity>(new Map());
   const doc = useCircuitStore(s => s.document);
   const selection = useCircuitStore(s => s.selection);
   const selectedIds = useCircuitStore(s => s.selectedIds);
@@ -407,6 +434,11 @@ export function CircuitCanvas() {
   const setFlowEnabled = useCircuitStore(s => s.setFlowEnabled);
   const pendingPin = useCircuitStore(s => s.pendingPin);
   const simulation = useCircuitStore(s => s.simulation);
+  useEffect(()=>{if(size.width&&size.height&&!didFit.current){didFit.current=true;setView(fitAnalogCircuit(doc,size));}},[size.width,size.height,doc]);
+  useEffect(()=>{
+    const escape=(event:KeyboardEvent)=>{if(event.key==='Escape'){setMenu(null);setMeasuring(null);}};
+    window.addEventListener('keydown',escape);return ()=>window.removeEventListener('keydown',escape);
+  },[]);
   const select = useCircuitStore(s => s.select);
   const move = useCircuitStore(s => s.moveComponent);
   const moveFreeEnd = useCircuitStore(s => s.moveFreeEnd);
@@ -442,44 +474,49 @@ export function CircuitCanvas() {
     return () => observer.disconnect();
   }, []);
 
-  useEffect(() => {
-    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const update = () => setReducedMotion(media.matches);
-    update(); media.addEventListener('change', update);
-    return () => media.removeEventListener('change', update);
-  }, []);
-
   // Keep connectivity extraction and geometry off the animation frame path.
   const looseNodes = useMemo(() => circuitNodes(doc, { allowIncomplete: true }), [doc]);
   const flowCurrents = useMemo(() => simulation
     ? unbranchedWireCurrents(doc, simulation, looseNodes.wireNodes) : {},
     [doc, simulation, looseNodes]);
   const junctions = useMemo(() => junctionPoints(doc), [doc]);
-  const focusNet = selection?.type === 'wire'
+  const measuredNet=useMemo(()=>measuring?analogMeasurement(doc,simulation,measuring,looseNodes)?.node:undefined,[doc,simulation,measuring,looseNodes]);
+  const focusNet = measuredNet??(selection?.type === 'wire'
     ? looseNodes.wireNodes[selection.id]
     : selection?.type === 'component'
       ? looseNodes.terminalNodes[selection.id + ':a'] ??
-        looseNodes.terminalNodes[selection.id + ':g'] : undefined;
+        looseNodes.terminalNodes[selection.id + ':g'] : undefined);
   const visuals: CanvasVisuals = {
     wireNodes: looseNodes.wireNodes, terminalNodes: looseNodes.terminalNodes,
     flowCurrents, junctions, focusedNet: focusNet,
-    showFlow: showFlow && !reducedMotion,
+    showFlow: showFlow && !reducedMotion,style:scene.style,activity:activity.current,
   };
+  const visualSnapshot=useMemo(()=>Object.fromEntries([
+    ...doc.wires.map(w=>['wire:'+w.id,simulation?.nodeVoltages[looseNodes.wireNodes[w.id]]??'unsolved']),
+    ...doc.components.map(c=>['part:'+c.id,[c.closed,c.wiper,simulation?.readings[c.id]?.voltage].join(':')]),
+  ]) as Record<string,string|number>,[doc,simulation,looseNodes]);
   useEffect(() => {
     let frameId = 0;
+    const now=performance.now();
+    activity.current=!reducedMotion?recordActivity(previousVisual.current,visualSnapshot,now,activity.current):new Map();
+    previousVisual.current=visualSnapshot;
+    const currentVisuals={...visuals,activity:activity.current};
     const draw = (time: number) => {
+      const changing=!reducedMotion&&[...activity.current.values()].some(start=>activityOpacity(start,time)>0);
+      const flowing=visuals.showFlow&&!!simulation&&Object.keys(flowCurrents).length>0;
+      if(canvas.current)canvas.current.dataset.animation=changing||flowing?'active':'idle';
       if (canvas.current) {
         drawCanvas(canvas.current, doc, view, selection, selectedIds,
-          pendingPin, hover, simulation, visuals, time / 1000);
+          pendingPin, hover, simulation, currentVisuals, time / 1000);
       }
-      if (visuals.showFlow && simulation && Object.keys(flowCurrents).length) {
+      if (flowing||changing) {
         frameId = window.requestAnimationFrame(draw);
       }
     };
-    draw(0);
+    draw(now);
     return () => window.cancelAnimationFrame(frameId);
   }, [doc, view, selection, selectedIds, pendingPin, hover, simulation, size,
-      showFlow, reducedMotion, flowCurrents, focusNet, junctions]);
+      showFlow, reducedMotion, flowCurrents, focusNet, junctions,scene.style,visualSnapshot]);
 
   const screenPoint = (e: { clientX: number; clientY: number }) => {
     const rect = canvas.current!.getBoundingClientRect();
@@ -490,15 +527,17 @@ export function CircuitCanvas() {
     return { x: (p.x - view.x) / view.zoom, y: (p.y - view.y) / view.zoom };
   };
   const findTerminal = (p: Point): WireEndpoint | null => {
+    let nearest:WireEndpoint|null=null,distance=14/view.zoom;
     for (const c of [...doc.components].reverse()) {
       for (const pin of pinsFor(c)) {
         const end = pinPosition(c, pin);
-        if (Math.hypot(end.x - p.x, end.y - p.y) <= 11 / view.zoom) {
-          return { componentId: c.id, pin };
+        const delta=Math.hypot(end.x-p.x,end.y-p.y);
+        if (delta<=distance) {
+          nearest={componentId:c.id,pin};distance=delta;
         }
       }
     }
-    return null;
+    return nearest;
   };
   const findWire = (p: Point): { wire: Wire; point: Point; distance: number } | null => {
     let closest: { wire: Wire; point: Point; distance: number } | null = null;
@@ -525,8 +564,21 @@ export function CircuitCanvas() {
   const onPointerDown = (e: PointerEvent<HTMLCanvasElement>) => {
     if (e.button === 2 || (e.button !== 0 && e.button !== 1)) return;
     e.preventDefault();
+    e.currentTarget.focus({preventScroll:true});
     setMenu(null);
     const p = worldPoint(e);
+    if(e.button===0&&mode==='inspect'){
+      const terminal=findTerminal(p);
+      if(terminal&&isTerminal(terminal))setMeasuring({kind:'terminal',...terminal});
+      else{
+        const part=[...doc.components].reverse().find(c=>hitComponent(c,p));
+        const trace=part?null:findWire(p);
+        if(part)setMeasuring({kind:'component',id:part.id});
+        else if(trace)setMeasuring({kind:'wire',id:trace.wire.id});
+        else{setMeasuring(null);dragging.current={type:'pan',clientX:e.clientX,clientY:e.clientY,originalX:view.x,originalY:view.y};e.currentTarget.setPointerCapture(e.pointerId);}
+      }
+      return;
+    }
     if (e.button === 0) {
       const terminal = findTerminal(p);
       if (terminal) { connect(terminal); return; }
@@ -555,6 +607,7 @@ export function CircuitCanvas() {
             return;
           }
           if (!selectedIds.includes(c.id)) select({ type: 'component', id: c.id });
+          setMeasuring({kind:'component',id:c.id});
           beginDrag();
           dragging.current = { type: 'component', id: c.id, x: c.x, y: c.y, at: p };
           e.currentTarget.setPointerCapture(e.pointerId);
@@ -562,7 +615,8 @@ export function CircuitCanvas() {
         }
       }
       const trace = findWire(p);
-      if (trace) { select({ type: 'wire', id: trace.wire.id }); return; }
+      if (trace) { select({ type: 'wire', id: trace.wire.id });setMeasuring({kind:'wire',id:trace.wire.id}); return; }
+      setMeasuring(null);
       select(null);
     }
     dragging.current = {
@@ -573,7 +627,8 @@ export function CircuitCanvas() {
   };
   const onPointerMove = (e: PointerEvent<HTMLCanvasElement>) => {
     const p = worldPoint(e);
-    setHover(snapEnd(p));
+    const terminal=findTerminal(p);
+    setHover(terminal?endpointPosition(terminal,doc):snapEnd(p));
     const d = dragging.current;
     if (!d) return;
     if (d.type === 'pan') {
@@ -598,13 +653,13 @@ export function CircuitCanvas() {
     }
   };
   const onWheel = (e: WheelEvent<HTMLCanvasElement>) => {
-    e.preventDefault();
     const p = screenPoint(e);
-    const zoom = Math.max(.35, Math.min(2.5, view.zoom * (e.deltaY < 0 ? 1.1 : 1 / 1.1)));
+    const zoom = Math.max(.15, Math.min(2.5, view.zoom * (e.deltaY < 0 ? 1.1 : 1 / 1.1)));
     setView({ zoom, x: p.x - (p.x - view.x) * zoom / view.zoom,
       y: p.y - (p.y - view.y) * zoom / view.zoom });
   };
   const onDoubleClick = (e: MouseEvent<HTMLCanvasElement>) => {
+    if(mode==='inspect')return;
     const p = worldPoint(e);
     const switched = [...doc.components].reverse().find(c =>
       c.kind === 'switch' && hitComponent(c, p));
@@ -660,29 +715,36 @@ export function CircuitCanvas() {
     setMenu(null);
   };
 
-  return (
+  const readout=measuring&&<PointReadout doc={doc} result={simulation} target={measuring} reference={reference}
+    onReference={setReference} onClose={()=>setMeasuring(null)}
+    time={useCircuitStore.getState().analysisMode==='transient'?useCircuitStore.getState().transient?.frames[useCircuitStore.getState().timeIndex]?.time:undefined}/>;
+  return <>
     <div className="canvas-wrapper" ref={wrapper}>
       <canvas
         ref={canvas} className="circuit-canvas" aria-label="Interactive circuit editor"
+        tabIndex={0}
+        data-view-x={view.x} data-view-y={view.y} data-view-zoom={view.zoom}
         onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp} onPointerLeave={() => setHover(null)}
         onDoubleClick={onDoubleClick} onWheel={onWheel} onContextMenu={onContextMenu}
         onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; }}
         onDrop={onDrop}
       />
-      <div className="canvas-hint">
-        ◈ RIGHT-CLICK TO EDIT <span>·</span> SHIFT+CLICK MULTI-SELECT <span>·</span>
-        SHIFT+DRAG FREE TIP TO MOVE
+      <div className="canvas-modebar" aria-label="Analog canvas mode">
+        <button aria-pressed={mode==='edit'} onClick={()=>{setMode('edit');setMeasuring(null);}}>↖ Edit & wire</button>
+        <button aria-pressed={mode==='inspect'} onClick={()=>{if(pendingPin)cancelWire();setMode('inspect');}}>⌖ Inspect points</button>
+        <span>{mode==='inspect'?'Click a pin, wire, or component':'Click terminals to connect · Esc cancels'}</span>
       </div>
+      {!compact&&readout}
       <div className="canvas-controls">
         <button className={showFlow && !reducedMotion ? 'flow-on' : ''}
           title="Toggle animated conventional current on unbranched wires (requires simulation)"
           aria-pressed={showFlow && !reducedMotion}
           onClick={() => setFlowEnabled(!showFlow)}>{reducedMotion ? '◌ STILL' : showFlow ? '◉ FLOW' : '○ FLOW'}</button>
-        <button title="Zoom out" onClick={() => setView(v => ({ ...v, zoom: Math.max(.35, v.zoom / 1.25) }))}>−</button>
+        <button title="Zoom out" onClick={() => setView(v => ({ ...v, zoom: Math.max(.15, v.zoom / 1.25) }))}>−</button>
         <span>{Math.round(view.zoom * 100)}%</span>
         <button title="Zoom in" onClick={() => setView(v => ({ ...v, zoom: Math.min(2.5, v.zoom * 1.25) }))}>+</button>
-        <button title="Reset view" onClick={() => setView({ x: 60, y: 42, zoom: 1 })}>⌖</button>
+        <button title="Fit circuit into view" onClick={() => setView(fitAnalogCircuit(doc,size))}>⊡ Fit</button>
       </div>
       {pendingPin && <div className="wire-tip">CLICK TO PLACE FREE END · ESC FINISHES WIRE</div>}
       {menu && <>
@@ -742,7 +804,7 @@ export function CircuitCanvas() {
             <button className="context-option" onClick={menuAction(duplicateSelection)}>⊞ DUPLICATE</button>
             <button className="context-option danger" onClick={menuAction(remove)}>× DELETE COMPONENT</button>
           </> : menu.selection?.type === 'wire' ? <>
-            <div className="context-target">NEON WIRE · CONNECTION</div>
+            <div className="context-target">WIRE · CONNECTION</div>
             <button className="context-option highlight"
               onClick={menuAction(() => beginWire(menu.wirePoint ?? menu.world))}>⌁ START BRANCH HERE</button>
             <button className="context-option" onClick={menuAction(() => {
@@ -773,5 +835,6 @@ export function CircuitCanvas() {
         </div>
       </>}
     </div>
-  );
+    {compact&&readout&&<div className="canvas-readout-dock">{readout}</div>}
+  </>;
 }
