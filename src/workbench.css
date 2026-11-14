@@ -1,0 +1,236 @@
+/* Shared workbench system. Simulation canvases retain their electrical colors. */
+:root{--wb-bg:#0c1120;--wb-panel:#121b2d;--wb-raised:#19253a;--wb-edge:#2b3b53;
+  --wb-muted:#a0b1c8;--wb-text:#e9eff8;--wb-accent:#80e2c5;color-scheme:dark}
+body{background:var(--wb-bg)}
+button,input,textarea,select,summary{font-family:inherit}
+button,summary,a,input,select,textarea{-webkit-tap-highlight-color:transparent}
+:is(button,a,input,select,textarea,summary):focus-visible{outline:2px solid #80e2c5;outline-offset:3px}
+.lab-hub-shell{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  background:var(--wb-bg);color:var(--wb-text);min-height:100dvh}
+#lab-content:focus{outline:none}
+.skip-link{position:fixed;top:8px;left:16px;transform:translateY(-160%);padding:12px 18px;
+  z-index:100;background:var(--wb-accent);color:#0c2421;border-radius:4px}
+.skip-link:focus{transform:none}
+.lab-switcher{min-height:73px;padding:12px 28px;gap:24px;background:#101727;
+  border-bottom:1px solid var(--wb-edge);box-shadow:none;flex-wrap:nowrap}
+.lab-switcher-home{font:700 17px/1.3 inherit;color:var(--wb-text);letter-spacing:-.5px;gap:13px}
+.lab-switcher-home>span:last-child{font:700 17px/1.4 ui-sans-serif,system-ui,sans-serif}
+.lab-switcher-home small{display:block;font:8px/1.7 'Space Mono',monospace;color:#92a8c0;letter-spacing:1.5px}
+.lab-switcher-cube{width:34px;height:34px;border:1px solid #4c937f;border-radius:7px;
+  background:#19352f;color:#a8f9df;box-shadow:none;font:24px monospace}
+.lab-switcher-home:hover .lab-switcher-cube{box-shadow:0 0 14px #80e2c52a}
+.landing-nav .lab-switcher-home{margin:0}
+.lab-switcher-tabs{gap:5px;margin:0 auto;min-width:0}
+.lab-switcher-tabs button,.lab-switcher-tabs button.lab-active{padding:10px 14px;min-height:42px;
+  border:1px solid transparent;border-radius:5px;box-shadow:none;background:transparent;gap:8px;
+  color:#9cacbf;font:12px/1.3 inherit;white-space:nowrap}
+.lab-switcher-tabs button strong{font:600 13px/1.3 ui-sans-serif,system-ui,sans-serif;margin:0}
+.lab-switcher-tabs button:hover{background:#1a283b;border-color:#344b61}
+.lab-switcher-tabs button.lab-active{background:#1a3536;border-color:#315e57;color:#aaf2dc}
+.lab-switcher-tabs button.lab-active strong{color:#b5f7e2}
+.lab-switch-symbol{font:20px monospace;color:inherit}.lab-active .lab-switch-symbol{text-shadow:none;color:#9ef1d3}
+.lab-nav-number{font:10px 'Space Mono',monospace;opacity:.65}
+.lab-switcher-status{font:9px 'Space Mono',monospace;letter-spacing:.4px;color:#98abbe}
+.lab-switcher-status span{width:5px;height:5px;border-radius:50%;background:#80e2c5;box-shadow:none}
+
+/* Landing */
+.landing-home{min-height:calc(100dvh - 73px);background:radial-gradient(ellipse at 75% 15%,#162d3a66,transparent 55%),#0c1120}
+.landing-home:before{opacity:.3;background-size:40px 40px}
+.landing-content{width:min(1280px,calc(100% - 80px));padding:64px 0 30px;text-align:left}
+.landing-hero{display:grid;grid-template-columns:.9fr 1.1fr;gap:36px;align-items:center;margin-bottom:64px}
+.landing-eyebrow{justify-content:flex-start;font-size:9px;letter-spacing:1.7px;color:#9ac1be}
+.landing-eyebrow span{width:5px;height:5px;box-shadow:none;border-radius:50%}
+.landing-content h1{font:650 clamp(36px,3.8vw,56px)/1.13 ui-sans-serif,system-ui,sans-serif;
+  margin:24px 0 20px;letter-spacing:-2.2px;text-shadow:none;color:#f1f4fb}
+.landing-content h1 em{color:#80e2c5}
+.landing-subtitle{font:15px/1.85 ui-sans-serif,system-ui,sans-serif;color:#a1b1c8}
+.landing-hero-note{margin-top:26px;font-size:12px;color:#b8c6d7}.landing-hero-note span{color:#80e2c5;margin-right:8px}
+.landing-art{margin:0;min-width:0;border:1px solid #2c3d53;border-radius:10px;
+  background:linear-gradient(130deg,#142238,#10192c);box-shadow:0 22px 70px #0003;overflow:hidden}
+.landing-cpu-svg{min-width:0;filter:none;min-height:240px;object-fit:contain}
+.landing-art-caption{display:flex;justify-content:space-between;gap:10px;padding:16px 18px;border-top:1px solid #29394c;
+  color:#8da4be;font:8px/1.5 'Space Mono',monospace;letter-spacing:1px}
+.landing-art-caption span:last-child{color:#78baa9}
+.landing-section-heading{display:flex;justify-content:space-between;gap:20px;align-items:center;margin-bottom:20px}
+.landing-section-heading h2{font-size:18px;font-weight:550;margin:0;color:#e1e8f4}
+.landing-section-heading>span{font:8px/1.6 'Space Mono',monospace;letter-spacing:1px;color:#8a9db6}
+.landing-choices{max-width:none;gap:16px}
+.landing-choice{--lab-color:#80e2c5;display:flex;flex-direction:column;align-items:stretch;gap:22px;
+  padding:24px;min-height:265px;background:#121d2e;border:1px solid #2b3b53;border-radius:8px;box-shadow:none}
+.landing-choice-signal{--lab-color:#c4b1f9}.landing-choice-computer{--lab-color:#96bfff}.landing-choice-robotics{--lab-color:#ffc489}
+.landing-choice:hover{background:#182639;border-color:var(--lab-color);box-shadow:0 8px 28px #0003}
+.landing-card-top{display:flex;align-items:center;justify-content:space-between}
+.landing-choice-icon,.landing-choice-signal .landing-choice-icon,.landing-choice-computer .landing-choice-icon{
+  width:40px;height:40px;border:1px solid #3a5064;border-radius:7px;background:#192b3d;color:var(--lab-color);font:25px monospace;text-shadow:none}
+.landing-choice-number{position:static;font:9px 'Space Mono',monospace;color:#91a4be;letter-spacing:1px}
+.landing-choice-text{gap:8px;flex:1}
+.landing-choice-name{font:600 14px/1.5 ui-sans-serif,system-ui,sans-serif;letter-spacing:.4px;color:#edf2fb}
+.landing-choice-description{font:11px/1.5 'Space Mono',monospace;color:var(--lab-color)}
+.landing-choice-detail{font:13px/1.8 ui-sans-serif,system-ui,sans-serif;color:#9fb0c7;margin-top:6px}
+.landing-card-bottom{display:flex;align-items:center;justify-content:space-between;gap:5px;border-top:1px solid #2b3b53;padding-top:16px;
+  color:#91a6be;font:10px/1.7 ui-sans-serif,system-ui,sans-serif}
+.landing-choice-arrow{color:var(--lab-color)}
+.landing-bottom{display:flex;justify-content:space-between;gap:20px;margin-top:35px;padding-top:22px;border-top:1px solid #263248;
+  color:#889cb5;font:10px/1.8 ui-sans-serif,system-ui,sans-serif;letter-spacing:0}
+.landing-bottom span{color:inherit;margin:0}.landing-bottom>span:first-child{font:8px 'Space Mono',monospace;letter-spacing:1.1px}
+
+/* Lab headers, toolbars and panels */
+.lab-guide{display:flex;gap:20px;justify-content:space-between;align-items:center;position:relative;
+  padding:20px 28px;background:#0e1626;border-bottom:1px solid #26364a}
+.lab-guide-heading{display:grid;grid-template-columns:auto 1fr;align-items:center;column-gap:12px;row-gap:7px;min-width:0}
+.lab-guide-number{font:9px 'Space Mono',monospace;color:#80e2c5;letter-spacing:1px;padding:6px 8px;border:1px solid #35544e;border-radius:3px}
+.lab-guide h1{font:600 23px/1.2 ui-sans-serif,system-ui,sans-serif;letter-spacing:-.6px;margin:0;color:#ecf3fc}
+.lab-guide-heading>p{grid-column:1/-1;margin:0;color:#9badc5;font:13px/1.7 ui-sans-serif,system-ui,sans-serif}
+.lab-guide-help{flex-shrink:0;z-index:22}
+.lab-guide-help>summary{list-style:none;cursor:pointer;font:12px/1.5 ui-sans-serif,system-ui,sans-serif;color:#bfd2e5;
+  padding:10px 13px;border:1px solid #3b4e64;border-radius:4px;background:#172538}
+.lab-guide-help>summary::-webkit-details-marker{display:none}.lab-guide-help summary span{margin-left:12px}
+.lab-guide-content{position:absolute;right:28px;top:calc(100% - 7px);width:min(600px,calc(100vw - 32px));
+  padding:24px;border:1px solid #4a6d76;border-radius:7px;box-shadow:0 18px 70px #0009;background:#162539;color:#cfdfef}
+.lab-guide-content ol{display:grid;gap:18px;padding-left:22px;margin:0;font:13px/1.7 ui-sans-serif,system-ui,sans-serif}
+.lab-guide-content li::marker{color:#80e2c5;font-family:monospace}.lab-guide-content p{color:#a9bfd5;margin:4px 0 0}
+.lab-hub-shell :is(.polished-shell,.signal-lab-shell){min-height:calc(100dvh - 73px);background:#0c1120}
+.lab-hub-shell :is(.polished-topbar,.signal-workbench-header,.computer-v12-shell .computer-builder-header){
+  background:#141e30;border-bottom:1px solid #2b3b53;box-shadow:none;min-height:64px;padding:10px 20px;
+  flex-wrap:wrap;gap:12px;height:auto}
+.lab-hub-shell :is(.brand-chip,.signal-lab-glyph){width:30px;height:30px;font:21px monospace;
+  border:1px solid #496b79;border-radius:5px;color:#9adeca;background:#1d3340;box-shadow:none;text-shadow:none}
+.lab-hub-shell :is(.brand-chip:before,.brand-chip:after){display:none}
+.lab-hub-shell :is(.brand-name,.signal-lab-brand strong,.computer-v12-shell .signal-lab-brand strong){
+  font:600 11px/1.6 ui-sans-serif,system-ui,sans-serif;letter-spacing:.7px;color:#dce8f6;text-shadow:none}
+.brand-name small,.signal-lab-brand small{font:8px/1.6 'Space Mono',monospace;color:#8fa6bf;letter-spacing:.5px}
+.lab-hub-shell .polished-filename{flex:1;min-width:130px;max-width:220px;display:flex}
+.polished-filename input,.signal-circuit-title{font:12px/1.6 ui-sans-serif,system-ui,sans-serif;color:#c5d5e8;max-width:220px;width:100%}
+.lab-hub-shell :is(.workbench-tools,.signal-toolbar,.computer-v12-shell .computer-main-tools){display:flex;flex:1;
+  order:0;gap:5px;justify-content:flex-end;flex-wrap:wrap;margin-left:auto}
+.lab-hub-shell :is(.workbench-tool,.signal-toolbar button,.computer-main-tools button,.computer-v12-shell .computer-main-tools button){
+  min-height:36px;box-shadow:none;border:1px solid #344962;border-radius:4px;background:#1c2b40;color:#b8cbe0;
+  font:10px/1.4 'Space Mono',monospace;padding:8px 10px;white-space:nowrap}
+.lab-hub-shell :is(.workbench-tool,.signal-toolbar button,.computer-main-tools button):hover:enabled{background:#243e50;color:#defbef;border-color:#658e98;box-shadow:none}
+.lab-hub-shell :is(.workbench-tool span,.signal-toolbar button span,.computer-main-tools button span){display:inline}
+.lab-hub-shell :is(.workbench-tool.primary-run,.signal-toolbar .truth-shortcut,.computer-main-tools .computer-top-step){
+  background:#80e2c5;border:1px solid #94efcf;box-shadow:none;color:#102a25}
+.lab-hub-shell :is(.workbench-tool.active-tool,.signal-toolbar .active,.computer-main-tools .is-selected){background:#203b41;border-color:#4e8c81;color:#b8f3df}
+.tool-divider{background:#34465c}
+.workbench-tool-select{display:flex;align-items:center;gap:8px;font:10px 'Space Mono',monospace;color:#91a8c0}
+.workbench-tool-select select{min-height:36px;border:1px solid #344962;border-radius:4px;padding:5px 8px;max-width:160px;
+  font:11px ui-sans-serif,system-ui,sans-serif;color:#c4d8e8;background:#1c2b40}
+.lab-hub-shell :is(.file-dropdown summary,.signal-file-menu summary,.computer-v12-shell .computer-project-menu>summary){
+  min-height:36px;border:1px solid #344962;background:#1c2b40;color:#c6d8e9;border-radius:4px;font:11px/1.4 'Space Mono',monospace;box-shadow:none}
+.lab-hub-shell :is(.file-dropdown-menu,.signal-file-menu>div){border:1px solid #456077;background:#17263b;box-shadow:0 12px 40px #0008;border-radius:5px;z-index:24;max-width:calc(100vw - 32px)}
+.lab-hub-shell :is(.file-dropdown-menu button,.signal-file-menu>div button){font:11px/1.7 'Space Mono',monospace;
+  background:#20344d;border:1px solid #3a526c;border-radius:3px;color:#d6e4f5}
+.lab-hub-shell :is(.polished-workspace,.signal-workspace,.computer-v12-shell .computer-workspace){
+  --parts:250px;--tools:320px;display:grid;grid-template-columns:var(--parts) minmax(0,1fr) var(--tools);
+  gap:12px;padding:14px;min-height:540px;height:calc(100dvh - 238px);align-items:stretch;
+  flex:0 0 auto;grid-template-rows:minmax(0,1fr)}
+.lab-hub-shell :is(.no-library,.signal-no-palette){grid-template-columns:minmax(0,1fr) var(--tools)}
+.lab-hub-shell :is(.no-inspector,.signal-no-panel){grid-template-columns:var(--parts) minmax(0,1fr)}
+.lab-hub-shell :is(.no-library.no-inspector,.signal-no-palette.signal-no-panel,.computer-v12-shell .computer-workspace.signal-no-palette.signal-no-panel){grid-template-columns:minmax(0,1fr)}
+.lab-hub-shell :is(.editor-region,.signal-editor,.computer-v12-shell .computer-editor){min-height:0;border:1px solid #35465e;border-radius:6px;box-shadow:none;overflow:hidden;min-width:0}
+.lab-hub-shell :is(.canvas-wrapper,.signal-canvas-wrapper,.polished-workspace .canvas-wrapper){min-height:360px}
+.lab-hub-shell :is(.signal-canvas,.circuit-canvas){position:absolute;inset:0}
+.lab-hub-shell :is(.polished-workspace .left-panel,.polished-workspace .compact-right,.signal-palette,.signal-right-panel){
+  min-width:0;max-height:100%;overflow-y:auto;scrollbar-width:thin;scrollbar-color:#435a76 #121c30;
+  grid-column:auto;min-height:0}
+.lab-hub-shell :is(.left-panel,.signal-palette,.panel,.signal-inspect-panel,.signal-truth-panel){
+  border:1px solid #30435e;border-radius:5px;background:#121d31;box-shadow:none}
+.lab-hub-shell :is(.panel-heading,.signal-panel-heading,.editor-titlebar,.signal-editor-heading){
+  background:#1b2b41;border-bottom:1px solid #344a63;color:#d1e3f0;font:10px/1.6 'Space Mono',monospace;
+  text-shadow:none;min-height:42px;box-shadow:none;letter-spacing:.4px}
+.lab-hub-shell :is(.palette-text strong,.signal-palette-words strong){font:600 11px/1.5 ui-sans-serif,system-ui,sans-serif;color:#d7e8f6}
+.lab-hub-shell :is(.palette-text small,.signal-palette-words small){font:10px/1.5 ui-sans-serif,system-ui,sans-serif;color:#98adc8}
+.lab-hub-shell .palette-item{width:100%;flex-direction:row;text-align:left;border-radius:4px;min-height:54px;background:#1a2b41;border-color:#334963;box-shadow:none}
+.lab-hub-shell .palette-text{text-align:left}.lab-hub-shell .palette-icon{background:#1d3446;border-color:#3c5a72;border-radius:4px;flex-shrink:0}
+.lab-hub-shell :is(.signal-palette-item,.signal-catalog-category>summary){background:#17263b;box-shadow:none}
+.lab-hub-shell :is(.signal-catalog-category>summary,.signal-search-field,.signal-filter-chip){border-color:#344d68}
+.lab-hub-shell .signal-catalog-category-title{font:600 10px/1.5 ui-sans-serif,system-ui,sans-serif;letter-spacing:.5px}
+.lab-hub-shell :is(.signal-catalog-category-title small,.signal-catalog-meta,.signal-catalog-category-title~small){font-size:9px;color:#9db0c7}
+.lab-hub-shell :is(.signal-filter-chip,.signal-catalog-filters button){font:9px/1.5 'Space Mono',monospace;min-height:28px;background:#17273b;box-shadow:none}
+.lab-hub-shell .signal-filter-chip.selected{background:#21473f;color:#b4f1d9;border-color:#4c8e7d}
+.signal-palette>*,.analog-catalog>*{flex-shrink:0}
+.lab-hub-shell :is(.right-tabs,.signal-tabs){position:sticky;top:0;z-index:3;background:#142137;border:1px solid #344c67;border-radius:5px;gap:3px;padding:4px}
+.lab-hub-shell :is(.right-tabs button,.signal-tabs button,.computer-v12-shell .computer-tool-tabs button){font:9px/1.6 'Space Mono',monospace;
+  padding:10px 4px;color:#9fb7d1;background:transparent;border:1px solid transparent;border-radius:3px;text-shadow:none;min-height:34px}
+.lab-hub-shell :is(.right-tabs .active-tab,.signal-tabs .active){background:#254641;border-color:#497e73;color:#b3f4dd;box-shadow:none}
+.lab-hub-shell :is(.signal-section-label,.sidebar-section-label,.field-label,.signal-field-label){font:9px/1.7 'Space Mono',monospace;letter-spacing:.7px;color:#a9c4d8}
+.lab-hub-shell :is(.field-note,.inspector-empty p,.signal-inspect-empty p,.signal-inspector-note){font:12px/1.8 ui-sans-serif,system-ui,sans-serif;color:#9cb3cc}
+.lab-hub-shell :is(.editor-foot,.signal-status){background:#16273a;border-top:1px solid #30445c;font:9px/1.7 'Space Mono',monospace;color:#9db6ca;min-height:37px}
+.lab-hub-shell :is(.editor-foot-message,.signal-status-message){color:#a0b5cd}
+.lab-hub-shell :is(.editor-tags,.signal-editor-tags){font-size:8px;opacity:.8}
+.lab-hub-shell :is(.canvas-controls,.signal-canvas-controls){background:#192a40;border:1px solid #3d5771;border-radius:4px;box-shadow:0 4px 14px #0004}
+.computer-contextbar{background:#111e31;border-bottom:1px solid #2b405a;min-height:42px}
+.computer-project-name{display:flex;align-items:center;gap:10px;min-width:0;flex:1}
+.computer-project-name input{min-width:0;max-width:300px;width:100%;border:1px solid transparent;background:transparent;
+  color:#bfcee1;font:12px/1.6 ui-sans-serif,system-ui,sans-serif;padding:3px 5px}
+.computer-project-name input:focus{border-color:#537a83}
+.computer-context-tip{font-size:9px}.computer-view-tabs{background:#111e31;border-color:#354b63}
+.computer-view-tabs button{font-size:10px}.computer-view-tabs button.is-current{box-shadow:none;background:#234b43;border-color:#4f897c}
+.lab-hub-shell .computer-v12-shell .computer-workspace{height:calc(100dvh - 280px)}
+.lab-hub-shell .casm-studio{font-family:'Space Mono',monospace}
+.casm-studio-intro h1{font:600 28px/1.3 ui-sans-serif,system-ui,sans-serif}
+.casm-studio-card{background:#141f34;border:1px solid #354963;box-shadow:none}
+.casm-studio-card-title{background:#1a2b42}.casm-studio-card-title strong{font:600 12px/1.5 ui-sans-serif,system-ui,sans-serif;letter-spacing:.5px}
+.casm-inject-button{box-shadow:none;background:#80e2c5;color:#102d27;border-color:#a4efda}
+
+@media(min-width:1101px) and (max-width:1350px){
+  .lab-hub-shell :is(.polished-workspace,.signal-workspace,.computer-v12-shell .computer-workspace){--parts:220px;--tools:290px}
+  .lab-switcher-status{display:none}.lab-switcher-tabs{margin-left:auto;margin-right:0}
+  .workbench-tool-select{font-size:0;gap:0}
+}
+@media(max-width:1100px){
+  .lab-switcher{padding:12px 18px;gap:18px}.lab-switcher-status{display:none}
+  .lab-switcher-tabs{margin-left:auto;margin-right:0}.lab-switcher-tabs button,.lab-switcher-tabs button.lab-active{padding:10px}
+  .lab-switcher-home small{font-size:7px}.lab-nav-number{display:none}
+  .landing-content{width:calc(100% - 48px);padding-top:42px}.landing-hero{gap:24px;margin-bottom:42px}
+  .landing-content h1{font-size:40px}.landing-choice{padding:20px}
+  .lab-hub-shell :is(.polished-workspace,.signal-workspace,.computer-v12-shell .computer-workspace){
+    --parts:240px;display:grid;grid-template-columns:var(--parts) minmax(0,1fr);height:auto;min-height:600px;grid-template-rows:auto}
+  .lab-hub-shell :is(.no-library,.signal-no-palette){grid-template-columns:minmax(0,1fr)}
+  .lab-hub-shell :is(.no-inspector,.signal-no-panel){grid-template-columns:var(--parts) minmax(0,1fr)}
+  .lab-hub-shell :is(.no-library.no-inspector,.signal-no-palette.signal-no-panel){grid-template-columns:minmax(0,1fr)}
+  .lab-hub-shell :is(.polished-workspace .left-panel,.signal-palette){max-height:620px}
+  .lab-hub-shell :is(.polished-workspace .compact-right,.signal-right-panel){grid-column:1/-1;max-height:650px}
+  .lab-hub-shell :is(.editor-region,.signal-editor,.computer-v12-shell .computer-editor){min-height:580px}
+  .lab-hub-shell :is(.workbench-tools,.signal-toolbar,.computer-v12-shell .computer-main-tools){flex:1 0 100%;justify-content:flex-start;order:3}
+  .lab-hub-shell :is(.file-dropdown,.signal-file-menu){margin-left:auto;order:1}
+  .lab-hub-shell .computer-view-tabs{order:0}.lab-hub-shell .computer-project-menu{margin-left:auto}
+  .computer-context-tip{display:none}
+}
+@media(max-width:740px){
+  .lab-switcher{flex-wrap:wrap;gap:12px;padding:12px 14px}
+  .lab-switcher-home{width:auto}.lab-switcher-home small{display:none}
+  .lab-switcher-tabs{width:100%;justify-content:space-between;gap:3px}
+  .lab-switcher-tabs button,.lab-switcher-tabs button.lab-active{flex:1;justify-content:center;padding:10px 5px;gap:5px}
+  .lab-switcher-tabs button strong{font-size:11px}.lab-switch-symbol{font-size:16px}
+  .landing-content{width:calc(100% - 32px);padding:32px 0 24px}.landing-hero{grid-template-columns:1fr;gap:30px;margin-bottom:34px}
+  .landing-content h1{font-size:43px;letter-spacing:-1.7px;margin:20px 0 16px}
+  .landing-subtitle{font-size:14px}.landing-hero-note{font-size:12px;margin-top:20px}
+  .landing-cpu-svg{min-height:150px;min-width:0}.landing-art-caption{font-size:7px;padding:13px}
+  .landing-section-heading h2{font-size:17px}.landing-section-heading>span{display:none}
+  .landing-choices{grid-template-columns:1fr;gap:12px}.landing-choice{min-height:230px;padding:22px}
+  .landing-bottom{flex-direction:column;gap:12px}.landing-eyebrow{font-size:8px}
+  .lab-guide{padding:18px 14px;gap:10px;align-items:flex-start}.lab-guide h1{font-size:19px}
+  .lab-guide-number{font-size:8px;padding:5px}.lab-guide-heading{gap:8px}.lab-guide-heading>p{font-size:12px;max-width:240px}
+  .lab-guide-help>summary{font-size:11px;padding:8px}.lab-guide-help summary span{display:none}
+  .lab-guide-content{right:14px;padding:20px}.lab-guide-help{margin-top:1px}
+  .lab-hub-shell :is(.polished-topbar,.signal-workbench-header,.computer-v12-shell .computer-builder-header){padding:10px 12px;gap:8px}
+  .lab-hub-shell :is(.polished-filename,.signal-circuit-title){max-width:160px;min-width:80px;margin-left:auto}
+  .lab-hub-shell :is(.brand-name,.signal-lab-brand strong){font-size:10px}.signal-lab-brand{gap:8px}
+  .lab-hub-shell :is(.workbench-tools,.signal-toolbar,.computer-v12-shell .computer-main-tools){gap:5px;overflow:visible;flex-wrap:wrap}
+  .lab-hub-shell :is(.workbench-tool,.signal-toolbar button,.computer-v12-shell .computer-main-tools button){padding:9px 8px;font-size:9px;min-height:40px}
+  .workbench-tool-select{font-size:0;gap:0}.workbench-tool-select select{min-height:40px;max-width:145px;font-size:11px}
+  .tool-divider{display:none}.workbench-tools button:nth-of-type(4),.workbench-tools button:nth-of-type(5),.signal-toolbar button:nth-of-type(4),.signal-toolbar button:nth-of-type(5){display:none}
+  .lab-hub-shell :is(.polished-workspace,.signal-workspace,.computer-v12-shell .computer-workspace,
+    .no-library,.no-inspector,.signal-no-palette,.signal-no-panel){display:flex;flex-direction:column;height:auto;padding:9px;gap:10px;min-height:0}
+  .lab-hub-shell :is(.left-panel,.signal-palette){width:100%;max-height:340px;min-height:220px;overflow:auto}
+  .lab-hub-shell :is(.polished-workspace .palette-list,.signal-palette-grid){display:flex;flex-direction:column;padding:0 8px 8px;gap:5px}
+  .lab-hub-shell .palette-item{width:100%;flex-direction:row}.lab-hub-shell .palette-text{text-align:left}
+  .lab-hub-shell :is(.editor-region,.signal-editor,.computer-v12-shell .computer-editor){min-height:500px}
+  .lab-hub-shell :is(.polished-workspace .compact-right,.signal-right-panel){max-height:none;overflow:visible;width:100%}
+  .lab-hub-shell :is(.signal-status,.editor-foot){white-space:normal;flex-wrap:wrap;gap:5px;padding:8px;font-size:8px}
+  .lab-hub-shell :is(.editor-foot-message,.signal-status-message){flex-basis:100%;order:3}
+  .computer-contextbar{padding:8px 12px}.computer-project-name{flex-basis:100%}
+  .lab-hub-shell .computer-view-tabs{order:2;width:100%;flex-basis:100%}
+}
+@media(prefers-reduced-motion:reduce){.lab-hub-shell *{scroll-behavior:auto!important;transition:none!important;animation:none!important}}

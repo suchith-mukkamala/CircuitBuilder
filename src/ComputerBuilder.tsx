@@ -12,6 +12,8 @@ import {cpuCoreDemo,counterDemo,flipFlopDemo,programmableCpuDemo} from './digita
 import {simulateLogic} from './digital/engine';
 import type {DigitalDocument} from './digital/types';
 import {useDigitalStore} from './digital/useDigitalStore';
+import {LabGuide} from './workbench/LabGuide';
+import {useWorkbenchLayout} from './workbench/useWorkbenchLayout';
 
 type ComputerView='hardware'|'code';
 type HardwareTool='run'|'inspect'|'scope'|'inputs'|'check';
@@ -37,8 +39,8 @@ export function ComputerBuilder(){
   const cancelBlock=useDigitalStore(s=>s.cancelBlockEdit);
   const focus=useDigitalStore(s=>s.focusIssue);
   const [view,setView]=useState<ComputerView>('hardware');
-  const [paletteOpen,setPaletteOpen]=useState(false);
-  const [panelOpen,setPanelOpen]=useState(false);
+  const {partsOpen:paletteOpen,toolsOpen:panelOpen,setParts:setPaletteOpen,
+    setTools:setPanelOpen,focused,toggleFocus}=useWorkbenchLayout('computer',{parts:false,tools:false});
   const [tab,setTab]=useState<HardwareTool>('inspect');
   const [saveError,setSaveError]=useState('');
   const fileRef=useRef<HTMLInputElement>(null);
@@ -114,7 +116,7 @@ export function ComputerBuilder(){
     if(view!=='hardware')return;
     const shortcut=(event:KeyboardEvent)=>{
       const target=event.target as HTMLElement|null;
-      if(target?.closest('input,textarea,select,button,a,[contenteditable="true"]'))return;
+      if(target?.closest('input,textarea,select,button,a,summary,[contenteditable="true"]'))return;
       const store=useDigitalStore.getState();
       const key=event.key.toLowerCase();
       if(event.metaKey||event.ctrlKey){
@@ -153,6 +155,12 @@ export function ComputerBuilder(){
   },[focusTarget?.nonce,view]);
 
   return <div className={'signal-lab-shell computer-builder-shell computer-v12-shell view-'+view}>
+    <LabGuide number="03" title="Build a computer" description="Connect the hardware. Write the program. Watch it execute."
+      steps={[
+        {title:'Explore the hardware',detail:'The starter datapath connects a counter, ROM, ALU, and register. Open Parts to extend it.'},
+        {title:'Program a CPU',detail:'Load the programmable CASM CPU from Project actions, then open Code Studio.'},
+        {title:'Inject and debug',detail:'Assemble your draft into the ROM. Step instructions and inspect registers, flags, and RAM.'},
+      ]}/>
     <header className="signal-workbench-header computer-builder-header">
       <div className="signal-lab-brand">
         <span className="signal-lab-glyph">▣</span>
@@ -184,6 +192,7 @@ export function ComputerBuilder(){
           onClick={()=>setPanelOpen(v=>!v)} title="Show or hide circuit inspector/tools">
           ◈ <span>TOOLS</span>
         </button>
+        <button aria-pressed={focused} onClick={toggleFocus} title="Hide or restore the side panels">⊡ <span>FOCUS</span></button>
       </nav>}
       <details className="signal-file-menu computer-project-menu" ref={actionsRef}>
         <summary title="Project actions and example circuits" aria-label="Project actions">⋮</summary>
@@ -230,7 +239,9 @@ export function ComputerBuilder(){
       </section>:
       <section role="tabpanel" aria-label="Hardware design page" className="computer-hardware-page">
         <div className="computer-contextbar">
-          <span><b>HARDWARE</b> / {doc.name}</span>
+          <label className="computer-project-name"><b>PROJECT</b>
+            <input aria-label="Computer circuit name" value={doc.name} maxLength={90}
+              onChange={event=>rename(event.target.value)}/></label>
           <span className="computer-context-tip">Click a chip to inspect · Right-click for wiring ·
             use ⊡ FIT to center the circuit</span>
           {hasDraft&&<button title="Saved CASM draft has not been injected"

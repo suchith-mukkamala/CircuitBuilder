@@ -3,6 +3,8 @@ type LabChoice = {
   number:string;
   name:string;
   description:string;
+  detail:string;
+  topics:string;
   symbol:string;
   action:()=>void;
 };
@@ -91,34 +93,44 @@ export function HomeScreen({
 }) {
   const labs:LabChoice[]=[
     {id:'analog',number:'01',name:'ANALOG LAB',
-      description:'Voltage & circuits',symbol:'〰',action:onAnalog},
+      description:'Voltage & circuits',detail:'Build a circuit and see the current flow. Explore the response of real electrical components.',
+      topics:'DC analysis · RLC simulation',symbol:'〰',action:onAnalog},
     {id:'signal',number:'02',name:'SIGNAL LAB',
-      description:'Logic & signals',symbol:'⊕',action:onSignal},
+      description:'Logic & signals',detail:'Connect gates, trace signals, and turn a simple idea into a reusable logic block.',
+      topics:'Logic gates · Truth tables',symbol:'⊕',action:onSignal},
     {id:'computer',number:'03',name:'COMPUTER BUILDER',
-      description:'Memory & processors',symbol:'▣',action:onComputer},
+      description:'Memory & processors',detail:'Wire a processor, write assembly, and follow every instruction through your machine.',
+      topics:'CPU design · Code Studio',symbol:'▣',action:onComputer},
   ];
   return <main className="landing-home">
     <div className="landing-content">
-      <div className="landing-eyebrow"><span/> THE ELECTRONICS PLAYGROUND</div>
-      <h1>Build something <em>brilliant.</em></h1>
-      <p className="landing-subtitle">Design circuits. Explore signals. Program computers.</p>
-      <div className="landing-art">
-        <CpuCircuitArt/>
+      <div className="landing-hero">
+        <div className="landing-hero-copy">
+          <div className="landing-eyebrow"><span/> THE ELECTRONICS PLAYGROUND</div>
+          <h1>Small circuits.<br/><em>Big possibilities.</em></h1>
+          <p className="landing-subtitle">From your first resistor to your own computer.<br/>A space to build, experiment, and understand.</p>
+          <div className="landing-hero-note"><span>↳</span> Choose a lab. Start making connections.</div>
+        </div>
+        <div className="landing-art"><CpuCircuitArt/>
+          <div className="landing-art-caption"><span>INSIDE A FOUR-BIT COMPUTER</span><span>HARDWARE → SOFTWARE</span></div>
+        </div>
       </div>
+      <div className="landing-section-heading"><h2>Your workbench awaits</h2><span>ONE IDEA. MANY WAYS TO BUILD.</span></div>
       <div className="landing-choices" aria-label="Choose a laboratory">
         {labs.map(lab=><button key={lab.id}
           className={'landing-choice landing-choice-'+lab.id}
           onClick={lab.action}>
-          <span className="landing-choice-icon" aria-hidden="true">{lab.symbol}</span>
+          <span className="landing-card-top"><span className="landing-choice-icon" aria-hidden="true">{lab.symbol}</span>
+            <span className="landing-choice-number">LAB {lab.number}</span></span>
           <span className="landing-choice-text">
             <span className="landing-choice-name">{lab.name}</span>
             <span className="landing-choice-description">{lab.description}</span>
+            <span className="landing-choice-detail">{lab.detail}</span>
           </span>
-          <span className="landing-choice-arrow" aria-hidden="true">↗</span>
-          <span className="landing-choice-number" aria-hidden="true">{lab.number}</span>
+          <span className="landing-card-bottom"><span>{lab.topics}</span><span className="landing-choice-arrow" aria-hidden="true">↗</span></span>
         </button>)}
       </div>
-      <div className="landing-bottom">CIRCUITBUILDER <span aria-hidden="true">·</span> DESIGN / CONNECT / DISCOVER</div>
+      <div className="landing-bottom"><span>BUILT FOR CURIOUS MINDS</span><span>Projects stay in this browser · Export a backup anytime</span></div>
     </div>
   </main>;
 }

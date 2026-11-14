@@ -13,6 +13,8 @@ import { ComputerPanel,RomProgramEditor } from './ComputerPanel';
 import { cpuCoreDemo } from './computerSamples';
 import { SignalDiagnostics } from './SignalDiagnostics';
 import { diagnoseDigitalCircuit } from './diagnostics';
+import {LabGuide} from '../workbench/LabGuide';
+import {useWorkbenchLayout} from '../workbench/useWorkbenchLayout';
 
 const logicTone = (v: LogicValue | undefined) => v === 1 ? 'high' : v === 0 ? 'low'
   : v === 'X' ? 'unknown' : 'floating';
@@ -244,8 +246,8 @@ export function SignalLab() {
   const issues=useMemo(()=>diagnoseDigitalCircuit(doc),[doc]);
   const clockStep = useDigitalStore(s=>s.clockStep);
   const resetClock = useDigitalStore(s=>s.resetClock);
-  const [paletteOpen,setPaletteOpen] = useState(true);
-  const [panelOpen,setPanelOpen] = useState(true);
+  const {partsOpen:paletteOpen,toolsOpen:panelOpen,setParts:setPaletteOpen,
+    setTools:setPanelOpen,focused,toggleFocus}=useWorkbenchLayout('signal');
   const [tab,setTab] = useState<'inspect'|'truth'|'scope'|'vector'|'computer'|'check'>('inspect');
   useEffect(()=>{
     if(focusTarget){setPanelOpen(true);setTab('inspect');}
@@ -255,7 +257,7 @@ export function SignalLab() {
   useEffect(()=>{
     const handle=(e:KeyboardEvent)=>{
       const target=e.target as HTMLElement|null;
-      if (target?.closest('input, textarea, select, [contenteditable="true"]')) return;
+      if (target?.closest('input, textarea, select, button, a, summary, [contenteditable="true"]')) return;
       const mod=e.ctrlKey||e.metaKey, key=e.key.toLowerCase();
       const store=useDigitalStore.getState();
       if (mod) {
@@ -281,16 +283,22 @@ export function SignalLab() {
   },[]);
   const importFile=async(e:ChangeEvent<HTMLInputElement>)=>{
     const f=e.target.files?.[0];
+    e.currentTarget.value='';
     if(!f)return;
     try {load(JSON.parse(await f.text()));}
     catch(error){window.alert(error instanceof Error?error.message:'Invalid signal file.');}
-    e.currentTarget.value='';
   };
   const close=()=>{if(fileMenu.current)fileMenu.current.open=false;};
   return <div className="signal-lab-shell">
+    <LabGuide number="02" title="Logic & signals" description="Turn simple gates into something greater."
+      steps={[
+        {title:'Build a logic circuit',detail:'Find gates, switches, and LEDs in Parts. Click to place or drag onto the canvas.'},
+        {title:'Follow the signal',detail:'Connect pins and click an input switch to toggle it. Green means HIGH; blue means LOW.'},
+        {title:'Test your design',detail:'Use the Tools menu for truth tables, input tests, waveforms, and connection checks.'},
+      ]}/>
     <header className="signal-workbench-header">
       <div className="signal-lab-brand"><span className="signal-lab-glyph">▧</span>
-        <div><strong>SIGNAL LAB</strong><small>LAB 02 / COMPUTER FOUNDATIONS v0.8</small></div></div>
+        <div><strong>SIGNAL LAB</strong><small>LOGIC WORKBENCH</small></div></div>
       <input aria-label="Signal circuit name" className="signal-circuit-title"
         title="Rename circuit" value={doc.name} onChange={e=>rename(e.target.value)}/>
       <nav className="signal-toolbar" aria-label="Signal Lab actions">
@@ -300,24 +308,22 @@ export function SignalLab() {
         <button disabled={!future} onClick={redo} title="Redo">↷ <span>REDO</span></button>
         <button disabled={!selectedIds.length} onClick={copy} title="Copy selection">▣ <span>COPY</span></button>
         <button onClick={paste} title="Paste copied selection">⊞ <span>PASTE</span></button>
-        <button className="signal-instrument-button" onClick={()=>{
-          setPanelOpen(true);setTab('computer');
-        }}>▣ <span>COMPUTER</span></button>
         <button className="signal-clock-quick" title="Emit one rising CLOCK edge"
           onClick={clockStep}>↯ <span>STEP</span></button>
-        <button className="signal-instrument-button" onClick={()=>{
-          setPanelOpen(true);setTab('vector');
-        }}>101 <span>INPUT TEST</span></button>
-        <button className="signal-instrument-button" onClick={()=>{
-          setPanelOpen(true);setTab('scope');
-        }}>〰 <span>WAVEFORM</span></button>
         <button className="truth-shortcut" onClick={()=>{
           setPanelOpen(true);setTab('truth');
         }}>▦ <span>TRUTH TABLE</span></button>
-        <button className="signal-diagnostics-shortcut" onClick={()=>{
-          setPanelOpen(true);setTab('check');
-        }}>⚠ <span>CHECK {issues.length||'✓'}</span></button>
-        <button className={panelOpen?'active':''} onClick={()=>setPanelOpen(v=>!v)}>◈ <span>PANEL</span></button>
+        <label className="workbench-tool-select">Tools
+          <select aria-label="Open signal tool" value={panelOpen?tab:''}
+            onChange={event=>{setTab(event.target.value as typeof tab);setPanelOpen(true);}}>
+            <option value="" disabled>Choose tool…</option>
+            <option value="inspect">Inspector</option><option value="truth">Truth table</option>
+            <option value="scope">Waveform</option><option value="vector">Input test</option>
+            <option value="computer">Clock & CPU</option><option value="check">Circuit check ({issues.length})</option>
+          </select>
+        </label>
+        <button aria-pressed={panelOpen} className={panelOpen?'active':''} onClick={()=>setPanelOpen(v=>!v)} title="Toggle inspector and instruments">◈ <span>PANEL</span></button>
+        <button aria-pressed={focused} onClick={toggleFocus} title="Hide or restore the side panels">⊡ <span>FOCUS</span></button>
       </nav>
       <details className="signal-file-menu" ref={fileMenu}>
         <summary title="Signal file actions">⋮</summary>

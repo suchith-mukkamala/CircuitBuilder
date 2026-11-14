@@ -5,6 +5,8 @@ import { Inspector, SimulationPanel } from './components/Inspector';
 import { TransientPanel } from './components/TransientPanel';
 import { starterCircuit } from './circuit/sample';
 import { useCircuitStore } from './state/useCircuitStore';
+import {LabGuide} from './workbench/LabGuide';
+import {useWorkbenchLayout} from './workbench/useWorkbenchLayout';
 
 function downloadCircuit() {
   const doc = useCircuitStore.getState().document;
@@ -24,8 +26,8 @@ type RightTab = 'inspect' | 'simulate';
 export function App() {
   const fileInput = useRef<HTMLInputElement>(null);
   const fileMenu = useRef<HTMLDetailsElement>(null);
-  const [showLibrary, setShowLibrary] = useState(true);
-  const [showRight, setShowRight] = useState(true);
+  const {partsOpen:showLibrary,toolsOpen:showRight,setParts:setShowLibrary,
+    setTools:setShowRight,focused,toggleFocus}=useWorkbenchLayout('analog');
   const [rightTab, setRightTab] = useState<RightTab>('inspect');
   const circuit = useCircuitStore(s => s.document);
   const rename = useCircuitStore(s => s.rename);
@@ -63,7 +65,7 @@ export function App() {
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
-      const typing = !!target?.closest('input, textarea, [contenteditable="true"]');
+      const typing = !!target?.closest('input, textarea, select, button, a, summary, [contenteditable="true"]');
       const command = e.ctrlKey || e.metaKey;
       if (command && e.key.toLowerCase() === 's') {
         e.preventDefault(); save(); return;
@@ -98,18 +100,24 @@ export function App() {
 
   const onImport = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.currentTarget.value = '';
     if (!file) return;
     try { load(JSON.parse(await file.text())); }
     catch (error) { window.alert(error instanceof Error ? error.message : 'Could not import circuit.'); }
-    e.currentTarget.value = '';
   };
 
   return (
     <div className="app-shell polished-shell">
+      <LabGuide number="01" title="Analog circuits" description="Explore voltage, current, and the components in between."
+        steps={[
+          {title:'Start with a circuit',detail:'Open Parts to place components, or load an instant lab from the library.'},
+          {title:'Connect and inspect',detail:'Click two terminals to wire them. Select a component to edit its value in the inspector.'},
+          {title:'See what happens',detail:'Run DC for steady-state readings. Run RLC for a capacitor or inductor response over time.'},
+        ]}/>
       <header className="topbar polished-topbar">
         <div className="brand">
           <span className="brand-chip"><span className="chip-center">▣</span></span>
-          <div className="brand-name">CIRCUIT<span>BUILDER</span><small>LAB 01</small></div>
+          <div className="brand-name">ANALOG <small>WORKBENCH</small></div>
         </div>
         <div className="file-name polished-filename">
           <span className="folder-icon">▰</span>
@@ -130,12 +138,14 @@ export function App() {
           <button className="workbench-tool" title="Paste clipboard (Ctrl/Cmd+V)"
             onClick={paste}>⊞ <span>PASTE</span></button>
           <span className="tool-divider" />
-          <button className="workbench-tool primary-run" onClick={() => run('dc')}>▶ <span>DC</span></button>
+          <button className="workbench-tool primary-run" title="Solve steady-state voltages and currents" onClick={() => run('dc')}>▶ <span>RUN DC</span></button>
           <button className="workbench-tool primary-run secondary-run"
             onClick={() => run('transient')}>〰 <span>RLC</span></button>
           <button className={'workbench-tool ' + (showRight ? 'active-tool' : '')}
             aria-pressed={showRight} title="Toggle inspector and instruments"
             onClick={() => setShowRight(v => !v)}>◈ <span>PANEL</span></button>
+          <button className="workbench-tool" aria-pressed={focused} onClick={toggleFocus}
+            title="Hide or restore the side panels">⊡ <span>FOCUS</span></button>
         </nav>
         <details className="file-dropdown" ref={fileMenu}>
           <summary title="File actions">⋮ <span>FILE</span></summary>
