@@ -1,5 +1,5 @@
 import { lazy,Suspense,useEffect,useState } from 'react';
-import { App as AnalogLab } from './App';
+const AnalogLab=lazy(()=>import('./App').then(module=>({default:module.App})));
 import { SignalLab } from './digital/SignalLab';
 import { ComputerBuilder } from './ComputerBuilder';
 import { HomeScreen } from './HomeScreen';
@@ -65,12 +65,14 @@ export function LabHub(){
         <div className="lab-switcher-status"><span/> LOCAL WORKSPACE</div>
     </nav>
     <div id="lab-content" tabIndex={-1}>
+    <Suspense fallback={<p className="lab-loading" role="status">Opening lab…</p>}>
     {page==='home'?
       <HomeScreen onAnalog={()=>choose('analog')}
         onSignal={()=>choose('signal')} onComputer={()=>choose('computer')} onRobotics={()=>choose('robotics')}/>:
       page==='analog'?<AnalogLab/>:
       page==='signal'?<SignalLab/>:page==='computer'?<ComputerBuilder/>:
-      <Suspense fallback={<p className="lab-loading" role="status">Opening Robotics Lab…</p>}><RoboticsLab/></Suspense>}
+      <RoboticsLab/>}
+    </Suspense>
     </div>
   </div>;
 }

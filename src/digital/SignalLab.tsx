@@ -15,6 +15,11 @@ import { SignalDiagnostics } from './SignalDiagnostics';
 import { diagnoseDigitalCircuit } from './diagnostics';
 import {LabGuide} from '../workbench/LabGuide';
 import {useWorkbenchLayout} from '../workbench/useWorkbenchLayout';
+import {ProjectShelf} from '../workbench/ProjectShelf';
+import {GuidedProject} from '../workbench/GuidedProject';
+import {PanelResizer,usePanelWidths} from '../workbench/PanelResizer';
+import {halfAdderDemo} from './samples';
+import {SaveIndicator} from '../workbench/SaveIndicator';
 
 const logicTone = (v: LogicValue | undefined) => v === 1 ? 'high' : v === 0 ? 'low'
   : v === 'X' ? 'unknown' : 'floating';
@@ -179,6 +184,7 @@ function SignalTruthPanel({ doc, result }: {
   };
   const inputs = doc.components.filter(c=>c.kind==='input');
   const outputs = doc.components.filter(c=>c.kind==='led');
+  const applyVector=useDigitalStore(s=>s.applyVector);
   return <div className="signal-truth-panel">
     <div className="signal-panel-heading">▦ TRUTH TABLE <span>/ BOOLEAN</span></div>
     <div className="signal-truth-intro">
@@ -197,13 +203,13 @@ function SignalTruthPanel({ doc, result }: {
       <table className="signal-truth-table">
         <thead><tr>
           {table.inputs.map(input=><th key={input.id}>{digitalLabel(input,doc.components)}</th>)}
-          {table.outputs.map(output=><th key={output.id}>{digitalLabel(output,doc.components)}</th>)}
+          {table.outputs.map(output=><th key={output.id}>{digitalLabel(output,doc.components)}</th>)}<th>TRY</th>
         </tr></thead>
-        <tbody>{table.rows.map((row,i)=><tr key={i}>
+        <tbody>{table.rows.map((row,i)=><tr key={i} className={inputs.map(c=>c.bit??0).join('')===row.inputs.join('')?'truth-row-current':''}>
           {row.inputs.map((value,j)=><td key={'i'+j}>{value}</td>)}
           {row.outputs.map((value,j)=><td key={'o'+j}>
             <LogicChip value={value}/>
-          </td>)}
+          </td>)}<td><button className="truth-apply" aria-label={'Apply inputs '+row.inputs.join('')} onClick={()=>applyVector(row.inputs.join(''))}>Apply</button></td>
         </tr>)}</tbody>
       </table>
     </div>}
@@ -218,6 +224,9 @@ function SignalTruthPanel({ doc, result }: {
 }
 
 export function SignalLab() {
+  const panelWidths=usePanelWidths('signal');
+  const [lessonStarted,setLessonStarted]=useState(false);
+  const [lessonVectors,setLessonVectors]=useState<string[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
   const fileMenu = useRef<HTMLDetailsElement>(null);
   const doc = useDigitalStore(s=>s.document);
@@ -253,6 +262,15 @@ export function SignalLab() {
     if(focusTarget){setPanelOpen(true);setTab('inspect');}
   },[focusTarget?.nonce]);
   const result = useMemo(()=>simulateLogic(doc,runtime),[doc,runtime]);
+  useEffect(()=>{
+    if(!lessonStarted)return;
+    const inputs=doc.components.filter(c=>c.kind==='input');
+    if(inputs.length!==2||!doc.components.some(c=>c.id==='sum')||!doc.components.some(c=>c.id==='carry'))return;
+    const vector=inputs.map(c=>c.bit??0).join('');
+    const a=inputs[0].bit??0,b=inputs[1].bit??0;
+    if(result.ledValues.sum===(a^b)&&result.ledValues.carry===(a&b))
+      setLessonVectors(old=>old.includes(vector)?old:[...old,vector]);
+  },[doc,result,lessonStarted]);
   const gates = doc.components.filter(c=>gateKinds.includes(c.kind as GateKind)||c.kind==='block');
   useEffect(()=>{
     const handle=(e:KeyboardEvent)=>{
@@ -296,6 +314,16 @@ export function SignalLab() {
         {title:'Follow the signal',detail:'Connect pins and click an input switch to toggle it. Green means HIGH; blue means LOW.'},
         {title:'Test your design',detail:'Use the Tools menu for truth tables, input tests, waveforms, and connection checks.'},
       ]}/>
+    <GuidedProject title="Add two binary digits" description="A half-adder combines XOR for SUM and AND for CARRY. Test the four input combinations and follow the outputs."
+      onStart={()=>{if(inBlock||!window.confirm('Load the guided half-adder? Save a project copy first to keep your circuit.'))return false;
+        load(halfAdderDemo());setLessonVectors([]);setLessonStarted(true);setPanelOpen(true);setTab('truth');return true;}}
+      steps={[
+        {title:'Find SUM and CARRY',detail:'The XOR gate lights SUM when exactly one input is HIGH. The AND gate lights CARRY when both are HIGH.',complete:lessonStarted},
+        {title:'Try one HIGH input',detail:'Generate a truth table, then apply 01 and 10. SUM should be 1, with CARRY at 0.',complete:lessonVectors.includes('01')&&lessonVectors.includes('10')},
+        {title:'Add 1 + 1',detail:'Apply 11. SUM turns off and CARRY turns on: binary 10 represents decimal 2.',complete:lessonVectors.includes('11'),
+          action:()=>useDigitalStore.getState().applyVector('11'),actionLabel:'Apply 11'},
+        {title:'Finish the table',detail:'Apply 00 as well. Inspect a gate output pin or record a waveform to compare all four combinations.',complete:lessonVectors.length===4},
+      ]}/>
     <header className="signal-workbench-header">
       <div className="signal-lab-brand"><span className="signal-lab-glyph">▧</span>
         <div><strong>SIGNAL LAB</strong><small>LOGIC WORKBENCH</small></div></div>
@@ -325,6 +353,8 @@ export function SignalLab() {
         <button aria-pressed={panelOpen} className={panelOpen?'active':''} onClick={()=>setPanelOpen(v=>!v)} title="Toggle inspector and instruments">◈ <span>PANEL</span></button>
         <button aria-pressed={focused} onClick={toggleFocus} title="Hide or restore the side panels">⊡ <span>FOCUS</span></button>
       </nav>
+      <ProjectShelf lab="signal" disabled={inBlock} getSnapshot={()=>({document:useDigitalStore.getState().document})}
+        onLoad={snapshot=>load(snapshot.document)}/>
       <details className="signal-file-menu" ref={fileMenu}>
         <summary title="Signal file actions">⋮</summary>
         <div>
@@ -358,7 +388,9 @@ export function SignalLab() {
       {!!blockSaveError&&<div className="signal-edit-error" role="alert">{blockSaveError}</div>}
     </div>}
     <div className={'signal-workspace'+(!paletteOpen?' signal-no-palette':'')+
-      (!panelOpen?' signal-no-panel':'')}>
+      (!panelOpen?' signal-no-panel':'')} style={panelWidths.style}>
+      {paletteOpen&&<PanelResizer side="parts" value={panelWidths.widths.parts} onChange={value=>panelWidths.resize('parts',value)}/>}
+      {panelOpen&&<PanelResizer side="tools" value={panelWidths.widths.tools} onChange={value=>panelWidths.resize('tools',value)}/>}
       {paletteOpen && <SignalPalette/>}
       <main className="signal-editor">
         <div className="signal-editor-heading">
@@ -371,6 +403,7 @@ export function SignalLab() {
           result={result} onProbe={()=>{setPanelOpen(true);setTab('scope');}}/>
         <div className="signal-status">
           <span><i/> {runtime.cycle>0?'CLOCKED LOGIC':'LIVE LOGIC'}</span><span className="signal-status-message">{message}</span>
+          <SaveIndicator storageKey="circuitbuilder-signal-v01" value={{document:doc}} revision={message} draft={inBlock}/>
           <span>{result.warnings.length?'⚠ '+result.warnings.length+' ISSUES':'✓ NO SIGNAL WARNINGS'}</span>
         </div>
       </main>

@@ -1,4 +1,4 @@
-# CircuitBuilder v0.21.0 — The Electronics Playground
+# CircuitBuilder v0.22.0 — The Electronics Playground
 
 Build, simulate and experiment with analog circuits, digital signals, programmable computers, and microcontroller projects in four laboratories.
 
@@ -8,6 +8,19 @@ Build, simulate and experiment with analog circuits, digital signals, programmab
 - **Lab 04 — Robotics:** a programmable virtual controller, live sensor inputs, LEDs, and a servo. Start with a traffic light, automatic door, or obstacle detector.
 
 ## What's new
+
+### v0.22 — Measure, learn, and keep your experiments
+
+- Click a wire or component for readings, or choose **Inspect points** to click a terminal without starting a wire. Analog points show voltage to ground or a chosen reference; components show signed voltage, current, and power. Digital pins show HIGH/LOW/X/Z, and buses show bits and unsigned values. Phone readouts dock below the canvas.
+- Guided projects use real simulation results: a voltage divider, half-adder, and 3 + 5 CPU program.
+- Transient graphs compare two component traces with labeled axes, automatic or manual vertical scales, a draggable time cursor, and an expanded graph. Canvas point measurements follow that same time cursor.
+- Code Studio explains the last instruction, highlights the blocks it used, and marks the next source line when the editor matches ROM.
+- **Projects** keeps up to 12 named copies per existing lab with schematic thumbnails. Computer copies retain un-injected CASM drafts. Save indicators verify the browser's persisted copy; storage failures keep the working circuit in memory.
+- Resize desktop side panels with the dividers (or arrow keys while focused). Canvas hit targets are larger, terminals use the nearest target, and analog circuits can fit the viewport.
+
+See [measurement and learning guide](docs/MEASUREMENTS_AND_LEARNING.md) for workflows and measurement limits.
+
+### v0.21 — Shared workbenches and Robotics Lab
 
 - Shared navigation, direct lab links (`#analog`, `#signal`, `#computer`, `#robotics`), quick-start guidance, and a responsive workbench layout.
 - More readable component lists and controls, per-lab panel preferences, and Focus mode. Narrow screens start with the canvas; Parts and Panel reopen the tools.

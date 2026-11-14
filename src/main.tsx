@@ -17,6 +17,7 @@ import './casm-v11.css';
 import './computer-v12.css';
 import './workbench.css';
 import './robotics/robotics.css';
+import './learning.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode><LabHub /></React.StrictMode>,

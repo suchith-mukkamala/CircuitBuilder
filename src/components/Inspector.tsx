@@ -120,7 +120,7 @@ export function Inspector() {
             <button className="small-action danger-action" onClick={remove}>✕ DELETE</button>
           </div>
           {reading && <div className="readings">
-            <div className="sidebar-section-label">DC TELEMETRY</div>
+            <div className="sidebar-section-label">COMPONENT READINGS</div>
             <div className="readout"><span>VOLTAGE A→B</span>
               <strong>{formatElectrical(reading.voltage, 'V')}</strong></div>
             <div className="readout"><span>{c.kind === 'potentiometer' ? 'CURRENT A→W' : 'CURRENT A→B'}</span>
@@ -156,7 +156,7 @@ export function SimulationPanel() {
   const analysisMode = useCircuitStore(s => s.analysisMode);
   return (
     <div className={'panel simulation-panel neon-panel ' + (result ? 'simulation-live' : '')}>
-      <div className="panel-heading">◉ VOLTAGE ARCADE <span className="tiny-muted">/ DC</span></div>
+      <div className="panel-heading">◉ CIRCUIT ANALYSIS <span className="tiny-muted">/ {analysisMode.toUpperCase()}</span></div>
       <div className="panel-content">
         <div className="status-line"><span className={'status-dot ' + (result ? 'success' : '')}></span>
           {result ? (analysisMode === 'dc' ? '● DC ANALYZED' : '● TRANSIENT ANALYZED') : '○ READY TO COMPUTE'}</div>

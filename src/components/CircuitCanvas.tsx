@@ -8,6 +8,10 @@ import { wirePath, endpointPosition } from '../circuit/geometry';
 import { circuitNodes } from '../circuit/connectivity';
 import { junctionPoints, unbranchedWireCurrents, voltageTint } from '../editor/wireVisuals';
 import { parseEngineering } from '../editor/units';
+import {PointReadout} from './PointReadout';
+import {analogMeasurement,type AnalogTarget} from '../editor/measurements';
+import {fitAnalogCircuit} from '../editor/viewport';
+import {useCompactCanvas} from '../workbench/useCompactCanvas';
 
 type View = { x: number; y: number; zoom: number };
 type Drag = { type: 'component'; id: string; x: number; y: number; at: Point } |
@@ -389,14 +393,26 @@ const snapEnd = (p: Point): Point => ({
   y: Math.round(p.y / HALF_GRID) * HALF_GRID,
 });
 
-export function CircuitCanvas() {
+export function CircuitCanvas({onMeasure}:{onMeasure?:(target:AnalogTarget|null)=>void}={}) {
+  const compact=useCompactCanvas();
   const canvas = useRef<HTMLCanvasElement>(null);
   const wrapper = useRef<HTMLDivElement>(null);
   const dragging = useRef<Drag | null>(null);
+  const didFit=useRef(false);
+  useEffect(()=>{
+    const element=canvas.current;
+    const prevent=(event:globalThis.WheelEvent)=>event.preventDefault();
+    element?.addEventListener('wheel',prevent,{passive:false});
+    return ()=>element?.removeEventListener('wheel',prevent);
+  },[]);
   const [view, setView] = useState<View>({ x: 60, y: 42, zoom: 1 });
   const [hover, setHover] = useState<Point | null>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [menu, setMenu] = useState<Menu | null>(null);
+  const [mode,setMode]=useState<'edit'|'inspect'>('edit');
+  const [measuring,setMeasuring]=useState<AnalogTarget|null>(null);
+  const [reference,setReference]=useState<AnalogTarget|null>(null);
+  useEffect(()=>{onMeasure?.(measuring);},[measuring,onMeasure]);
   const [quickValue, setQuickValue] = useState('');
   const [quickError, setQuickError] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(false);
@@ -407,6 +423,11 @@ export function CircuitCanvas() {
   const setFlowEnabled = useCircuitStore(s => s.setFlowEnabled);
   const pendingPin = useCircuitStore(s => s.pendingPin);
   const simulation = useCircuitStore(s => s.simulation);
+  useEffect(()=>{if(size.width&&size.height&&!didFit.current){didFit.current=true;setView(fitAnalogCircuit(doc,size));}},[size.width,size.height,doc]);
+  useEffect(()=>{
+    const escape=(event:KeyboardEvent)=>{if(event.key==='Escape'){setMenu(null);setMeasuring(null);}};
+    window.addEventListener('keydown',escape);return ()=>window.removeEventListener('keydown',escape);
+  },[]);
   const select = useCircuitStore(s => s.select);
   const move = useCircuitStore(s => s.moveComponent);
   const moveFreeEnd = useCircuitStore(s => s.moveFreeEnd);
@@ -455,11 +476,12 @@ export function CircuitCanvas() {
     ? unbranchedWireCurrents(doc, simulation, looseNodes.wireNodes) : {},
     [doc, simulation, looseNodes]);
   const junctions = useMemo(() => junctionPoints(doc), [doc]);
-  const focusNet = selection?.type === 'wire'
+  const measuredNet=useMemo(()=>measuring?analogMeasurement(doc,simulation,measuring,looseNodes)?.node:undefined,[doc,simulation,measuring,looseNodes]);
+  const focusNet = measuredNet??(selection?.type === 'wire'
     ? looseNodes.wireNodes[selection.id]
     : selection?.type === 'component'
       ? looseNodes.terminalNodes[selection.id + ':a'] ??
-        looseNodes.terminalNodes[selection.id + ':g'] : undefined;
+        looseNodes.terminalNodes[selection.id + ':g'] : undefined);
   const visuals: CanvasVisuals = {
     wireNodes: looseNodes.wireNodes, terminalNodes: looseNodes.terminalNodes,
     flowCurrents, junctions, focusedNet: focusNet,
@@ -490,15 +512,17 @@ export function CircuitCanvas() {
     return { x: (p.x - view.x) / view.zoom, y: (p.y - view.y) / view.zoom };
   };
   const findTerminal = (p: Point): WireEndpoint | null => {
+    let nearest:WireEndpoint|null=null,distance=14/view.zoom;
     for (const c of [...doc.components].reverse()) {
       for (const pin of pinsFor(c)) {
         const end = pinPosition(c, pin);
-        if (Math.hypot(end.x - p.x, end.y - p.y) <= 11 / view.zoom) {
-          return { componentId: c.id, pin };
+        const delta=Math.hypot(end.x-p.x,end.y-p.y);
+        if (delta<=distance) {
+          nearest={componentId:c.id,pin};distance=delta;
         }
       }
     }
-    return null;
+    return nearest;
   };
   const findWire = (p: Point): { wire: Wire; point: Point; distance: number } | null => {
     let closest: { wire: Wire; point: Point; distance: number } | null = null;
@@ -525,8 +549,21 @@ export function CircuitCanvas() {
   const onPointerDown = (e: PointerEvent<HTMLCanvasElement>) => {
     if (e.button === 2 || (e.button !== 0 && e.button !== 1)) return;
     e.preventDefault();
+    e.currentTarget.focus({preventScroll:true});
     setMenu(null);
     const p = worldPoint(e);
+    if(e.button===0&&mode==='inspect'){
+      const terminal=findTerminal(p);
+      if(terminal&&isTerminal(terminal))setMeasuring({kind:'terminal',...terminal});
+      else{
+        const part=[...doc.components].reverse().find(c=>hitComponent(c,p));
+        const trace=part?null:findWire(p);
+        if(part)setMeasuring({kind:'component',id:part.id});
+        else if(trace)setMeasuring({kind:'wire',id:trace.wire.id});
+        else{setMeasuring(null);dragging.current={type:'pan',clientX:e.clientX,clientY:e.clientY,originalX:view.x,originalY:view.y};e.currentTarget.setPointerCapture(e.pointerId);}
+      }
+      return;
+    }
     if (e.button === 0) {
       const terminal = findTerminal(p);
       if (terminal) { connect(terminal); return; }
@@ -555,6 +592,7 @@ export function CircuitCanvas() {
             return;
           }
           if (!selectedIds.includes(c.id)) select({ type: 'component', id: c.id });
+          setMeasuring({kind:'component',id:c.id});
           beginDrag();
           dragging.current = { type: 'component', id: c.id, x: c.x, y: c.y, at: p };
           e.currentTarget.setPointerCapture(e.pointerId);
@@ -562,7 +600,8 @@ export function CircuitCanvas() {
         }
       }
       const trace = findWire(p);
-      if (trace) { select({ type: 'wire', id: trace.wire.id }); return; }
+      if (trace) { select({ type: 'wire', id: trace.wire.id });setMeasuring({kind:'wire',id:trace.wire.id}); return; }
+      setMeasuring(null);
       select(null);
     }
     dragging.current = {
@@ -573,7 +612,8 @@ export function CircuitCanvas() {
   };
   const onPointerMove = (e: PointerEvent<HTMLCanvasElement>) => {
     const p = worldPoint(e);
-    setHover(snapEnd(p));
+    const terminal=findTerminal(p);
+    setHover(terminal?endpointPosition(terminal,doc):snapEnd(p));
     const d = dragging.current;
     if (!d) return;
     if (d.type === 'pan') {
@@ -598,13 +638,13 @@ export function CircuitCanvas() {
     }
   };
   const onWheel = (e: WheelEvent<HTMLCanvasElement>) => {
-    e.preventDefault();
     const p = screenPoint(e);
-    const zoom = Math.max(.35, Math.min(2.5, view.zoom * (e.deltaY < 0 ? 1.1 : 1 / 1.1)));
+    const zoom = Math.max(.15, Math.min(2.5, view.zoom * (e.deltaY < 0 ? 1.1 : 1 / 1.1)));
     setView({ zoom, x: p.x - (p.x - view.x) * zoom / view.zoom,
       y: p.y - (p.y - view.y) * zoom / view.zoom });
   };
   const onDoubleClick = (e: MouseEvent<HTMLCanvasElement>) => {
+    if(mode==='inspect')return;
     const p = worldPoint(e);
     const switched = [...doc.components].reverse().find(c =>
       c.kind === 'switch' && hitComponent(c, p));
@@ -660,29 +700,36 @@ export function CircuitCanvas() {
     setMenu(null);
   };
 
-  return (
+  const readout=measuring&&<PointReadout doc={doc} result={simulation} target={measuring} reference={reference}
+    onReference={setReference} onClose={()=>setMeasuring(null)}
+    time={useCircuitStore.getState().analysisMode==='transient'?useCircuitStore.getState().transient?.frames[useCircuitStore.getState().timeIndex]?.time:undefined}/>;
+  return <>
     <div className="canvas-wrapper" ref={wrapper}>
       <canvas
         ref={canvas} className="circuit-canvas" aria-label="Interactive circuit editor"
+        tabIndex={0}
+        data-view-x={view.x} data-view-y={view.y} data-view-zoom={view.zoom}
         onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp} onPointerLeave={() => setHover(null)}
         onDoubleClick={onDoubleClick} onWheel={onWheel} onContextMenu={onContextMenu}
         onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; }}
         onDrop={onDrop}
       />
-      <div className="canvas-hint">
-        ◈ RIGHT-CLICK TO EDIT <span>·</span> SHIFT+CLICK MULTI-SELECT <span>·</span>
-        SHIFT+DRAG FREE TIP TO MOVE
+      <div className="canvas-modebar" aria-label="Analog canvas mode">
+        <button aria-pressed={mode==='edit'} onClick={()=>{setMode('edit');setMeasuring(null);}}>↖ Edit & wire</button>
+        <button aria-pressed={mode==='inspect'} onClick={()=>{if(pendingPin)cancelWire();setMode('inspect');}}>⌖ Inspect points</button>
+        <span>{mode==='inspect'?'Click a pin, wire, or component':'Click terminals to connect · Esc cancels'}</span>
       </div>
+      {!compact&&readout}
       <div className="canvas-controls">
         <button className={showFlow && !reducedMotion ? 'flow-on' : ''}
           title="Toggle animated conventional current on unbranched wires (requires simulation)"
           aria-pressed={showFlow && !reducedMotion}
           onClick={() => setFlowEnabled(!showFlow)}>{reducedMotion ? '◌ STILL' : showFlow ? '◉ FLOW' : '○ FLOW'}</button>
-        <button title="Zoom out" onClick={() => setView(v => ({ ...v, zoom: Math.max(.35, v.zoom / 1.25) }))}>−</button>
+        <button title="Zoom out" onClick={() => setView(v => ({ ...v, zoom: Math.max(.15, v.zoom / 1.25) }))}>−</button>
         <span>{Math.round(view.zoom * 100)}%</span>
         <button title="Zoom in" onClick={() => setView(v => ({ ...v, zoom: Math.min(2.5, v.zoom * 1.25) }))}>+</button>
-        <button title="Reset view" onClick={() => setView({ x: 60, y: 42, zoom: 1 })}>⌖</button>
+        <button title="Fit circuit into view" onClick={() => setView(fitAnalogCircuit(doc,size))}>⊡ Fit</button>
       </div>
       {pendingPin && <div className="wire-tip">CLICK TO PLACE FREE END · ESC FINISHES WIRE</div>}
       {menu && <>
@@ -773,5 +820,6 @@ export function CircuitCanvas() {
         </div>
       </>}
     </div>
-  );
+    {compact&&readout&&<div className="canvas-readout-dock">{readout}</div>}
+  </>;
 }

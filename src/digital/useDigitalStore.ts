@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import {createJSONStorage,persist} from 'zustand/middleware';
+import {browserStorage} from '../workbench/browserStorage';
 import {
   DigitalComponent, DigitalDocument, DigitalEndpoint, DigitalKind, DigitalPoint,
   DigitalSelection, DigitalWire, DigitalBus, DigitalBusEnd, BusGroup,
@@ -728,6 +729,7 @@ export const useDigitalStore = create<DigitalStore>()(persist((set, get) => ({
   },
 }), {
   name: 'circuitbuilder-signal-v01',
+  storage:createJSONStorage(()=>browserStorage),
   // An in-progress internal edit is a draft: reload restores the last
   // committed parent, never an orphaned copy of the module's internals.
   partialize: persistedDigitalState,
